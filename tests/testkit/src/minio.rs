@@ -22,30 +22,30 @@ impl IsolatedMinio {
             "cgr.dev/chainguard/minio",
             "latest@sha256:7618b82bba99aadd77fcf59eb6cfd89b4b8b8e01ac796c474d57a1c1abf17e79",
         )
-            .with_wait_for(WaitFor::message_on_stderr("API:"))
-            .with_entrypoint("/bin/sh")
-            .with_cmd([
-                "-c",
-                "mkdir -p /data/kernel-content; exec minio server /data",
-            ])
-            .with_mapped_port(0, ContainerPort::Tcp(9000))
-            .with_env_var("MINIO_ROOT_USER", MINIO_TEST_ACCESS_KEY)
-            .with_env_var("MINIO_ROOT_PASSWORD", MINIO_TEST_SECRET_KEY)
-            .with_label(
-                "owner",
-                std::env::var("MUSTERAGENT_TEST_OWNER")
-                    .unwrap_or_else(|_| "musteragent-testkit".into()),
-            )
-            .with_label(
-                "run-id",
-                std::env::var("MUSTERAGENT_TEST_RUN_ID")
-                    .unwrap_or_else(|_| format!("{}-{}", std::process::id(), now.as_millis())),
-            )
-            .with_label("purpose", "isolated-s3-conformance")
-            .with_label("disposable", "true")
-            .with_label("expires-at", format!("unix:{}", now.as_secs() + 3600))
-            .start()
-            .await
+        .with_wait_for(WaitFor::message_on_stderr("API:"))
+        .with_entrypoint("/bin/sh")
+        .with_cmd([
+            "-c",
+            "mkdir -p /data/kernel-content; exec minio server /data",
+        ])
+        .with_mapped_port(0, ContainerPort::Tcp(9000))
+        .with_env_var("MINIO_ROOT_USER", MINIO_TEST_ACCESS_KEY)
+        .with_env_var("MINIO_ROOT_PASSWORD", MINIO_TEST_SECRET_KEY)
+        .with_label(
+            "owner",
+            std::env::var("MUSTERAGENT_TEST_OWNER")
+                .unwrap_or_else(|_| "musteragent-testkit".into()),
+        )
+        .with_label(
+            "run-id",
+            std::env::var("MUSTERAGENT_TEST_RUN_ID")
+                .unwrap_or_else(|_| format!("{}-{}", std::process::id(), now.as_millis())),
+        )
+        .with_label("purpose", "isolated-s3-conformance")
+        .with_label("disposable", "true")
+        .with_label("expires-at", format!("unix:{}", now.as_secs() + 3600))
+        .start()
+        .await
     }
 
     /// Create a new container with a test-only bucket and automatic teardown.
