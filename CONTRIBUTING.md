@@ -16,6 +16,22 @@ submitted under that license. There is no separate CLA or mandatory DCO
 sign-off. Retain third-party notices and verify that you have the right to
 redistribute any code or data you add.
 
+## Pull request workflow
+
+1. Discuss substantial architecture, storage or dependency changes in an issue or
+   [Discussions](https://github.com/wanquanY/MusterAgent/discussions) first.
+2. Fork the repository (or use a feature branch if you have write access) and
+   open a pull request against `main` using the template.
+3. All changes to `main`, including the maintainer's, land through a pull request
+   and are merged with squash. Direct pushes, force pushes and deleting `main`
+   are blocked, and history stays linear.
+4. The required checks `CI required` and `Security required` must pass on an
+   up-to-date branch, review conversations must be resolved, and a code owner
+   approves external changes. Version tags (`v*`) are created by the maintainer
+   and cannot be moved or deleted.
+
+The exact repository rules are kept in [`.github/rulesets/`](.github/rulesets).
+
 ## Ground rules
 
 - Keep changes focused; one concern per pull request.

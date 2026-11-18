@@ -1,0 +1,22 @@
+name: Feature request / 功能建议
+description: Describe a kernel capability or host integration need.
+title: '[Feature]: '
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Task and limitation / 任务与当前限制
+      description: What are you trying to build on the kernel? What prevents it today?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Desired behavior and acceptance / 目标行为与验收
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives and constraints / 替代方案与约束
