@@ -16,7 +16,12 @@ impl IsolatedMinio {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("system clock");
-        GenericImage::new("minio/minio", "RELEASE.2025-04-22T22-12-26Z")
+        // MinIO no longer publishes images to Docker Hub or quay.io. Use the
+        // Chainguard build, pinned by index digest for reproducible tests.
+        GenericImage::new(
+            "cgr.dev/chainguard/minio",
+            "latest@sha256:7618b82bba99aadd77fcf59eb6cfd89b4b8b8e01ac796c474d57a1c1abf17e79",
+        )
             .with_wait_for(WaitFor::message_on_stderr("API:"))
             .with_entrypoint("/bin/sh")
             .with_cmd([
