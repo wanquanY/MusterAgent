@@ -1,16 +1,13 @@
 //! A prepared body retains its original route and Invocation while a short
 //! scoped credential is renewed. Personal/API-key credentials keep their path.
 use super::*;
-use musteragent_identity::InvocationId;
-use musteragent_model::{CredentialGrantRef, ModelRoute};
-use musteragent_runtime_model::ModelInvocationRouteRole;
+use musteragent_runtime_model::ModelRequestAuthority;
+use reqwest::header::HeaderName;
 
 pub(super) struct PreparedCredentialLease {
     deadline: Instant,
-    grant: CredentialGrantRef,
-    route: ModelRoute,
-    role: ModelInvocationRouteRole,
-    invocation: InvocationId,
+    authority: ModelRequestAuthority,
+    dynamic_headers: Vec<HeaderName>,
 }
 fn rejected() -> ProviderError {
     provider_error(
@@ -20,7 +17,9 @@ fn rejected() -> ProviderError {
         None,
     )
 }
-fn deadline(value: &CredentialMaterial) -> Result<Option<Instant>, ProviderError> {
+pub(crate) fn credential_deadline(
+    value: &CredentialMaterial,
+) -> Result<Option<Instant>, ProviderError> {
     let CredentialMaterial::ScopedBearer { expires_at, .. } = value else {
         return Ok(None);
     };
@@ -40,43 +39,64 @@ fn deadline(value: &CredentialMaterial) -> Result<Option<Instant>, ProviderError
     ))
 }
 impl PreparedCredentialLease {
-    pub(super) fn retain(
-        request: &CanonicalModelRequest,
-        credentials: &CredentialMaterial,
-    ) -> Result<Option<Self>, ProviderError> {
-        Ok(deadline(credentials)?.map(|deadline| Self {
+    pub(super) fn new(
+        deadline: Instant,
+        authority: ModelRequestAuthority,
+        dynamic_headers: Vec<HeaderName>,
+    ) -> Self {
+        Self {
             deadline,
-            grant: request.credential_grant_ref.clone(),
-            route: request.route.clone(),
-            role: request.route_role,
-            invocation: request.invocation.invocation_id,
-        }))
+            authority,
+            dynamic_headers,
+        }
     }
+
     pub(super) async fn refresh(
         self,
-        resolver: &dyn CredentialResolver,
+        provider: &DirectModelProvider,
         outbound: &mut crate::PreparedModelHttpRequest,
         recovery_headers: &mut reqwest::header::HeaderMap,
     ) -> Result<(), ProviderError> {
         if self.deadline.saturating_duration_since(Instant::now()) >= Duration::from_secs(1) {
             return Ok(());
         }
-        let credentials = resolver
-            .resolve(&self.grant, &self.route, self.role, self.invocation)
+        let authority = &self.authority;
+        let credentials = provider
+            .credentials
+            .resolve(
+                &authority.credential_grant_ref,
+                &authority.route,
+                authority.route_role,
+                authority.invocation.invocation_id,
+            )
             .await
             .map_err(super::failures::credential_resolution)?;
-        let expiry = deadline(&credentials)?.ok_or_else(rejected)?;
+        let expiry = credential_deadline(&credentials)?.ok_or_else(rejected)?;
         let CredentialMaterial::ScopedBearer { secret, .. } = credentials else {
             return Err(rejected());
         };
         let mut header = HeaderValue::from_str(&format!("Bearer {}", secret.expose_secret()))
             .map_err(|_| rejected())?;
         header.set_sensitive(true);
+        recovery_headers.insert(reqwest::header::AUTHORIZATION, header.clone());
+        outbound.replace_bearer_credential(header);
+        if provider.per_request_authorization
+            && let crate::PreparedModelHttpRequest::Native(native) = outbound
+        {
+            let headers = native.headers_mut();
+            for name in self
+                .dynamic_headers
+                .iter()
+                .chain(provider.host_headers.static_headers.keys())
+            {
+                headers.remove(name);
+            }
+            provider.host_headers.apply(authority, headers).await?;
+            recovery_headers.clone_from(headers);
+        }
         if Instant::now() >= expiry {
             return Err(rejected());
         }
-        recovery_headers.insert(reqwest::header::AUTHORIZATION, header.clone());
-        outbound.replace_bearer_credential(header);
         Ok(())
     }
 }

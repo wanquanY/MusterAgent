@@ -13,7 +13,7 @@ impl DirectModelProvider {
             let stream_budget = request.stream_budget;
             let PreparedDirectRequest { provider_revision, client, endpoint, mut outbound, credential_lease, timing, wire_credit, mut recovery_headers } = prepared;
             if let Some(lease) = credential_lease
-                && let Err(error) = lease.refresh(self.credentials.as_ref(), &mut outbound, &mut recovery_headers).await {
+                && let Err(error) = lease.refresh(self, &mut outbound, &mut recovery_headers).await {
                 yield Err(error);
                 return;
             }

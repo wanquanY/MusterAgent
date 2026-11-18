@@ -83,8 +83,11 @@ The result URL must have the same origin as the validated invocation URL. It
 cannot contain credentials, query parameters or a fragment. The client disables
 redirects and automatic retries. It copies the invocation's credentials and host
 metadata, removes request-body framing, and URL-encodes the key. It never follows
-a result URL supplied in a remote error body. A host needing method-specific
-signatures or credential renewal during lookup implements its own resolver.
+a result URL supplied in a remote error body. With `with_request_authorization`,
+each GET instead obtains fresh token authentication and host headers for the
+original authority and key. The embedded worker selects this mode when a host
+supplies either model override. A host needing a method- or URL-specific signing
+contract can implement its own result transport. [Worker configuration](cloud-worker.md#per-invocation-model-credentials)
 
 The gateway must authenticate the caller and scope key ownership to the original
 tenant, actor and route. Its deduplication record and result must survive worker

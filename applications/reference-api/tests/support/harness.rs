@@ -14,6 +14,8 @@ pub const TENANT: &str = "01982f80-0000-7000-8000-000000000801";
 pub const USER: &str = "01982f80-0000-7000-8000-000000000802";
 pub const PROVIDER: &str = "01982f80-0000-7000-8000-000000000803";
 pub const ENTRY: &str = "01982f80-0000-7000-8000-000000000804";
+pub const EMPTY_WORKSPACE_CATALOG: &[u8] =
+    br#"{"schema_version":"musteragent.workspace-tool-releases.v1","releases":[]}"#;
 pub struct Harness {
     _pg: IsolatedPostgres,
     pub pool: sqlx::PgPool,
@@ -59,6 +61,10 @@ pub fn process(binary: &Path, config: &Path, dir: &Path, name: &str) -> Result<C
 }
 impl Harness {
     pub async fn start() -> Result<Self> {
+        Self::start_with_workspace_tools(true).await
+    }
+
+    pub async fn start_with_workspace_tools(include_workspace_tools: bool) -> Result<Self> {
         for name in [
             "musteragent-reference-api",
             "musteragent-cloud-worker",
@@ -96,7 +102,11 @@ impl Harness {
             .port();
         std::fs::write(
             dir.join("workspace-releases.json"),
-            include_bytes!("../../examples/workspace-releases.json"),
+            if include_workspace_tools {
+                include_bytes!("../../examples/workspace-releases.json").as_slice()
+            } else {
+                EMPTY_WORKSPACE_CATALOG
+            },
         )?;
         let common = format!(
             r#"database_url = {:?}
@@ -117,6 +127,21 @@ allow_http = true
             minio.endpoint,
             minio.bucket
         );
+        let workspace_grant = if include_workspace_tools {
+            format!(
+                r#"[[agents.workspace_tools]]
+principal_id = "{USER}"
+provider_id = "{PROVIDER}"
+plugin_id = "mcp.example-search"
+version = "1.0.0"
+release_sha256 = "2222222222222222222222222222222222222222222222222222222222222222"
+operation_ref = "mcp.example_search.find.h_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc@1"
+scopes = []
+"#
+            )
+        } else {
+            String::new()
+        };
         let api_config = format!(
             r#"listen = "127.0.0.1:{port}"
 {common}
@@ -140,15 +165,7 @@ tenant_id = "{TENANT}"
 published_by = "{USER}"
 instructions = "Use the requested tools and return the observed result."
 tools = ["system.time.current", "delegation.spawn", "delegation.join", "delegation.list", "data.python.run", "schedules.create", "schedules.list", "schedules.update", "schedules.control", "schedules.history"]
-[[agents.workspace_tools]]
-principal_id = "{USER}"
-provider_id = "{PROVIDER}"
-plugin_id = "mcp.example-search"
-version = "1.0.0"
-release_sha256 = "2222222222222222222222222222222222222222222222222222222222222222"
-operation_ref = "mcp.example_search.find.h_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc@1"
-scopes = []
-[[agents]]
+{workspace_grant}[[agents]]
 key = "approval-agent"
 id = "01982f80-0000-7000-8000-000000000815"
 version_id = "01982f80-0000-7000-8000-000000000816"

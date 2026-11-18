@@ -32,3 +32,6 @@ pub use resource_embeddings::ResourceEmbeddingWorker;
 
 mod extensions;
 pub use extensions::WorkerExtensionConfig;
+
+mod worker;
+pub use worker::{WorkerOverrides, run_worker};

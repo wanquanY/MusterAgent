@@ -2,6 +2,7 @@
 //!
 //! Resolution never dispatches inference. Completed responses contain the original
 //! native event stream and pass through the ordinary adapter normalizer and ledger.
+use crate::{CredentialResolver, HostRequestHeaders};
 use std::{sync::Arc, time::Duration};
 
 use musteragent_runtime_contract::ApplicationFuture;
@@ -176,6 +177,7 @@ impl ExistingInvocationRecovery {
 pub struct HttpExistingInvocationResolver {
     endpoint: Url,
     client: reqwest::Client,
+    authorization: Option<(Arc<dyn CredentialResolver>, HostRequestHeaders)>,
 }
 impl HttpExistingInvocationResolver {
     pub fn new(endpoint: Url) -> Result<Self, ProviderError> {
@@ -195,7 +197,66 @@ impl HttpExistingInvocationResolver {
         )
         .build()
         .map_err(|_| failure(ProviderErrorCode::RouteConfigurationInvalid))?;
-        Ok(Self { endpoint, client })
+        Ok(Self {
+            endpoint,
+            client,
+            authorization: None,
+        })
+    }
+
+    /// Authorize each GET using the frozen invocation, including polls after a pending result.
+    /// Host metadata is generated for this request. POST-only signatures are never copied.
+    #[must_use]
+    pub fn with_request_authorization(
+        mut self,
+        credentials: Arc<dyn CredentialResolver>,
+        headers: HostRequestHeaders,
+    ) -> Self {
+        self.authorization = Some((credentials, headers));
+        self
+    }
+
+    async fn prepare_lookup(
+        &self,
+        url: Url,
+        request: ExistingInvocationRequest<'_>,
+    ) -> Result<reqwest::Request, ProviderError> {
+        let lookup = self.client.get(url);
+        let failed = || failure(ProviderErrorCode::ExistingInvocationLookupFailed);
+        if let Some((resolver, host_headers)) = &self.authorization {
+            let authority = request.authority;
+            let credentials = resolver
+                .resolve(
+                    &authority.credential_grant_ref,
+                    &authority.route,
+                    authority.route_role,
+                    authority.invocation.invocation_id,
+                )
+                .await
+                .map_err(|_| failed())?;
+            let expiry = crate::adapter::credential_deadline(&credentials)?;
+            let mut lookup =
+                crate::adapter::authorize_token(lookup, authority.route.api_format, credentials)?
+                    .header("idempotency-key", request.idempotency_key)
+                    .build()
+                    .map_err(|_| failed())?;
+            host_headers.apply(authority, lookup.headers_mut()).await?;
+            if expiry.is_some_and(|deadline| tokio::time::Instant::now() >= deadline) {
+                return Err(failed());
+            }
+            Ok(lookup)
+        } else {
+            let mut headers = request.headers.clone();
+            for name in [
+                "content-length",
+                "content-type",
+                "transfer-encoding",
+                "host",
+            ] {
+                headers.remove(name);
+            }
+            lookup.headers(headers).build().map_err(|_| failed())
+        }
     }
 }
 impl ExistingInvocationResolver for HttpExistingInvocationResolver {
@@ -210,20 +271,10 @@ impl ExistingInvocationResolver for HttpExistingInvocationResolver {
             let mut url = self.endpoint.clone();
             url.query_pairs_mut()
                 .append_pair("key", request.idempotency_key);
-            let mut headers = request.headers.clone();
-            for name in [
-                "content-length",
-                "content-type",
-                "transfer-encoding",
-                "host",
-            ] {
-                headers.remove(name);
-            }
+            let lookup = self.prepare_lookup(url, request).await?;
             let response = self
                 .client
-                .get(url)
-                .headers(headers)
-                .send()
+                .execute(lookup)
                 .await
                 .map_err(|_| failure(ProviderErrorCode::ExistingInvocationLookupFailed))?;
             match response.status().as_u16() {
