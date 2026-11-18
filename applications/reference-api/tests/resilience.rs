@@ -479,17 +479,12 @@ async fn http_admission_delegation_sandbox_stop_restart_and_cursor_recovery() ->
     }
     h.worker = None;
     h.restart_api().await?;
-    // The replacement worker publishes only the docs release. Recovery of the
-    // existing Run still exposes the original immutable search binding.
-    let catalog = musteragent_tool::workspace::WorkspaceReleaseCatalog::from_json(include_bytes!(
-        "../examples/workspace-releases.json"
-    ))?;
-    let docs = catalog.resolve("workspace.example-docs", "1.0.0", &"1".repeat(64))?;
-    let reduced = format!(
-        r#"{{"schema_version":"musteragent.workspace-tool-releases.v1","releases":[{}]}}"#,
-        std::str::from_utf8(docs.bytes())?
-    );
-    std::fs::write(h.dir.join("workspace-releases.json"), reduced)?;
+    // assert_receipts verifies the original search binding after the successor
+    // starts with zero releases available for publication.
+    std::fs::write(
+        h.dir.join("workspace-releases.json"),
+        EMPTY_WORKSPACE_CATALOG,
+    )?;
     h.start_worker("worker-replacement")?;
     save(
         &h,
@@ -628,5 +623,40 @@ async fn http_admission_delegation_sandbox_stop_restart_and_cursor_recovery() ->
         "acceptance.json",
         &json!({"normal":"passed","stop_cascade":"passed","worker_sigkill":"passed","api_sigkill_cursor_resume":"passed","stream_equal":true,"tenant_isolation":"passed","interaction_response":"passed","approval_allow_deny":"passed"}),
     )?;
+    h.shutdown().await
+}
+
+#[tokio::test]
+async fn empty_workspace_catalog_admits_and_replays_a_connector_free_snapshot() -> Result<()> {
+    let mut h = Harness::start_with_workspace_tools(false).await?;
+    let command = json!({"command_id": uuid::Uuid::now_v7(), "message": "Read the time.",
+        "agent": "reference-agent", "model_route": "reference.chat@1", "placement": "cloud"});
+    let admitted = h.post("/v1/runs", command.clone()).await?;
+    let run = uuid::Uuid::parse_str(admitted["run_id"].as_str().expect("admitted run"))?;
+    let pool = h.pool.clone();
+    let read_snapshot = || {
+        sqlx::query_scalar::<_, Vec<u8>>(
+            "SELECT encoded_snapshot FROM capability.runtime_snapshots WHERE run_id=$1",
+        )
+        .bind(run)
+        .fetch_one(&pool)
+    };
+    let before = read_snapshot().await?;
+    let snapshot = musteragent_runtime_snapshot::SnapshotCodec::decode_content(
+        &musteragent_wire::ProtobufSnapshotCodec,
+        &before,
+    )?;
+    assert!(!snapshot.tools.is_empty());
+    assert!(
+        snapshot
+            .tools
+            .iter()
+            .all(|tool| tool.manifest.application.is_none())
+    );
+    h.restart_api().await?;
+    let replay = h.post("/v1/runs", command).await?;
+    assert_eq!(replay["duplicate"], true);
+    assert_eq!(replay["run_id"], admitted["run_id"]);
+    assert_eq!(before, read_snapshot().await?);
     h.shutdown().await
 }

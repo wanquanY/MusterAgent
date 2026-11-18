@@ -1023,7 +1023,7 @@ async fn cancellation_marks_started_external_writes_indeterminate_instead_of_fak
     tokio::select! {
         () = provider.all_started.notified() => {}
         result = &mut task => panic!("Run exited before the external write started: {result:?}"),
-        () = tokio::time::sleep(Duration::from_secs(2)) => {
+        () = tokio::time::sleep(musteragent_testkit::integration_timeout()) => {
             let state: (i16, i16, i64, i64, i64) = sqlx::query_as(
                 "SELECT run.status, attempt.status,
                         (SELECT count(*) FROM runtime.model_invocations WHERE run_id = run.run_id),

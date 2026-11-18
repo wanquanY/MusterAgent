@@ -21,3 +21,34 @@ pub struct HostRequestHeaders {
     pub static_headers: HeaderMap,
     pub hook: Option<std::sync::Arc<dyn ModelRequestHeaderHook>>,
 }
+
+impl HostRequestHeaders {
+    pub(crate) async fn apply(
+        &self,
+        authority: &ModelRequestAuthority,
+        outbound: &mut HeaderMap,
+    ) -> Result<HeaderMap, ProviderError> {
+        let dynamic = match &self.hook {
+            Some(hook) => hook.headers(authority).await?,
+            None => Default::default(),
+        };
+        for headers in [&self.static_headers, &dynamic] {
+            for (name, value) in headers {
+                if outbound.contains_key(name)
+                    || matches!(
+                        name.as_str(),
+                        "host"
+                            | "content-type"
+                            | "content-length"
+                            | "transfer-encoding"
+                            | "connection"
+                    )
+                {
+                    return Err(crate::adapter::protocol_error());
+                }
+                outbound.insert(name.clone(), value.clone());
+            }
+        }
+        Ok(dynamic)
+    }
+}
