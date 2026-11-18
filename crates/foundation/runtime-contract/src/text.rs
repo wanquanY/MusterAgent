@@ -29,6 +29,32 @@ impl SafeDisplayText {
         Ok(Self(value))
     }
 
+    /// Normalize already-displayable tool feedback and truncate at a UTF-8 boundary.
+    #[must_use]
+    pub fn bounded(value: &str) -> Option<Self> {
+        let mut text = String::with_capacity(value.len().min(SAFE_DISPLAY_TEXT_MAX_BYTES));
+        let mut space = false;
+        for ch in value.chars() {
+            if ch.is_control() || ch.is_whitespace() {
+                space = !text.is_empty();
+                continue;
+            }
+            if text.len() + usize::from(space) + ch.len_utf8() > SAFE_DISPLAY_TEXT_MAX_BYTES {
+                while text.len() > SAFE_DISPLAY_TEXT_MAX_BYTES - '…'.len_utf8() {
+                    text.pop();
+                }
+                text.push('…');
+                break;
+            }
+            if space {
+                text.push(' ');
+                space = false;
+            }
+            text.push(ch);
+        }
+        (!text.is_empty()).then_some(Self(text))
+    }
+
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0

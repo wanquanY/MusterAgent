@@ -168,3 +168,6 @@ async fn native_handoff_requires_all_original_starts_and_cannot_impersonate_repo
         .unwrap();
     assert_eq!(count, 2);
 }
+
+#[path = "task_lineage.rs"]
+mod lineage;

@@ -340,9 +340,9 @@ impl ModelRoute {
             return false;
         }
         match self.api_format {
-            ApiFormat::OpenAiChatCompletions | ApiFormat::OpenAiResponses => {
-                media_type == "application/pdf"
-            }
+            // Compatible gateways on these wires do not uniformly accept inline files.
+            // The authorized file reader handles documents on both routes.
+            ApiFormat::OpenAiChatCompletions | ApiFormat::OpenAiResponses => false,
             ApiFormat::AnthropicMessages
             | ApiFormat::BedrockInvokeModel
             | ApiFormat::GoogleGenerateContent

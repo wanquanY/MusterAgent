@@ -71,6 +71,26 @@ impl ObservationFailure {
     }
 }
 
+fn failed_feedback(error: &musteragent_runtime_contract::ErrorInfo) -> serde_json::Value {
+    let mut feedback = serde_json::json!({
+        "ok": false,
+        "outcome": "failed",
+        "error": {
+            "code": error.code.as_str(),
+            "message": error.safe_message.as_str(),
+            "retryable": error.retryable,
+        }
+    });
+    if !error.retryable {
+        feedback["error"]["next_step"] = serde_json::Value::String(
+            "Do not repeat this identical call. Use the message to change the arguments, \
+             or address the reported cause before continuing."
+                .to_owned(),
+        );
+    }
+    feedback
+}
+
 // The supervisor's persisted window expiration is the stop cause. A native
 // failure observed during cleanup remains evidence, but cannot rename that
 // cause. RequestTimedOut/ExecutionFailed originate at the adapter and retain
@@ -214,15 +234,7 @@ impl DurableToolExecutor {
             ToolTerminalOutcome::Failed { error, diagnostic_result, .. } => {
                 self.failure_feedback(
                     material,
-                    serde_json::json!({
-                        "ok": false,
-                        "outcome": "failed",
-                        "error": {
-                            "code": error.code.as_str(),
-                            "message": error.safe_message.as_str(),
-                            "retryable": error.retryable,
-                        }
-                    }),
+                    failed_feedback(error),
                     diagnostic_result.as_ref(),
                 ).await?
             }

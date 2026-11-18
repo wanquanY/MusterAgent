@@ -53,7 +53,12 @@ impl NativeMemoryEmbeddingProvider {
             .pool_idle_timeout(Duration::from_secs(30));
         let builder = match policy {
             NativeEmbeddingHttpPolicy::HttpsDirect => builder.https_only(true).no_proxy(),
-            NativeEmbeddingHttpPolicy::SystemProxyWithLoopbackHttp => builder,
+            NativeEmbeddingHttpPolicy::SystemProxyWithLoopbackHttp => {
+                crate::endpoint::apply_proxy_policy(
+                    builder,
+                    crate::endpoint::is_loopback_origin(&base_url),
+                )
+            }
         };
         let client = builder
             .build()
@@ -81,12 +86,7 @@ fn validate_gateway(
     url: &Url,
     policy: NativeEmbeddingHttpPolicy,
 ) -> Result<(), MemoryEmbeddingError> {
-    let loopback = match url.host() {
-        Some(url::Host::Domain("localhost")) => true,
-        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
-        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
-        _ => false,
-    };
+    let loopback = crate::endpoint::is_loopback_origin(url);
     let cleartext_allowed = policy == NativeEmbeddingHttpPolicy::SystemProxyWithLoopbackHttp
         && url.scheme() == "http"
         && loopback;

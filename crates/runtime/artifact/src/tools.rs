@@ -601,6 +601,13 @@ pub enum ArtifactToolError {
     /// A capability that is not configured or has no capacity right now.
     #[error("Capability unavailable: {0}")]
     Unavailable(String),
+    /// A host reports its own classified, safe-to-display tool failure.
+    #[error("{message}")]
+    Reported {
+        code: musteragent_runtime_contract::ErrorCode,
+        retryable: bool,
+        message: String,
+    },
     #[error("Artifact Tool is not implemented by the Rust built-in provider")]
     UnsupportedTool,
     #[error("Artifact Tool input or stored content is invalid JSON")]

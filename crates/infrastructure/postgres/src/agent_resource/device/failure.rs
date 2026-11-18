@@ -24,6 +24,13 @@ pub(super) fn artifact(error: ArtifactToolError) -> Error {
         | ArtifactToolError::InvalidIdentifier
         | ArtifactToolError::InvalidJson
         | ArtifactToolError::ArtifactKindMismatch => Error::InvalidArguments,
+        ArtifactToolError::Reported { code, .. } => match code.category() {
+            musteragent_runtime_contract::ErrorCategory::Validation => Error::InvalidArguments,
+            musteragent_runtime_contract::ErrorCategory::Conflict => Error::Conflict,
+            musteragent_runtime_contract::ErrorCategory::NotFound => Error::ReferenceUnavailable,
+            musteragent_runtime_contract::ErrorCategory::Policy => Error::Forbidden,
+            _ => Error::Infrastructure,
+        },
         ArtifactToolError::VersionConflict => Error::Conflict,
         ArtifactToolError::ArtifactUnavailable => Error::ReferenceUnavailable,
         ArtifactToolError::UnauthorizedContent => Error::Forbidden,

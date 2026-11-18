@@ -12,7 +12,10 @@ pub(crate) mod device;
 mod device_target;
 mod inputs;
 mod preparation;
-pub use device::PostgresWorkItemDeviceExecutionStore;
+pub use device::{
+    PostgresWorkItemDeviceExecutionStore, PostgresWorkItemDeviceLineageSweep,
+    WorkItemDeviceLineageSweepReport,
+};
 pub(crate) use inputs::accepted_source as work_item_accepted_input_source;
 mod commit;
 mod reports;

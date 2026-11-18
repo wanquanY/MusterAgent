@@ -487,7 +487,8 @@ fn route_sends_documents_natively_only_when_its_protocol_carries_the_type() {
     route.capabilities =
         BTreeSet::from([DottedKey::new("document_input").expect("document input")]);
 
-    // OpenAI Responses carries PDF natively; the Word file is read by tools.
+    // Anthropic carries PDF natively; the Word file is read by tools.
+    route.api_format = ApiFormat::AnthropicMessages;
     let presented = present_message_for_route(&message, &route).expect("present documents");
     assert!(presented.content.iter().any(|part| {
         matches!(part, CanonicalContentPart::File(reference) if reference.content_id == pdf_id)
@@ -504,7 +505,24 @@ fn route_sends_documents_natively_only_when_its_protocol_carries_the_type() {
     let presented = present_message_for_route(&message, &route).expect("present documents");
     assert_eq!(presented, message);
 
+    // OpenAI-compatible vendors reject the `file` / `input_file` part on both
+    // OpenAI wires, so even a declared document is read through the file tools.
+    for format in [ApiFormat::OpenAiChatCompletions, ApiFormat::OpenAiResponses] {
+        route.api_format = format;
+        let presented = present_message_for_route(&message, &route).expect("present documents");
+        assert!(
+            !presented
+                .content
+                .iter()
+                .any(|part| matches!(part, CanonicalContentPart::File(_)))
+        );
+        assert!(presented.content.iter().any(|part| {
+            matches!(part, CanonicalContentPart::Text(text) if text.as_str().contains(&pdf_id.to_string()))
+        }));
+    }
+
     // Without a document contract nothing is sent as original bytes.
+    route.api_format = ApiFormat::BedrockConverse;
     route.capabilities.clear();
     let presented = present_message_for_route(&message, &route).expect("present documents");
     assert!(
@@ -532,6 +550,7 @@ fn route_keeps_native_documents_within_the_request_budget_newest_first() {
     let first = message(vec![older]);
     let second = message(newer.clone());
     let mut route = model_route();
+    route.api_format = ApiFormat::AnthropicMessages;
     route.capabilities = BTreeSet::from([DottedKey::new("input.document").expect("document")]);
 
     let presented = present_messages_for_route(&[&first, &second], &route).expect("present");

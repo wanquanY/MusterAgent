@@ -242,12 +242,13 @@ impl DirectModelProvider {
             provider.request.layout_version = crate::WIRE_BLOCK_LAYOUT_VERSION,
             "native Provider request serialized"
         );
-        let client = self.clients.for_transport(
+        let client = self.clients.for_endpoint(
             endpoint.connect_timeout,
             self.existing_invocations.contains_key(&(
                 request.route.model_provider_id,
                 request.route.model_entry_id,
             )),
+            &endpoint.invocation_url,
         )?;
         // Resolve scoped credentials only after potentially large content
         // reads and request mapping; those bytes carry no execution permission.
@@ -358,7 +359,8 @@ impl DirectModelProvider {
             crate::PreparedModelHttpRequest::Native(Box::new(outbound))
         };
         let client = if matches!(&outbound, crate::PreparedModelHttpRequest::FirstParty(_)) {
-            self.clients.for_transport(endpoint.connect_timeout, true)?
+            self.clients
+                .for_endpoint(endpoint.connect_timeout, true, &endpoint.invocation_url)?
         } else {
             client
         };
