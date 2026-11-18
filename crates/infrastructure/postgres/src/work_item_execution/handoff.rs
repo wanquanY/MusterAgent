@@ -92,31 +92,7 @@ impl PostgresWorkItemExecutionHandoffStore {
         // A failed coordinator continuation does not rewrite the task execution's
         // business outcome. Its exact signed rejection remains on this outbox item.
         if p.report.is_none() {
-            let mut record = p.work_item.clone();
-            record.core = record
-                .core
-                .execution_rejected(
-                    p.key.goal_revision,
-                    p.key.control_revision,
-                    p.key.assignment_epoch,
-                )
-                .map_err(|_| DialogueStoreError::RevisionConflict)?;
-            record.updated_at = now;
-            crate::work_item_authority::commands::revision_and_outbox(
-                &mut tx,
-                &record,
-                "execution_rejected",
-            )
-            .await
-            .map_err(authority_error)?;
-            sqlx::query(
-                "UPDATE collaboration.work_items SET state_revision=$2 WHERE work_item_id=$1",
-            )
-            .bind(record.core.work_item_id.into_uuid())
-            .bind(integer(record.core.revisions.state.get())?)
-            .execute(&mut *tx)
-            .await
-            .map_err(db)?;
+            reject_execution(&mut tx, &p, now).await?;
         }
         let changed=sqlx::query("UPDATE collaboration.work_item_outbox SET signed_admission_rejection=$4,delivered_at_ms=floor(extract(epoch FROM clock_timestamp())*1000)::bigint,failure_code=$5,claim_owner=NULL,lease_expires_at_ms=NULL WHERE event_seq=$1 AND claim_owner=$2 AND claim_generation=$3 AND delivered_at_ms IS NULL AND lease_expires_at_ms>floor(extract(epoch FROM clock_timestamp())*1000)::bigint")
    .bind(integer(claim.event_seq)?).bind(claim.owner).bind(integer(claim.generation)?).bind(bytes).bind(c.reason.as_str()).execute(&mut *tx).await.map_err(db)?.rows_affected()==1;
@@ -134,6 +110,33 @@ impl PostgresWorkItemExecutionHandoffStore {
             .map_err(crate::dialogue_codec::transaction)?;
         Ok(true)
     }
+}
+/// Append the blocked revision and its requester event within the claim transaction.
+pub(super) async fn reject_execution(
+    tx: &mut PgConnection,
+    p: &WorkItemExecutionPreparation,
+    now: UtcTimestamp,
+) -> Result<(), DialogueStoreError> {
+    let mut record = p.work_item.clone();
+    record.core = record
+        .core
+        .execution_rejected(
+            p.key.goal_revision,
+            p.key.control_revision,
+            p.key.assignment_epoch,
+        )
+        .map_err(|_| DialogueStoreError::RevisionConflict)?;
+    record.updated_at = now;
+    crate::work_item_authority::commands::revision_and_outbox(tx, &record, "execution_rejected")
+        .await
+        .map_err(authority_error)?;
+    sqlx::query("UPDATE collaboration.work_items SET state_revision=$2 WHERE work_item_id=$1")
+        .bind(record.core.work_item_id.into_uuid())
+        .bind(integer(record.core.revisions.state.get())?)
+        .execute(tx)
+        .await
+        .map_err(db)?;
+    Ok(())
 }
 impl WorkItemExecutionHandoffStore for PostgresWorkItemExecutionHandoffStore {
     fn claim(

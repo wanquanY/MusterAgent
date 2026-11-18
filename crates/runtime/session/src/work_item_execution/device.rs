@@ -178,6 +178,16 @@ pub trait WorkItemDeviceTargetAuthority: Send + Sync {
             async move { WorkItemDeviceHostQualification::current_selection(current, selection) },
         )
     }
+    /// Inspect the original destination without authorizing a device or a tool effect.
+    /// An unavailable authority leaves the reservation pending.
+    fn inspect_membership_lineage(
+        &self,
+        _actor: Actor,
+        _destination: crate::DeviceDestination,
+    ) -> ApplicationFuture<'_, Result<WorkItemDeviceMembershipLineage, DialogueStoreError>> {
+        Box::pin(async { Err(DialogueStoreError::Unavailable) })
+    }
+
     /// Existing reservations retain their target and consent commitment. The
     /// original Owner rechecks current policy in addition to exact host lineage.
     fn resolve_retained<'a>(
@@ -203,6 +213,13 @@ pub trait WorkItemDeviceTargetAuthority: Send + Sync {
             Ok(WorkItemDeviceTargetQualification::new(resolved, host))
         })
     }
+}
+
+/// A permanent ending is an explicit decision of the original membership authority.
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub enum WorkItemDeviceMembershipLineage {
+    Continuing,
+    Ended,
 }
 
 /// Native transport authenticates the exact request bytes before this original

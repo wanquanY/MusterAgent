@@ -188,9 +188,13 @@ impl HttpExistingInvocationResolver {
         }
         let client = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
-            .retry(reqwest::retry::never())
-            .build()
-            .map_err(|_| failure(ProviderErrorCode::RouteConfigurationInvalid))?;
+            .retry(reqwest::retry::never());
+        let client = crate::endpoint::apply_proxy_policy(
+            client,
+            crate::endpoint::is_loopback_origin(&endpoint),
+        )
+        .build()
+        .map_err(|_| failure(ProviderErrorCode::RouteConfigurationInvalid))?;
         Ok(Self { endpoint, client })
     }
 }

@@ -33,7 +33,7 @@ impl PostgresContextMaterialSource {
                 .map(|e| e.entry_id.into_uuid())
                 .collect();
             let cut = &page.frozen_cut;
-            let mut closed_entries = std::collections::BTreeSet::new();
+            let mut closed_entries = BTreeSet::new();
             let mut transcripts = BTreeMap::<DialogueEntryId, Vec<ContextEntry>>::new();
             if !ids.is_empty() {
                 let admitted_at: i64 = sqlx::query_scalar(
@@ -80,10 +80,10 @@ impl PostgresContextMaterialSource {
                                       AND revoked.epoch=e.epoch AND revoked.seq<=$7 AND (revoked.erasure_job_id IS NOT NULL OR (revoked.visible_revision>1 AND revoked.kind<>'interaction')))
                 )
                 SELECT entry_id,run_id,activity_id,conversation_id,admitted_sequence::text,anchor::text,
-                       previous,delivery_call,COALESCE(is_last_closed,false) AS closed_tail,seq,false AS boundary_only FROM publications WHERE entry_id=ANY($5)
+                       previous,delivery_call,COALESCE(is_last_closed,false) AS closed_tail,seq FROM publications WHERE entry_id=ANY($5)
                 UNION ALL
                 SELECT e.entry_id,r.run_id,r.activity_id,r.conversation_id,r.admitted_sequence::text,NULL::text,
-                       NULL::uuid,NULL::uuid,true,e.seq,false
+                       NULL::uuid,NULL::uuid,true,e.seq
                 FROM agent.agent_dialogue_entries e
                 JOIN agent.dialogue_sessions task ON task.source_intent_id=e.source_intent_id AND task.dialogue_id=e.dialogue_id
                 JOIN runtime.runs r ON r.conversation_id=task.conversation_id AND r.tenant_id=task.tenant_id
@@ -92,61 +92,13 @@ impl PostgresContextMaterialSource {
                   AND r.finished_at_ms<=$8 AND r.status IN (5,6,7) AND e.erasure_job_id IS NULL AND e.visible_revision=1
                   AND NOT EXISTS(SELECT 1 FROM agent.dialogue_publications p WHERE p.source_run_id=r.run_id)
                   AND NOT EXISTS(SELECT 1 FROM agent.agent_dialogue_entries revoked WHERE revoked.source_intent_id=e.source_intent_id AND (revoked.erasure_job_id IS NOT NULL OR (revoked.visible_revision>1 AND revoked.kind<>'interaction')))
-                UNION ALL
-                SELECT e.entry_id,r.run_id,r.activity_id,r.conversation_id,r.admitted_sequence::text,NULL::text,
-                       NULL::uuid,NULL::uuid,true,e.seq,true
-                FROM agent.dialogue_publications p
-                JOIN agent.agent_dialogue_entries e ON e.entry_id=p.entry_id AND e.tenant_id=p.tenant_id
-                JOIN runtime.runs r ON r.run_id=p.source_run_id AND r.tenant_id=p.tenant_id
-                WHERE p.tenant_id=$1 AND p.owner_id=$2 AND p.dialogue_id=$3 AND p.agent_id=$4
-                  AND p.entry_id=ANY($5) AND e.epoch=$6 AND e.seq<=$7 AND r.finished_at_ms<=$8
-                  AND p.source_kind='terminal_owner' AND e.erasure_job_id IS NULL
-                  AND NOT EXISTS (SELECT 1 FROM agent.dialogue_publications later
-                     JOIN agent.agent_dialogue_entries le ON le.entry_id=later.entry_id
-                     WHERE later.source_run_id=p.source_run_id AND le.seq>e.seq)
-                UNION ALL
-                -- A request refused before any task was created (for example by
-                -- an entitlement check) is answered by a notice with no run and no
-                -- publication. That notice closes the request; otherwise it stays
-                -- open forever and no later history can ever be compacted.
-                SELECT e.entry_id,NULL::uuid,NULL::uuid,NULL::uuid,NULL::text,NULL::text,
-                       NULL::uuid,NULL::uuid,true,e.seq,true
-                FROM agent.agent_dialogue_entries e
-                WHERE e.entry_id=ANY($5) AND e.tenant_id=$1 AND e.owner_id=$2 AND e.dialogue_id=$3
-                  AND e.epoch=$6 AND e.seq<=$7 AND e.kind<>'user_message' AND e.erasure_job_id IS NULL
-                  AND e.source_intent_id IS NOT NULL
-                  AND NOT EXISTS (SELECT 1 FROM agent.dialogue_sessions t
-                     WHERE t.source_intent_id=e.source_intent_id AND t.dialogue_id=e.dialogue_id)
-                  AND NOT EXISTS (SELECT 1 FROM agent.dialogue_publications p WHERE p.entry_id=e.entry_id)
-                UNION ALL
-                -- A request executed on the desktop has its run and transcript
-                -- in the device store; the cloud only sees its published
-                -- replies. The run's last published reply closes the request,
-                -- or every desktop-run request would block compaction forever.
-                SELECT e.entry_id,NULL::uuid,NULL::uuid,NULL::uuid,NULL::text,NULL::text,
-                       NULL::uuid,NULL::uuid,true,e.seq,true
-                FROM agent.dialogue_publications p
-                JOIN agent.agent_dialogue_entries e ON e.entry_id=p.entry_id AND e.tenant_id=p.tenant_id
-                WHERE p.tenant_id=$1 AND p.owner_id=$2 AND p.dialogue_id=$3 AND p.agent_id=$4
-                  AND p.entry_id=ANY($5) AND p.execution_home='device'
-                  AND e.epoch=$6 AND e.seq<=$7 AND e.erasure_job_id IS NULL
-                  AND NOT EXISTS (SELECT 1 FROM agent.dialogue_publications later
-                     JOIN agent.agent_dialogue_entries le ON le.entry_id=later.entry_id
-                     WHERE later.source_run_id=p.source_run_id AND le.seq>e.seq AND le.seq<=$7)
                 ORDER BY run_id,seq
             "#).bind(cut.tenant_id.into_uuid()).bind(cut.owner_id.into_uuid()).bind(cut.dialogue_id.into_uuid()).bind(cut.agent_id.into_uuid())
-                .bind(ids).bind(i64::try_from(cut.through.epoch)?).bind(i64::try_from(cut.through.seq)?).bind(admitted_at).fetch_all(&self.pool).await?;
+                .bind(&ids).bind(i64::try_from(cut.through.epoch)?).bind(i64::try_from(cut.through.seq)?).bind(admitted_at).fetch_all(&self.pool).await?;
+                closed_entries =
+                    super::request_closure::settled(&self.pool, cut, &ids, admitted_at).await?;
                 let mut runs = BTreeMap::<RunId, Vec<sqlx::postgres::PgRow>>::new();
                 for row in rows {
-                    // A lifecycle delivery closes failed or cancelled work without
-                    // giving its public text the authorship of a model response.
-                    if row.try_get::<bool, _>("boundary_only")? {
-                        closed_entries.insert(
-                            DialogueEntryId::from_uuid(row.try_get("entry_id")?)
-                                .map_err(|_| PostgresContextMaterialError::CorruptState)?,
-                        );
-                        continue;
-                    }
                     runs.entry(id(row.try_get("run_id")?)?)
                         .or_default()
                         .push(row);
@@ -269,12 +221,6 @@ impl PostgresContextMaterialSource {
                             terminal,
                             row.try_get("closed_tail")?,
                         ) {
-                            if row
-                                .try_get::<Option<bool>, _>("closed_tail")?
-                                .unwrap_or(false)
-                            {
-                                closed_entries.insert(entry);
-                            }
                             transcripts.insert(entry, segment);
                         }
                     }

@@ -231,8 +231,9 @@ mod work_item_execution;
 pub use work_item_authority::PostgresWorkItemAuthority;
 pub use work_item_execution::{
     PostgresWorkItemControlStore, PostgresWorkItemDeviceExecutionStore,
-    PostgresWorkItemExecutionHandoffStore, PostgresWorkItemExecutionStore,
-    PostgresWorkItemReportStore, PostgresWorkItemStartStore,
+    PostgresWorkItemDeviceLineageSweep, PostgresWorkItemExecutionHandoffStore,
+    PostgresWorkItemExecutionStore, PostgresWorkItemReportStore, PostgresWorkItemStartStore,
+    WorkItemDeviceLineageSweepReport,
 };
 mod agent_dialogue;
 mod dialogue_codec;

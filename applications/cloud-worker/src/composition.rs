@@ -77,6 +77,7 @@ pub struct CloudWorkerComposition {
     wake: Arc<PostgresWakeSignal>,
     schedules: PostgresScheduleDispatcher,
     delegation: PostgresCloudDelegation,
+    device_lineages: Option<PostgresWorkItemDeviceLineageSweep>,
     extensions: Arc<musteragent_extension::ExtensionHost>,
     extension_workspace: std::path::PathBuf,
 }
@@ -253,10 +254,26 @@ impl CloudWorkerComposition {
             database,
             wake,
             schedules,
+            device_lineages: None,
             delegation,
             extensions,
             extension_workspace,
         })
+    }
+
+    /// Enable background settlement using the same trusted membership owner as device pickup.
+    #[must_use]
+    pub fn with_device_membership_authority(
+        mut self,
+        targets: Arc<dyn musteragent_runtime_session::WorkItemDeviceTargetAuthority>,
+    ) -> Self {
+        let admission =
+            PostgresAdmissionStore::new(self.database.clone(), Arc::new(ProtobufSnapshotCodec));
+        self.device_lineages = Some(PostgresWorkItemDeviceLineageSweep::new(
+            PostgresWorkItemExecutionStore::new(admission),
+            targets,
+        ));
+        self
     }
 
     /// A sibling failure cancels the whole generation and waits for runner cleanup.
@@ -305,8 +322,26 @@ impl CloudWorkerComposition {
                 }
             }
         };
-        let (scheduled, executed, listened, occurred) =
-            tokio::join!(scheduler, runner, listener, occurrences);
+        let lineages = async {
+            if let Some(sweep) = self.device_lineages {
+                let owner = uuid::Uuid::now_v7();
+                loop {
+                    let delay = match sweep.sweep_once(owner, 64).await {
+                        Ok(report) if !report.wrapped => Duration::from_secs(1),
+                        Ok(_) => Duration::from_secs(300),
+                        Err(error) => {
+                            tracing::warn!(?error, "Device membership sweep deferred");
+                            Duration::from_secs(30)
+                        }
+                    };
+                    tokio::time::sleep(delay).await;
+                }
+            }
+        };
+        let (scheduled, executed, listened, occurred, ()) =
+            tokio::join!(scheduler, runner, listener, occurrences, async {
+                tokio::select! { _ = generation.cancelled() => {}, _ = lineages => {} }
+            });
         scheduled?;
         executed?;
         listened?;

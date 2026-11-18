@@ -10,6 +10,8 @@ mod claim;
 mod controls;
 mod custody;
 mod grant_history;
+mod lineage_sweep;
+pub use lineage_sweep::{PostgresWorkItemDeviceLineageSweep, WorkItemDeviceLineageSweepReport};
 pub(super) mod placement;
 mod preparation_failure;
 mod reauthorization;

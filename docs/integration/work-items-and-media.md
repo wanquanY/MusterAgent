@@ -26,6 +26,16 @@ executor. It does not bypass verification. `tasks.followup@1` requires an accept
 user reply to an exact published result and creates a new task linked to that
 result's current action head. It never reopens the completed parent.
 
+A host that supports device WorkItems supplies its membership owner through
+`WorkItemDeviceTargetAuthority::inspect_membership_lineage`. Return `Ended` only
+when the original membership, device, installation and epoch for that actor can
+never be resumed. An unavailable lookup leaves the task pending. Pass the same
+authority to `CloudWorkerComposition::with_device_membership_authority` to settle
+pending tasks even when the device stays offline. A host running its own
+scheduler can drive `PostgresWorkItemDeviceLineageSweep::sweep_once` directly.
+The fenced settlement blocks the task and acknowledges its execution request in
+one transaction.
+
 For image/video generation, implement `BackendMediaCapabilityProvider` and
 register `MediaArtifactCapabilityHandler` with:
 

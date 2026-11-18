@@ -19,6 +19,7 @@ mod provenance;
 mod public_delivery_recovery;
 mod public_delivery_refs;
 mod public_delivery_repair;
+mod request_closure;
 mod run_source;
 mod source_port;
 mod source_selection;

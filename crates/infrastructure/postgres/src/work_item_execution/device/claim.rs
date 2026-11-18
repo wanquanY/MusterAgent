@@ -1,4 +1,13 @@
 use super::*;
+enum Pickup {
+    Ready(Option<WorkItemExecutionClaim>),
+    Ended(
+        WorkItemExecutionClaim,
+        Box<WorkItemExecutionPreparation>,
+        DeviceDestination,
+    ),
+}
+
 impl PostgresWorkItemDeviceExecutionStore {
     pub(super) async fn claim_inner(
         &self,
@@ -6,6 +15,31 @@ impl PostgresWorkItemDeviceExecutionStore {
         owner: uuid::Uuid,
         lease: Duration,
     ) -> Result<Option<WorkItemExecutionClaim>, DialogueStoreError> {
+        loop {
+            match self.claim_once(authority, owner, lease).await? {
+                Pickup::Ready(claim) => return Ok(claim),
+                Pickup::Ended(claim, preparation, destination) => {
+                    if !super::lineage_sweep::settle_ended(
+                        &self.executions,
+                        claim,
+                        *preparation,
+                        destination,
+                    )
+                    .await?
+                    {
+                        return Ok(None);
+                    }
+                }
+            }
+        }
+    }
+
+    async fn claim_once(
+        &self,
+        authority: &DeviceHostAuthority,
+        owner: uuid::Uuid,
+        lease: Duration,
+    ) -> Result<Pickup, DialogueStoreError> {
         if owner.is_nil() || !(Duration::from_secs(1)..=Duration::from_secs(300)).contains(&lease) {
             return Err(DialogueStoreError::Corrupt);
         }
@@ -45,34 +79,10 @@ impl PostgresWorkItemDeviceExecutionStore {
             .bind(destination.device_id.into_uuid()).bind(destination.installation_id.into_uuid())
             .bind(destination.membership_id)
             .fetch_optional(&mut *tx).await.map_err(db)?;
-        let Some(row) = row else { return Ok(None) };
-        let claim = WorkItemExecutionClaim {
-            request: WorkItemExecutionRequest {
-                actor,
-                work_item_id: WorkItemId::from_uuid(row.try_get("work_item_id").map_err(db)?)
-                    .map_err(|_| DialogueStoreError::Corrupt)?,
-                goal_revision: WorkItemGoalRevision::new(unsigned(
-                    row.try_get("goal_revision").map_err(db)?,
-                )?)
-                .map_err(|_| DialogueStoreError::Corrupt)?,
-                control_revision: WorkItemControlRevision::new(unsigned(
-                    row.try_get("control_revision").map_err(db)?,
-                )?)
-                .map_err(|_| DialogueStoreError::Corrupt)?,
-                assignment_epoch: AssignmentEpoch::new(unsigned(
-                    row.try_get("assignment_epoch").map_err(db)?,
-                )?)
-                .map_err(|_| DialogueStoreError::Corrupt)?,
-                report_from_run_id: None,
-            },
-            event_seq: unsigned(row.try_get("event_seq").map_err(db)?)?,
-            owner,
-            generation: unsigned(row.try_get("claim_generation").map_err(db)?)?,
-            attempt_count: unsigned(row.try_get("attempt_count").map_err(db)?)?,
-            lease_expires_at: UtcTimestamp::from_unix_millis(
-                row.try_get("lease_expires_at_ms").map_err(db)?,
-            ),
+        let Some(row) = row else {
+            return Ok(Pickup::Ready(None));
         };
+        let claim = decode_claim(&row, actor, owner)?;
         // No target migration or newly generated Intent: revalidate the original
         // reservation against the currently authenticated membership/consent.
         let validated = async {
@@ -83,10 +93,45 @@ impl PostgresWorkItemDeviceExecutionStore {
                 self.executions.admission.snapshots.as_ref(),
             )
             .await?;
-            self.require_current_target(authority, &source, &mut tx)
+            match self
+                .require_current_target(authority, &source, &mut tx)
                 .await
+            {
+                Ok(()) => Ok(None),
+                Err(error) => {
+                    // An older epoch alone does not prove that continuity ended.
+                    if let WorkItemExecutionTarget::RemoteDevice(target) = &source.target
+                        && target.device_id == destination.device_id
+                        && target.installation_id == destination.installation_id
+                        && target.membership_id == destination.membership_id
+                        && target.membership_epoch < destination.membership_epoch.get()
+                    {
+                        let original = DeviceDestination {
+                            membership_epoch: std::num::NonZeroU64::new(target.membership_epoch)
+                                .ok_or(DialogueStoreError::Corrupt)?,
+                            ..destination
+                        };
+                        if super::lineage_sweep::inspect(self.targets.as_ref(), actor, original)
+                            .await
+                            == Ok(WorkItemDeviceMembershipLineage::Ended)
+                        {
+                            authority
+                                .require_current_at(now(&mut tx).await?)
+                                .map_err(|_| DialogueStoreError::Unavailable)?;
+                            return Ok(Some((source, original)));
+                        }
+                    }
+                    Err(error)
+                }
+            }
         }
         .await;
+        if let Ok(Some((source, original))) = validated {
+            tx.commit()
+                .await
+                .map_err(crate::dialogue_codec::transaction)?;
+            return Ok(Pickup::Ended(claim, Box::new(source), original));
+        }
         if let Err(error) = validated {
             // Failure is not an ACK. Retain this obligation but move its
             // availability atomically, so an old revoked source cannot starve
@@ -114,7 +159,7 @@ impl PostgresWorkItemDeviceExecutionStore {
         tx.commit()
             .await
             .map_err(crate::dialogue_codec::transaction)?;
-        Ok(Some(claim))
+        Ok(Pickup::Ready(Some(claim)))
     }
     pub(super) async fn prepare_inner(
         &self,
@@ -190,4 +235,38 @@ pub(super) async fn lock_claim(
         return Err(DialogueStoreError::RevisionConflict);
     }
     Ok(())
+}
+
+pub(super) fn decode_claim(
+    row: &sqlx::postgres::PgRow,
+    actor: Actor,
+    owner: uuid::Uuid,
+) -> Result<WorkItemExecutionClaim, DialogueStoreError> {
+    Ok(WorkItemExecutionClaim {
+        request: WorkItemExecutionRequest {
+            actor,
+            work_item_id: WorkItemId::from_uuid(row.try_get("work_item_id").map_err(db)?)
+                .map_err(|_| DialogueStoreError::Corrupt)?,
+            goal_revision: WorkItemGoalRevision::new(unsigned(
+                row.try_get("goal_revision").map_err(db)?,
+            )?)
+            .map_err(|_| DialogueStoreError::Corrupt)?,
+            control_revision: WorkItemControlRevision::new(unsigned(
+                row.try_get("control_revision").map_err(db)?,
+            )?)
+            .map_err(|_| DialogueStoreError::Corrupt)?,
+            assignment_epoch: AssignmentEpoch::new(unsigned(
+                row.try_get("assignment_epoch").map_err(db)?,
+            )?)
+            .map_err(|_| DialogueStoreError::Corrupt)?,
+            report_from_run_id: None,
+        },
+        event_seq: unsigned(row.try_get("event_seq").map_err(db)?)?,
+        owner,
+        generation: unsigned(row.try_get("claim_generation").map_err(db)?)?,
+        attempt_count: unsigned(row.try_get("attempt_count").map_err(db)?)?,
+        lease_expires_at: UtcTimestamp::from_unix_millis(
+            row.try_get("lease_expires_at_ms").map_err(db)?,
+        ),
+    })
 }

@@ -93,7 +93,9 @@ impl DirectModelProvider {
             "questions": request.evaluation.questions,
         });
         let body = crate::NativeWireBody::serialize(&payload).map_err(|_| invalid())?;
-        let client = self.clients.for_transport(endpoint.connect_timeout, true)?;
+        let client =
+            self.clients
+                .for_endpoint(endpoint.connect_timeout, true, &endpoint.invocation_url)?;
         let native = build_request(
             &client,
             &endpoint,

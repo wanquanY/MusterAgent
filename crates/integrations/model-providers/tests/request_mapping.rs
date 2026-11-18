@@ -638,9 +638,26 @@ fn provider_file_results_use_native_payloads_and_bounded_formats() {
         byte_length: u64::try_from(bytes.len()).expect("length"),
         sha256: Sha256::digest(&bytes),
     };
+    // OpenAI wires never carry documents natively (see
+    // `ModelRoute::accepts_native_document`); the planner reads them instead.
+    for format in [ApiFormat::OpenAiChatCompletions, ApiFormat::OpenAiResponses] {
+        let mut request = request(format);
+        request.input[2]
+            .content
+            .push(CanonicalContentPart::File(reference.clone()));
+        let mut contents = ResolvedContents::default();
+        contents
+            .insert(
+                &reference,
+                ResolvedContent::Inline {
+                    media_type: reference.media_type.clone(),
+                    bytes: SecretSlice::new(bytes.clone().into_boxed_slice()),
+                },
+            )
+            .expect("resolved PDF");
+        assert!(map_request(&request, &contents).is_err());
+    }
     for format in [
-        ApiFormat::OpenAiChatCompletions,
-        ApiFormat::OpenAiResponses,
         ApiFormat::AnthropicMessages,
         ApiFormat::GoogleGenerateContent,
         ApiFormat::GoogleInteractions,
@@ -671,34 +688,8 @@ fn provider_file_results_use_native_payloads_and_bounded_formats() {
             ApiFormat::TypeSafeSystemOne | ApiFormat::OpenRouterDecisions => {
                 unreachable!("decision protocols do not use chat fixtures")
             }
-            ApiFormat::OpenAiChatCompletions => {
-                let file = &body["messages"]
-                    .as_array()
-                    .expect("messages")
-                    .last()
-                    .expect("file")["content"][1]["file"];
-                assert_eq!(file["filename"], "musteragent_attachment.pdf");
-                // OpenAI documents file_data as a data URL, like image_url.
-                assert!(
-                    file["file_data"]
-                        .as_str()
-                        .is_some_and(|data| data.starts_with("data:application/pdf;base64,"))
-                );
-            }
-            ApiFormat::OpenAiResponses => {
-                let file = body["input"]
-                    .as_array()
-                    .expect("input")
-                    .iter()
-                    .find_map(|item| item["output"].as_array())
-                    .and_then(|output| output.iter().find(|part| part["type"] == "input_file"))
-                    .expect("input file");
-                assert_eq!(file["filename"], "musteragent_attachment.pdf");
-                assert!(
-                    file["file_data"]
-                        .as_str()
-                        .is_some_and(|data| data.starts_with("data:application/pdf;base64,"))
-                );
+            ApiFormat::OpenAiChatCompletions | ApiFormat::OpenAiResponses => {
+                unreachable!("covered above")
             }
             ApiFormat::AnthropicMessages | ApiFormat::BedrockInvokeModel => {
                 let source = &body["messages"]

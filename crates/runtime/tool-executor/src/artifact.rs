@@ -84,7 +84,9 @@ fn artifact_commit_error(
         ErrorInfo {
             code,
             category: code.category(),
-            safe_message: SafeDisplayText::new(message).map_err(|_| invariant())?,
+            safe_message: SafeDisplayText::bounded(message)
+                .or_else(|| SafeDisplayText::new(code.as_str()).ok())
+                .ok_or_else(invariant)?,
             retryable,
             dependency_ref: None,
             diagnostic_ref: None,
@@ -102,12 +104,14 @@ pub(crate) fn artifact_failure(
 ) -> Result<CapabilityOutcome, LoopPortError> {
     let (code, retryable, message) = match error {
         ArtifactToolError::Unavailable(reason) => {
-            let message: String = reason
-                .chars()
-                .filter(|c| !c.is_control())
-                .take(300)
-                .collect();
-            return artifact_failure_outcome(ErrorCode::CapabilityUnavailable, false, &message);
+            return artifact_failure_outcome(ErrorCode::CapabilityUnavailable, false, &reason);
+        }
+        ArtifactToolError::Reported {
+            code,
+            retryable,
+            message,
+        } => {
+            return artifact_failure_outcome(code, retryable, &message);
         }
         ArtifactToolError::InvalidArgument { path, expected } => {
             return artifact_failure_outcome(
@@ -197,7 +201,9 @@ fn artifact_failure_outcome(
         error: ErrorInfo {
             code,
             category: code.category(),
-            safe_message: SafeDisplayText::new(message).map_err(|_| invariant())?,
+            safe_message: SafeDisplayText::bounded(message)
+                .or_else(|| SafeDisplayText::new(code.as_str()).ok())
+                .ok_or_else(invariant)?,
             retryable,
             dependency_ref: None,
             diagnostic_ref: None,
@@ -338,6 +344,30 @@ mod tests {
             } => (error, retry_disposition),
             other => panic!("expected failed Artifact outcome, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn dynamic_artifact_failure_keeps_its_classification_and_bounded_detail() {
+        let (error, retry) = failed(ArtifactToolError::Unavailable(format!(
+            "Missing folder\n{}",
+            "界".repeat(400)
+        )));
+        assert_eq!(error.code, ErrorCode::CapabilityUnavailable);
+        assert_eq!(retry, RetryDisposition::DoNotRetry);
+        assert!(error.safe_message.as_str().starts_with("Missing folder "));
+        assert!(error.safe_message.as_str().ends_with('…'));
+        assert!(error.safe_message.as_str().len() <= 1024);
+        let (reported, retry) = failed(ArtifactToolError::Reported {
+            code: ErrorCode::ResourceRevisionConflict,
+            retryable: true,
+            message: "The captured file changed.".into(),
+        });
+        assert_eq!(reported.code, ErrorCode::ResourceRevisionConflict);
+        assert_eq!(reported.safe_message.as_str(), "The captured file changed.");
+        assert!(reported.retryable);
+        assert_eq!(retry, RetryDisposition::RetryNewAttempt);
+        let (empty, _) = failed(ArtifactToolError::Unavailable("\n".into()));
+        assert_eq!(empty.safe_message.as_str(), empty.code.as_str());
     }
 
     #[test]

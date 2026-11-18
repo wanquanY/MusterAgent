@@ -347,8 +347,8 @@ impl FileQueryCapabilityHandler {
                     error: ErrorInfo {
                         code,
                         category: code.category(),
-                        safe_message: SafeDisplayText::new(error.to_string())
-                            .map_err(|_| port(ErrorCode::InternalInvariantViolated, false))?,
+                        safe_message: SafeDisplayText::bounded(&error.to_string())
+                            .ok_or_else(|| port(ErrorCode::InternalInvariantViolated, false))?,
                         retryable: false,
                         dependency_ref: None,
                         diagnostic_ref: None,

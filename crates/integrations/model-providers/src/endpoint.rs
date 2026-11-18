@@ -48,6 +48,27 @@ pub struct ProviderEndpoint {
     pub origin: ProviderEndpointOrigin,
 }
 
+pub(crate) fn is_loopback_origin(url: &Url) -> bool {
+    match url.host() {
+        Some(url::Host::Domain(name)) => name.eq_ignore_ascii_case("localhost"),
+        Some(url::Host::Ipv4(address)) => address.is_loopback(),
+        Some(url::Host::Ipv6(address)) => address.is_loopback(),
+        None => false,
+    }
+}
+
+/// Keep requests to the local machine off externally configured proxies.
+pub(crate) fn apply_proxy_policy(
+    builder: reqwest::ClientBuilder,
+    loopback: bool,
+) -> reqwest::ClientBuilder {
+    if loopback {
+        builder.no_proxy()
+    } else {
+        builder
+    }
+}
+
 impl ProviderEndpoint {
     pub fn validate(&self, allow_loopback_http: bool) -> Result<(), EndpointRegistryError> {
         if self.invocation_url.username() != ""

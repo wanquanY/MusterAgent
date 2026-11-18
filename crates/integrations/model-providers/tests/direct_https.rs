@@ -117,6 +117,44 @@ async fn successful_preflight_prepares_once_and_dispatch_consumes_the_exact_requ
     server.shutdown().await.expect("mock Provider shutdown");
 }
 
+// Run the real adapter in a child so proxy configuration cannot leak into parallel tests.
+#[cfg(feature = "system-proxy")]
+#[test]
+fn loopback_inference_bypasses_a_configured_system_proxy() {
+    let proxy = std::net::TcpListener::bind("127.0.0.1:0").expect("isolated proxy address");
+    let address = format!("http://{}", proxy.local_addr().unwrap());
+    let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+    for name in [
+        "http_proxy",
+        "HTTP_PROXY",
+        "https_proxy",
+        "HTTPS_PROXY",
+        "all_proxy",
+        "ALL_PROXY",
+    ] {
+        child.env(name, &address);
+    }
+    let result = child
+        .env("no_proxy", "")
+        .env("NO_PROXY", "")
+        .args([
+            "--exact",
+            "successful_preflight_prepares_once_and_dispatch_consumes_the_exact_request",
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "loopback inference failed: {}",
+        String::from_utf8_lossy(&result.stdout)
+    );
+    proxy.set_nonblocking(true).unwrap();
+    assert_eq!(
+        proxy.accept().unwrap_err().kind(),
+        std::io::ErrorKind::WouldBlock
+    );
+}
+
 #[derive(Default)]
 struct PreflightEffects {
     endpoint_resolutions: AtomicUsize,

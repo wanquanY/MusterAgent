@@ -5,7 +5,7 @@ const MAX_CLIENT_BUDGETS: usize = 64;
 
 pub(super) struct ProviderHttpClients {
     config: ProviderAdapterConfig,
-    clients: Mutex<BTreeMap<(Duration, bool), reqwest::Client>>,
+    clients: Mutex<BTreeMap<(Duration, bool, bool), reqwest::Client>>,
 }
 
 impl ProviderHttpClients {
@@ -22,21 +22,27 @@ impl ProviderHttpClients {
         &self,
         budget: Duration,
     ) -> Result<reqwest::Client, ProviderError> {
-        self.for_transport(budget, false)
+        self.pool(budget, false, false)
     }
 
-    pub(super) fn for_transport(
+    pub(super) fn for_endpoint(
         &self,
         budget: Duration,
         private_transport: bool,
+        url: &url::Url,
     ) -> Result<reqwest::Client, ProviderError> {
-        self.pool(budget, private_transport)
+        self.pool(
+            budget,
+            private_transport,
+            crate::endpoint::is_loopback_origin(url),
+        )
     }
 
     fn pool(
         &self,
         budget: Duration,
         private_transport: bool,
+        loopback: bool,
     ) -> Result<reqwest::Client, ProviderError> {
         if budget.is_zero() {
             return Err(provider_error(
@@ -50,7 +56,7 @@ impl ProviderHttpClients {
             .clients
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if let Some(client) = clients.get(&(budget, private_transport)) {
+        if let Some(client) = clients.get(&(budget, private_transport, loopback)) {
             return Ok(client.clone());
         }
         let builder = reqwest::Client::builder()
@@ -65,12 +71,14 @@ impl ProviderHttpClients {
         } else {
             builder
         };
-        let client = builder.build().map_err(|error| transport_error(&error))?;
+        let client = crate::endpoint::apply_proxy_policy(builder, loopback)
+            .build()
+            .map_err(|error| transport_error(&error))?;
         if clients.len() >= MAX_CLIENT_BUDGETS {
             // In-flight requests own clones; eviction cannot cancel their I/O.
             clients.pop_first();
         }
-        clients.insert((budget, private_transport), client.clone());
+        clients.insert((budget, private_transport, loopback), client.clone());
         Ok(client)
     }
 }
