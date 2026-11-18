@@ -10,7 +10,7 @@ publish.workspace = true
 musteragent-identity.workspace = true
 chrono = "0.4.45"
 chrono-tz = "0.10.4"
-croner = "3.0.1"
+croner = "4.0.3"
 thiserror.workspace = true
 serde.workspace = true
 
