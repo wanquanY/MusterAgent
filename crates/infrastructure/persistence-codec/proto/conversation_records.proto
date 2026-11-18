@@ -1,0 +1,189 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+
+message ActivityCancelled {
+  CancelReason reason = 1;
+}
+
+message ActivityCompleted {
+  repeated ResourceRef result_refs = 1;
+}
+
+message ActivityFailed {
+  ErrorInfo error = 1;
+}
+
+enum ActivityKind {
+  ACTIVITY_KIND_UNSPECIFIED = 0;
+  ACTIVITY_KIND_CHAT = 1;
+  ACTIVITY_KIND_COORDINATION = 2;
+  ACTIVITY_KIND_AUTOMATION = 3;
+  ACTIVITY_KIND_DELEGATION = 4;
+  ACTIVITY_KIND_MAINTENANCE = 5;
+  ACTIVITY_KIND_EVALUATION = 6;
+}
+
+message ActivityStarted {
+  ActivityKind kind = 1;
+  ActivityId root_activity_id = 2;
+  ActivityId parent_activity_id = 3;
+  string policy_snapshot_ref = 4;
+}
+
+enum CancelReason {
+  CANCEL_REASON_UNSPECIFIED = 0;
+  CANCEL_REASON_USER_REQUESTED = 1;
+  CANCEL_REASON_CONVERSATION_ARCHIVED = 2;
+  CANCEL_REASON_PARENT_CANCELLED = 3;
+  CANCEL_REASON_POLICY_REVOKED = 4;
+  CANCEL_REASON_SYSTEM_SHUTDOWN = 5;
+  CANCEL_REASON_COORDINATION_INTERRUPTED = 6;
+}
+
+message ConversationArchived {}
+
+message ConversationCreated {
+  ConversationKind kind = 1;
+  RuntimeHome control_home = 2;
+  optional WorkspaceId workspace_id = 3;
+}
+
+enum ConversationKind {
+  CONVERSATION_KIND_UNSPECIFIED = 0;
+  CONVERSATION_KIND_DIRECT = 1;
+  CONVERSATION_KIND_TEAM = 2;
+  CONVERSATION_KIND_AUTOMATION = 3;
+  CONVERSATION_KIND_SYSTEM = 4;
+}
+
+message ConversationTitleChanged {
+  string title = 1;
+  ConversationTitleOrigin origin = 2;
+  PrincipalId set_by = 3;
+  optional LedgerRecordId proposal_record_id = 4;
+}
+
+enum ConversationTitleOrigin {
+  CONVERSATION_TITLE_ORIGIN_UNSPECIFIED = 0;
+  CONVERSATION_TITLE_ORIGIN_USER = 1;
+  CONVERSATION_TITLE_ORIGIN_ACCEPTED_PROPOSAL = 2;
+  CONVERSATION_TITLE_ORIGIN_FIRST_USER_MESSAGE = 3;
+}
+
+message ConversationWorkspaceAssigned {
+  WorkspaceId workspace_id = 1;
+  CommandId assignment_command_id = 2;
+}
+
+message CoordinationContextProjected {
+  InterSessionMessageId mailbox_message_id = 1;
+  ConversationId source_conversation_id = 2;
+  ContentRef payload_ref = 3;
+}
+
+message DelegationContextProjected {
+  DelegationId delegation_id = 1;
+  ContentRef objective_ref = 2;
+  InvocationId parent_invocation_id = 3;
+}
+
+message MaintenanceContextProjected {
+  DreamJobId dream_job_id = 1;
+  ContentRef input_manifest_ref = 2;
+  ContentRef model_input_ref = 3;
+}
+
+message MessageAccepted {
+  MessageId message_id = 1;
+  MessageRole role = 2;
+  ContentRef content_ref = 3;
+  repeated AttachmentRef attachment_refs = 4;
+  // Explicit Product-selected skills attached to this immutable user turn.
+  repeated string requested_skill_refs = 5;
+  PresentationTemplateRef presentation_template = 6;
+  ProjectTaskTarget project_task_target = 7;
+}
+
+message MessageCommitted {
+  MessageId message_id = 1;
+  MessageRole role = 2;
+  ContentRef content_ref = 3;
+  Sha256 content_hash = 4;
+  uint64 content_bytes = 5;
+}
+
+message MessageImported {
+  MessageId message_id = 1;
+  MessageRole role = 2;
+  ContentRef content_ref = 3;
+  ContentRef projection_ref = 4;
+  string legacy_message_id = 5;
+  uint64 source_sequence = 6;
+  Sha256 source_payload_hash = 7;
+  repeated AttachmentRef attachment_refs = 8;
+}
+
+message MessagePartiallyCommitted {
+  MessageId message_id = 1;
+  ContentRef content_ref = 2;
+  Sha256 content_hash = 3;
+  uint64 content_bytes = 4;
+  PartialMessageReason reason = 5;
+}
+
+message MessageRetracted {
+  MessageId message_id = 1;
+  string reason = 2;
+  RunId source_run_id = 3;
+}
+
+enum MessageRole {
+  MESSAGE_ROLE_UNSPECIFIED = 0;
+  MESSAGE_ROLE_USER = 1;
+  MESSAGE_ROLE_ASSISTANT = 2;
+  MESSAGE_ROLE_SYSTEM_NOTICE = 3;
+}
+
+enum PartialMessageReason {
+  PARTIAL_MESSAGE_REASON_UNSPECIFIED = 0;
+  PARTIAL_MESSAGE_REASON_CANCELLED = 1;
+  PARTIAL_MESSAGE_REASON_INTERRUPTED = 2;
+  PARTIAL_MESSAGE_REASON_PROVIDER_FAILURE = 3;
+  PARTIAL_MESSAGE_REASON_TOOL_FAILURE = 4;
+}
+
+message ParticipantJoined {
+  ParticipantKind kind = 1;
+  PrincipalId principal_ref = 2;
+  AgentId agent_ref = 3;
+  string service_ref = 4;
+  string display_name = 5;
+  ContentRef avatar_ref = 6;
+}
+
+enum ParticipantKind {
+  PARTICIPANT_KIND_UNSPECIFIED = 0;
+  PARTICIPANT_KIND_USER = 1;
+  PARTICIPANT_KIND_AGENT = 2;
+  PARTICIPANT_KIND_SERVICE = 3;
+}
+
+message ParticipantLeft {}
+
+message StandingGoalContextProjected {
+  GoalId goal_id = 1;
+  GoalPursuitId pursuit_id = 2;
+  ContentRef objective_ref = 3;
+  optional ContentRef previous_evaluation_summary_ref = 4;
+  repeated ContentRef input_refs = 5;
+}
+
+message StandingGoalJudgeContextProjected {
+  GoalId goal_id = 1;
+  GoalPursuitId pursuit_id = 2;
+  RunId source_run_id = 3;
+  ContentRef judge_input_ref = 4;
+}

@@ -1,0 +1,9 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+enum ConversationLifecycle {
+  CONVERSATION_LIFECYCLE_UNSPECIFIED = 0;
+  CONVERSATION_LIFECYCLE_ACTIVE = 1;
+  CONVERSATION_LIFECYCLE_ARCHIVED = 2;
+}

@@ -1,0 +1,30 @@
+{
+  "schema": "musteragent.invocation-policy.v9",
+  "policy_ref": "musteragent.invocation-policy.conditional-approval@9",
+  "rules": [
+    {
+      "rule_ref": "runtime-experience-candidate-policy@1",
+      "boundary": "Allow unpublished experience proposals only with canonical current-task provenance. Preserve signed capability decisions, mandatory approval floors and content authority."
+    },
+    {
+      "rule_ref": "device-browser-operation-policy@1",
+      "boundary": "Allow passive browser state, navigation keys, and syntactically public HTTP(S) navigation; require approval for DOM mutation until provider-attested target semantics and redirect enforcement exist."
+    },
+    {
+      "rule_ref": "device-computer-operation-policy@1",
+      "boundary": "Allow passive observation and non-committing navigation such as cursor movement, scrolling, and paging; require approval for clicks, keyboard input, drag, value changes, application lifecycle, and capture lifecycle."
+    },
+    {
+      "rule_ref": "device-resource-mutation-policy@2",
+      "boundary": "Resolve the physical file target through the provisioned local resource authority. Allow current-task non-delete writes to authorized resources, including absolute paths and other registered workspaces; require approval for protected resources, missing authority and deletions. A policy approval never grants new filesystem access."
+    },
+    {
+      "rule_ref": "device-task-confined-terminal-policy@2",
+      "boundary": "Trusted current-task terminal commands run natively with existing local software and normal project dependencies. Preserve existing sensitive-operation approvals, hard denials, pending interactions and task cancellation."
+    },
+    {
+      "rule_ref": "device-interactive-execution-policy@2",
+      "boundary": "In Trusted mode, require approval for unconfined interactive terminal sessions/input and project diagnostic programs. Ctrl-C may stop an operation. A command-looking string or an Enter key does not prove read-only effects. Full-access and immutable legacy modes retain their existing policy semantics."
+    }
+  ]
+}

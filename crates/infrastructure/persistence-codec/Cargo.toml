@@ -1,0 +1,55 @@
+[package]
+name = "musteragent-persistence-codec"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-schedule.workspace = true
+musteragent-approval.workspace = true
+musteragent-runtime-session.workspace = true
+musteragent-execution-grant.workspace = true
+musteragent-goal.workspace = true
+musteragent-work-item.workspace = true
+musteragent-runtime-skill.workspace = true
+prost-reflect = "=0.16.5"
+musteragent-ledger.workspace = true
+serde.workspace = true
+base64 = "0.23"
+musteragent-activity.workspace = true
+musteragent-run.workspace = true
+musteragent-runtime-model.workspace = true
+musteragent-loop.workspace = true
+musteragent-capability.workspace = true
+musteragent-content-ref.workspace = true
+musteragent-context.workspace = true
+musteragent-definition.workspace = true
+musteragent-discovery.workspace = true
+musteragent-identity.workspace = true
+musteragent-memory.workspace = true
+musteragent-policy.workspace = true
+musteragent-runtime-snapshot.workspace = true
+musteragent-skill.workspace = true
+musteragent-tool.workspace = true
+musteragent-model.workspace = true
+musteragent-runtime-contract.workspace = true
+musteragent-runtime-memory.workspace = true
+musteragent-evolution.workspace = true
+musteragent-execution-liveness.workspace = true
+musteragent-event-envelope.workspace = true
+musteragent-execution-context.workspace = true
+musteragent-runtime-capability.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+thiserror.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
+protoc-bin-vendored.workspace = true
+
+[lints]
+workspace = true

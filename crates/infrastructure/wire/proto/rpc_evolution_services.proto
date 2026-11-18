@@ -1,0 +1,760 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+import "rpc_common.proto";
+import "rpc_privacy_erasure_records.proto";
+
+message AgentEvolutionInspection {
+  TenantId tenant_id = 1;
+  AgentId agent_id = 2;
+  google.protobuf.Timestamp observed_at = 3;
+  EvolutionInspectionMetrics metrics = 4;
+  repeated EvolutionProposalInspection proposals = 5;
+  repeated AgentMemoryInspection active_memories = 6;
+  MemorySearchBackfillInspection search_backfill = 7;
+  repeated LearningGraphNode learning_graph = 8;
+  AgentGrowthSummary growth_summary = 9;
+  repeated DreamRecordInspection dream_records = 10;
+  optional DreamRecordCursor dream_records_next_cursor = 11;
+  DreamScheduleInspection dream_schedule = 12;
+  repeated AgentGrowthActivityBucket growth_activity = 13;
+}
+
+message AgentGrowthActivityBucket {
+  google.protobuf.Timestamp window_started_at = 1;
+  google.protobuf.Timestamp window_ended_at = 2;
+  uint64 successful_uses = 3;
+}
+
+message AgentGrowthSummary {
+  uint64 proposed = 1;
+  uint64 published = 2;
+  uint64 rejected = 3;
+  uint64 active_nodes = 4;
+  uint64 uses = 5;
+  uint64 successes = 6;
+  uint64 failures = 7;
+  uint32 success_rate_bps = 8;
+  optional google.protobuf.Timestamp last_learned_at = 9;
+}
+
+message AgentInstinct {
+  InstinctId instinct_id = 1;
+  TenantId tenant_id = 2;
+  AgentId target_agent_id = 3;
+  EvolutionProposalId proposal_id = 4;
+  EvolutionEvaluationId evaluation_id = 5;
+  InteractionId approval_interaction_id = 6;
+  EvolutionPromotionId promotion_id = 7;
+  ContentRef payload_ref = 8;
+  repeated RunId evidence_run_ids = 9;
+  repeated LedgerRecordId evidence_record_ids = 10;
+  AgentInstinctLifecycle lifecycle = 11;
+  uint64 revision = 12;
+  PrincipalId created_by = 13;
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+}
+
+enum AgentInstinctLifecycle {
+  AGENT_INSTINCT_LIFECYCLE_UNSPECIFIED = 0;
+  AGENT_INSTINCT_LIFECYCLE_ENABLED = 1;
+  AGENT_INSTINCT_LIFECYCLE_DISABLED = 2;
+}
+
+message AgentInstinctLifecycleReceipt {
+  TenantId tenant_id = 1;
+  AgentId target_agent_id = 2;
+  InstinctId instinct_id = 3;
+  uint64 previous_revision = 4;
+  uint64 revision = 5;
+  AgentInstinctLifecycle lifecycle = 6;
+  PrincipalId actor_principal_id = 7;
+  string reason_code = 8;
+  string idempotency_key = 9;
+  google.protobuf.Timestamp changed_at = 10;
+}
+
+message AgentMemoryCheckout {
+  TenantId tenant_id = 1;
+  PrincipalId principal_id = 2;
+  AgentId agent_id = 3;
+  MemoryId memory_id = 4;
+  MemoryVersionId baseline_memory_version_id = 5;
+  string memory_key = 6;
+  AgentMemoryKind kind = 7;
+  bytes published_content = 8;
+}
+
+message AgentMemoryDraft {
+  MemoryDraftId draft_id = 1;
+  TenantId tenant_id = 2;
+  PrincipalId owner_principal_id = 3;
+  AgentId agent_id = 4;
+  MemoryId memory_id = 5;
+  MemoryVersionId baseline_memory_version_id = 6;
+  ContentRef content_ref = 7;
+  AgentMemoryDraftStatus status = 8;
+  optional EvolutionProposalId proposal_id = 9;
+  optional MemoryVersionId conflicting_memory_version_id = 10;
+  optional MemoryDraftId supersedes_draft_id = 11;
+  string idempotency_key = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+message AgentMemoryDraftCursor {
+  TenantId tenant_id = 1;
+  PrincipalId owner_principal_id = 2;
+  AgentId agent_id = 3;
+  AgentMemoryDraftStatus status = 4;
+  google.protobuf.Timestamp updated_at = 5;
+  MemoryDraftId draft_id = 6;
+}
+
+message AgentMemoryDraftPublicationItem {
+  MemoryDraftId draft_id = 1;
+  EvolutionProposalId proposal_id = 2;
+  InteractionId approval_interaction_id = 3;
+  EvolutionPromotionId promotion_id = 4;
+  MemoryId memory_id = 5;
+  MemoryVersionId memory_version_id = 6;
+}
+
+message AgentMemoryDraftReviewItem {
+  AgentMemoryDraft draft = 1;
+  EvolutionProposalInspection proposal = 2;
+}
+
+enum AgentMemoryDraftStatus {
+  AGENT_MEMORY_DRAFT_STATUS_UNSPECIFIED = 0;
+  AGENT_MEMORY_DRAFT_STATUS_DRAFT = 1;
+  AGENT_MEMORY_DRAFT_STATUS_SUBMITTED = 2;
+  AGENT_MEMORY_DRAFT_STATUS_CONFLICT = 3;
+  AGENT_MEMORY_DRAFT_STATUS_PUBLISHED = 4;
+  AGENT_MEMORY_DRAFT_STATUS_ABANDONED = 5;
+}
+
+message AgentMemoryErasureJob {
+  ErasureRequestRecord request = 1;
+  ErasurePlanSnapshotRecord latest_plan = 2;
+  repeated ErasureTransitionRecord transitions = 3;
+  optional ErasureReceiptRecord receipt = 4;
+  AgentId agent_id = 5;
+  MemoryId memory_id = 6;
+  MemoryVersionId memory_version_id = 7;
+}
+
+message AgentMemoryInspection {
+  MemoryId memory_id = 1;
+  string memory_key = 2;
+  AgentMemoryKind kind = 3;
+  MemoryVersionId memory_version_id = 4;
+  uint64 version = 5;
+  AgentMemorySource source = 6;
+  ContentRef content_ref = 7;
+  uint32 confidence_bps = 8;
+  MemoryDataClassification data_classification = 9;
+  repeated RunId source_run_ids = 10;
+  repeated LedgerRecordId evidence_record_ids = 11;
+  google.protobuf.Timestamp created_at = 12;
+  google.protobuf.Timestamp updated_at = 13;
+  optional google.protobuf.Timestamp valid_until = 14;
+}
+
+enum AgentMemoryKind {
+  AGENT_MEMORY_KIND_UNSPECIFIED = 0;
+  AGENT_MEMORY_KIND_PREFERENCE = 1;
+  AGENT_MEMORY_KIND_SEMANTIC = 2;
+  AGENT_MEMORY_KIND_PROCEDURE = 3;
+  AGENT_MEMORY_KIND_FAILURE_LESSON = 4;
+}
+
+message AgentMemoryRevocationReceipt {
+  TenantId tenant_id = 1;
+  PrincipalId revoked_by = 2;
+  AgentId agent_id = 3;
+  MemoryId memory_id = 4;
+  MemoryVersionId memory_version_id = 5;
+  string reason_code = 6;
+  string idempotency_key = 7;
+  google.protobuf.Timestamp revoked_at = 8;
+}
+
+enum AgentMemorySource {
+  AGENT_MEMORY_SOURCE_UNSPECIFIED = 0;
+  AGENT_MEMORY_SOURCE_USER_AUTHORED = 1;
+  AGENT_MEMORY_SOURCE_VERIFIED_EXPERIENCE = 2;
+  AGENT_MEMORY_SOURCE_GOVERNED_IMPORT = 3;
+}
+
+message AgentMemoryWorkspaceCheckout {
+  TenantId tenant_id = 1;
+  PrincipalId principal_id = 2;
+  AgentId agent_id = 3;
+  google.protobuf.Timestamp checked_out_at = 4;
+  string user_markdown = 5;
+  string agent_markdown = 6;
+  uint32 entry_count = 7;
+}
+
+message ApproveEvolutionProposalRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  EvolutionProposalId proposal_id = 3;
+  string idempotency_key = 4;
+}
+
+message ApproveEvolutionProposalResponse {
+  EvolutionMutationDisposition disposition = 1;
+  EvolutionManagementPublicationReceipt receipt = 2;
+}
+
+message CheckoutAgentMemoryRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  MemoryId memory_id = 3;
+  
+  optional MemoryVersionId expected_memory_version_id = 4;
+
+  optional uint64 max_content_bytes = 5;
+}
+
+message CheckoutAgentMemoryResponse {
+  AgentMemoryCheckout checkout = 1;
+}
+
+message CheckoutAgentMemoryWorkspaceRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+}
+
+message CheckoutAgentMemoryWorkspaceResponse {
+  AgentMemoryWorkspaceCheckout checkout = 1;
+
+  optional string user_file_path = 2;
+  optional string agent_file_path = 3;
+}
+
+message ConfirmAgentMemoryDraftBatchRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  MemoryDraftBatchId batch_id = 3;
+  string idempotency_key = 4;
+}
+
+message ConfirmAgentMemoryDraftBatchResponse {
+  EvolutionMutationDisposition disposition = 1;
+  MemoryDraftBatchId batch_id = 2;
+  repeated AgentMemoryDraftPublicationItem items = 3;
+}
+
+message DreamRecordCursor {
+  google.protobuf.Timestamp created_at = 1;
+  DreamJobId dream_job_id = 2;
+}
+
+enum DreamRecordHealth {
+  DREAM_RECORD_HEALTH_UNSPECIFIED = 0;
+  DREAM_RECORD_HEALTH_HEALTHY = 1;
+  DREAM_RECORD_HEALTH_RECOVERING = 2;
+  DREAM_RECORD_HEALTH_NEEDS_ATTENTION = 3;
+}
+
+message DreamRecordInspection {
+  DreamJobId dream_job_id = 1;
+  DreamRecordState state = 2;
+  uint32 retry_count = 3;
+  repeated RunId source_run_ids = 4;
+  repeated EvolutionProposalId proposal_ids = 5;
+  google.protobuf.Timestamp created_at = 6;
+  optional google.protobuf.Timestamp completed_at = 7;
+  DreamRecordHealth health = 8;
+  optional google.protobuf.Timestamp next_action_at = 9;
+
+  uint64 manual_request_generation = 10;
+}
+
+enum DreamRecordState {
+  DREAM_RECORD_STATE_UNSPECIFIED = 0;
+  DREAM_RECORD_STATE_PENDING = 1;
+  DREAM_RECORD_STATE_RUNNING = 2;
+  DREAM_RECORD_STATE_COMPLETED = 3;
+  DREAM_RECORD_STATE_FAILED = 4;
+  DREAM_RECORD_STATE_CANCELLED = 5;
+}
+
+message DreamScheduleInspection {
+  uint64 pending_signal_count = 1;
+  uint64 pending_source_run_count = 2;
+  optional google.protobuf.Timestamp oldest_pending_signal_at = 3;
+  optional google.protobuf.Timestamp newest_pending_signal_at = 4;
+  bool active_ordinary_run = 5;
+  bool active_dream_job = 6;
+  repeated google.protobuf.Timestamp automatic_quota_consumed_at = 7;
+  optional google.protobuf.Timestamp last_dream_job_created_at = 8;
+}
+
+enum EvolutionCandidateStatus {
+  EVOLUTION_CANDIDATE_STATUS_UNSPECIFIED = 0;
+  EVOLUTION_CANDIDATE_STATUS_CANDIDATE = 1;
+  EVOLUTION_CANDIDATE_STATUS_QUARANTINED = 2;
+  EVOLUTION_CANDIDATE_STATUS_VERIFIED = 3;
+  EVOLUTION_CANDIDATE_STATUS_REJECTED = 4;
+  EVOLUTION_CANDIDATE_STATUS_PUBLISHED = 5;
+}
+
+message EvolutionEvaluationInspection {
+  EvolutionEvaluationId evaluation_id = 1;
+  PrincipalId evaluated_by = 2;
+  bool passed = 3;
+  ContentRef report_ref = 4;
+  google.protobuf.Timestamp evaluated_at = 5;
+}
+
+enum EvolutionExperienceKind {
+  EVOLUTION_EXPERIENCE_KIND_UNSPECIFIED = 0;
+  EVOLUTION_EXPERIENCE_KIND_SEMANTIC = 1;
+  EVOLUTION_EXPERIENCE_KIND_PROCEDURE = 2;
+  EVOLUTION_EXPERIENCE_KIND_FAILURE = 3;
+  EVOLUTION_EXPERIENCE_KIND_PREFERENCE = 4;
+  EVOLUTION_EXPERIENCE_KIND_POLICY_PROPOSAL = 5;
+  EVOLUTION_EXPERIENCE_KIND_SKILL = 6;
+  EVOLUTION_EXPERIENCE_KIND_INSTINCT = 7;
+  EVOLUTION_EXPERIENCE_KIND_PERSONA_PATCH = 8;
+}
+
+message EvolutionInspectionMetrics {
+  uint64 candidate = 1;
+  uint64 quarantined = 2;
+  uint64 verified = 3;
+  uint64 rejected = 4;
+  uint64 published = 5;
+  uint64 active_memories = 6;
+}
+
+service EvolutionInspectionService {
+  rpc InspectAgent(InspectAgentEvolutionRequest) returns (InspectAgentEvolutionResponse);
+  rpc ReadAgentGrowthContent(ReadAgentGrowthContentRequest) returns (ReadAgentGrowthContentResponse);
+}
+
+message EvolutionManagementPublicationReceipt {
+  TenantId tenant_id = 1;
+  PrincipalId approved_by = 2;
+  AgentId agent_id = 3;
+  EvolutionProposalId proposal_id = 4;
+  EvolutionEvaluationId evaluation_id = 5;
+  InteractionId approval_interaction_id = 6;
+  string idempotency_key = 7;
+  google.protobuf.Timestamp approved_at = 8;
+  oneof target {
+    PublishedEvolutionMemoryTarget memory = 9;
+    PublishedEvolutionInstinctTarget instinct = 10;
+    PublishedEvolutionStudioDraftTarget studio_revision_draft = 11;
+  }
+}
+
+message EvolutionManagementRejectionReceipt {
+  TenantId tenant_id = 1;
+  PrincipalId rejected_by = 2;
+  AgentId agent_id = 3;
+  EvolutionProposalId proposal_id = 4;
+  EvolutionEvaluationId evaluation_id = 5;
+  string reason_code = 6;
+  string idempotency_key = 7;
+  google.protobuf.Timestamp rejected_at = 8;
+}
+
+service EvolutionManagementService {
+  rpc CheckoutAgentMemoryWorkspace(CheckoutAgentMemoryWorkspaceRequest) returns (CheckoutAgentMemoryWorkspaceResponse);
+  rpc SaveAgentMemoryWorkspace(SaveAgentMemoryWorkspaceRequest) returns (SaveAgentMemoryWorkspaceResponse);
+  rpc CheckoutAgentMemory(CheckoutAgentMemoryRequest) returns (CheckoutAgentMemoryResponse);
+  rpc SaveAgentMemoryDraft(SaveAgentMemoryDraftRequest) returns (SaveAgentMemoryDraftResponse);
+  rpc ListAgentMemoryDrafts(ListAgentMemoryDraftsRequest) returns (ListAgentMemoryDraftsResponse);
+  rpc ReadAgentMemoryDraft(ReadAgentMemoryDraftRequest) returns (ReadAgentMemoryDraftResponse);
+  rpc SubmitAgentMemoryDraftBatch(SubmitAgentMemoryDraftBatchRequest) returns (SubmitAgentMemoryDraftBatchResponse);
+  rpc ListAgentMemoryDraftBatches(ListAgentMemoryDraftBatchesRequest) returns (ListAgentMemoryDraftBatchesResponse);
+  rpc ReviewAgentMemoryDraftBatch(ReviewAgentMemoryDraftBatchRequest) returns (ReviewAgentMemoryDraftBatchResponse);
+  rpc ConfirmAgentMemoryDraftBatch(ConfirmAgentMemoryDraftBatchRequest) returns (ConfirmAgentMemoryDraftBatchResponse);
+  rpc RevokeAgentMemory(RevokeAgentMemoryRequest) returns (RevokeAgentMemoryResponse);
+  rpc PermanentlyForgetAgentMemory(PermanentlyForgetAgentMemoryRequest) returns (PermanentlyForgetAgentMemoryResponse);
+  rpc GetAgentMemoryErasure(GetAgentMemoryErasureRequest) returns (GetAgentMemoryErasureResponse);
+  rpc ListAgentInstincts(ListAgentInstinctsRequest) returns (ListAgentInstinctsResponse);
+  rpc SetAgentInstinctLifecycle(SetAgentInstinctLifecycleRequest) returns (SetAgentInstinctLifecycleResponse);
+  rpc ApproveEvolutionProposal(ApproveEvolutionProposalRequest) returns (ApproveEvolutionProposalResponse);
+  rpc RejectEvolutionProposal(RejectEvolutionProposalRequest) returns (RejectEvolutionProposalResponse);
+}
+
+enum EvolutionMutationDisposition {
+  EVOLUTION_MUTATION_DISPOSITION_UNSPECIFIED = 0;
+  EVOLUTION_MUTATION_DISPOSITION_APPLIED = 1;
+  EVOLUTION_MUTATION_DISPOSITION_DUPLICATE = 2;
+}
+
+message EvolutionProposalInspection {
+  EvolutionProposalId proposal_id = 1;
+  PrincipalId proposed_by = 2;
+  optional MemoryId target_memory_id = 3;
+  optional EvolutionProposalId supersedes_proposal_id = 4;
+  EvolutionExperienceKind kind = 5;
+  ContentRef claim_ref = 6;
+  repeated RunId source_run_ids = 7;
+  repeated LedgerRecordId evidence_record_ids = 8;
+  EvolutionCandidateStatus status = 9;
+  optional uint32 confidence_bps = 10;
+  google.protobuf.Timestamp proposed_at = 11;
+  optional EvolutionEvaluationInspection evaluation = 12;
+  optional InteractionId approval_interaction_id = 13;
+  optional MemoryVersionId published_memory_version_id = 14;
+  optional InstinctId published_instinct_id = 15;
+  optional StudioRevisionDraftId studio_revision_draft_id = 16;
+  optional StudioRevisionArtifactKind studio_artifact_kind = 17;
+  ExperienceClaimInspection claim_detail = 18;
+  EvolutionProposalPublicationReadiness publication_readiness = 19;
+}
+
+enum EvolutionProposalPublicationReadiness {
+  EVOLUTION_PROPOSAL_PUBLICATION_READINESS_UNSPECIFIED = 0;
+  EVOLUTION_PROPOSAL_PUBLICATION_READINESS_ELIGIBLE = 1;
+  EVOLUTION_PROPOSAL_PUBLICATION_READINESS_AWAITING_EVALUATION = 2;
+  EVOLUTION_PROPOSAL_PUBLICATION_READINESS_EVALUATION_REJECTED = 3;
+  EVOLUTION_PROPOSAL_PUBLICATION_READINESS_ALREADY_PUBLISHED = 4;
+  EVOLUTION_PROPOSAL_PUBLICATION_READINESS_POLICY_REVIEW_REQUIRED = 5;
+  EVOLUTION_PROPOSAL_PUBLICATION_READINESS_CLAIM_CONTENT_UNAVAILABLE = 6;
+  EVOLUTION_PROPOSAL_PUBLICATION_READINESS_CLAIM_CONTRACT_INVALID = 7;
+}
+
+message ExperienceClaimConditionInspection {
+  string key = 1;
+  string value = 2;
+}
+
+message ExperienceClaimInspection {
+  ExperienceClaimInspectionState state = 1;
+  optional ExperienceClaimOrigin origin = 2;
+  string claim = 3;
+  string outcome = 4;
+  repeated ExperienceClaimConditionInspection conditions = 5;
+  repeated ExperienceEvidenceInspection evidence = 6;
+}
+
+enum ExperienceClaimInspectionState {
+  EXPERIENCE_CLAIM_INSPECTION_STATE_UNSPECIFIED = 0;
+  EXPERIENCE_CLAIM_INSPECTION_STATE_READY = 1;
+  EXPERIENCE_CLAIM_INSPECTION_STATE_CONTENT_UNAVAILABLE = 2;
+  EXPERIENCE_CLAIM_INSPECTION_STATE_CONTRACT_INVALID = 3;
+}
+
+enum ExperienceClaimOrigin {
+  EXPERIENCE_CLAIM_ORIGIN_UNSPECIFIED = 0;
+  EXPERIENCE_CLAIM_ORIGIN_MANUAL = 1;
+  EXPERIENCE_CLAIM_ORIGIN_DREAM_EVIDENCE = 2;
+}
+
+enum ExperienceEvidenceBranchState {
+  EXPERIENCE_EVIDENCE_BRANCH_STATE_UNSPECIFIED = 0;
+  EXPERIENCE_EVIDENCE_BRANCH_STATE_ACTIVE = 1;
+  EXPERIENCE_EVIDENCE_BRANCH_STATE_PRESERVED = 2;
+  EXPERIENCE_EVIDENCE_BRANCH_STATE_ABANDONED = 3;
+}
+
+message ExperienceEvidenceInspection {
+  ConversationId conversation_id = 1;
+  RunId run_id = 2;
+  optional ContextBranchId branch_id = 3;
+  ExperienceEvidenceBranchState branch_state = 4;
+  uint64 cursor_from = 5;
+  uint64 cursor_to = 6;
+  uint32 record_count = 7;
+  ExperienceEvidenceTerminal terminal = 8;
+  ExperienceEvidenceOutcome outcome = 9;
+}
+
+enum ExperienceEvidenceOutcome {
+  EXPERIENCE_EVIDENCE_OUTCOME_UNSPECIFIED = 0;
+  EXPERIENCE_EVIDENCE_OUTCOME_SUCCESS = 1;
+  EXPERIENCE_EVIDENCE_OUTCOME_FAILURE = 2;
+  EXPERIENCE_EVIDENCE_OUTCOME_CANCELLED = 3;
+  EXPERIENCE_EVIDENCE_OUTCOME_INTERRUPTED = 4;
+  EXPERIENCE_EVIDENCE_OUTCOME_UNKNOWN = 5;
+}
+
+enum ExperienceEvidenceTerminal {
+  EXPERIENCE_EVIDENCE_TERMINAL_UNSPECIFIED = 0;
+  EXPERIENCE_EVIDENCE_TERMINAL_COMPLETED = 1;
+  EXPERIENCE_EVIDENCE_TERMINAL_FAILED = 2;
+  EXPERIENCE_EVIDENCE_TERMINAL_CANCELLED = 3;
+  EXPERIENCE_EVIDENCE_TERMINAL_INTERRUPTED = 4;
+}
+
+message GetAgentMemoryErasureRequest {
+  Actor actor = 1;
+  ErasureJobId erasure_job_id = 2;
+}
+
+message GetAgentMemoryErasureResponse {
+  AgentMemoryErasureJob job = 1;
+  bool execution_pending = 2;
+}
+
+message InspectAgentEvolutionRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  uint32 proposal_limit = 3;
+  uint32 memory_limit = 4;
+  uint32 graph_limit = 5;
+  optional google.protobuf.Timestamp growth_since = 6;
+  uint32 dream_limit = 7;
+  optional google.protobuf.Timestamp dream_since = 8;
+  optional DreamRecordCursor dream_cursor = 9;
+}
+
+message InspectAgentEvolutionResponse {
+  AgentEvolutionInspection inspection = 1;
+}
+
+message LearningGraphNode {
+  string node_id = 1;
+  LearningGraphNodeKind kind = 2;
+  LearningGraphNodeState state = 3;
+  ContentRef payload_ref = 4;
+  optional EvolutionProposalId proposal_id = 5;
+  optional MemoryId memory_id = 6;
+  optional MemoryVersionId memory_version_id = 7;
+  optional SkillId skill_id = 8;
+  optional InstinctId instinct_id = 9;
+  optional StudioRevisionDraftId studio_revision_draft_id = 10;
+  uint64 uses = 11;
+  uint64 successes = 12;
+  uint64 failures = 13;
+  optional google.protobuf.Timestamp last_used_at = 14;
+  google.protobuf.Timestamp learned_at = 15;
+  optional ExperienceClaimInspection claim_detail = 16;
+}
+
+enum LearningGraphNodeKind {
+  LEARNING_GRAPH_NODE_KIND_UNSPECIFIED = 0;
+  LEARNING_GRAPH_NODE_KIND_EXPERIENCE = 1;
+  LEARNING_GRAPH_NODE_KIND_SKILL = 2;
+  LEARNING_GRAPH_NODE_KIND_INSTINCT = 3;
+}
+
+enum LearningGraphNodeState {
+  LEARNING_GRAPH_NODE_STATE_UNSPECIFIED = 0;
+  LEARNING_GRAPH_NODE_STATE_CANDIDATE = 1;
+  LEARNING_GRAPH_NODE_STATE_ACTIVE = 2;
+  LEARNING_GRAPH_NODE_STATE_DISABLED = 3;
+  LEARNING_GRAPH_NODE_STATE_SUPERSEDED = 4;
+  LEARNING_GRAPH_NODE_STATE_REJECTED = 5;
+}
+
+message ListAgentInstinctsRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  bool include_disabled = 3;
+  uint32 limit = 4;
+}
+
+message ListAgentInstinctsResponse {
+  repeated AgentInstinct instincts = 1;
+}
+
+message ListAgentMemoryDraftBatchesRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  uint32 limit = 3;
+}
+
+message ListAgentMemoryDraftBatchesResponse {
+  repeated ReviewAgentMemoryDraftBatchResponse batches = 1;
+}
+
+message ListAgentMemoryDraftsRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  
+  AgentMemoryDraftStatus status = 3;
+  
+  uint32 limit = 4;
+  optional AgentMemoryDraftCursor cursor = 5;
+}
+
+message ListAgentMemoryDraftsResponse {
+  
+  repeated AgentMemoryDraft drafts = 1;
+  optional AgentMemoryDraftCursor next_cursor = 2;
+}
+
+enum MemoryDataClassification {
+  MEMORY_DATA_CLASSIFICATION_UNSPECIFIED = 0;
+  MEMORY_DATA_CLASSIFICATION_PUBLIC = 1;
+  MEMORY_DATA_CLASSIFICATION_INTERNAL = 2;
+  MEMORY_DATA_CLASSIFICATION_CONFIDENTIAL = 3;
+  MEMORY_DATA_CLASSIFICATION_RESTRICTED = 4;
+}
+
+message MemorySearchBackfillInspection {
+  uint64 pending = 1;
+  uint64 running = 2;
+  uint64 completed = 3;
+  uint64 dead_letter = 4;
+}
+
+message PermanentlyForgetAgentMemoryRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  MemoryId memory_id = 3;
+  MemoryVersionId expected_memory_version_id = 4;
+  string idempotency_key = 5;
+}
+
+message PermanentlyForgetAgentMemoryResponse {
+  EvolutionMutationDisposition disposition = 1;
+  AgentMemoryErasureJob job = 2;
+  bool execution_pending = 3;
+}
+
+message PublishedEvolutionInstinctTarget {
+  InstinctId instinct_id = 1;
+  EvolutionPromotionId promotion_id = 2;
+}
+
+message PublishedEvolutionMemoryTarget {
+  MemoryId memory_id = 1;
+  MemoryVersionId memory_version_id = 2;
+  EvolutionPromotionId promotion_id = 3;
+}
+
+message PublishedEvolutionStudioDraftTarget {
+  StudioRevisionDraftId studio_revision_draft_id = 1;
+  EvolutionPromotionId promotion_id = 2;
+  StudioRevisionArtifactKind artifact_kind = 3;
+}
+
+message ReadAgentGrowthContentRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  ContentRef reference = 3;
+  uint64 max_content_bytes = 4;
+}
+
+message ReadAgentGrowthContentResponse {
+  ContentRef reference = 1;
+  bytes content = 2;
+}
+
+message ReadAgentMemoryDraftRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  MemoryDraftId draft_id = 3;
+}
+
+message ReadAgentMemoryDraftResponse {
+  AgentMemoryDraft draft = 1;
+
+  bytes content = 2;
+}
+
+message RejectEvolutionProposalRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  EvolutionProposalId proposal_id = 3;
+  string idempotency_key = 4;
+}
+
+message RejectEvolutionProposalResponse {
+  EvolutionMutationDisposition disposition = 1;
+  EvolutionManagementRejectionReceipt receipt = 2;
+}
+
+message ReviewAgentMemoryDraftBatchRequest {
+  Actor actor = 1;
+  MemoryDraftBatchId batch_id = 2;
+  AgentId agent_id = 3;
+}
+
+message ReviewAgentMemoryDraftBatchResponse {
+  MemoryDraftBatchId batch_id = 1;
+  TenantId tenant_id = 2;
+  PrincipalId owner_principal_id = 3;
+  AgentId agent_id = 4;
+  google.protobuf.Timestamp submitted_at = 5;
+  repeated AgentMemoryDraftReviewItem items = 6;
+}
+
+message RevokeAgentMemoryRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  MemoryId memory_id = 3;
+  MemoryVersionId expected_memory_version_id = 4;
+  string idempotency_key = 5;
+}
+
+message RevokeAgentMemoryResponse {
+  EvolutionMutationDisposition disposition = 1;
+  AgentMemoryRevocationReceipt receipt = 2;
+}
+
+message SaveAgentMemoryDraftRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  MemoryId memory_id = 3;
+  MemoryVersionId expected_baseline_memory_version_id = 4;
+  string edited_claim = 5;
+  optional MemoryDraftId supersedes_draft_id = 6;
+  string idempotency_key = 7;
+}
+
+message SaveAgentMemoryDraftResponse {
+  EvolutionMutationDisposition disposition = 1;
+  AgentMemoryDraft draft = 2;
+}
+
+message SaveAgentMemoryWorkspaceRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  string user_markdown = 3;
+  string agent_markdown = 4;
+  string idempotency_key = 5;
+}
+
+message SaveAgentMemoryWorkspaceResponse {
+  EvolutionMutationDisposition disposition = 1;
+  repeated AgentMemoryDraft drafts = 2;
+}
+
+message SetAgentInstinctLifecycleRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  InstinctId instinct_id = 3;
+  uint64 expected_revision = 4;
+  AgentInstinctLifecycle lifecycle = 5;
+  string idempotency_key = 6;
+}
+
+message SetAgentInstinctLifecycleResponse {
+  EvolutionMutationDisposition disposition = 1;
+  AgentInstinctLifecycleReceipt receipt = 2;
+}
+
+enum StudioRevisionArtifactKind {
+  STUDIO_REVISION_ARTIFACT_KIND_UNSPECIFIED = 0;
+  STUDIO_REVISION_ARTIFACT_KIND_SKILL = 1;
+  STUDIO_REVISION_ARTIFACT_KIND_PERSONA_PATCH = 2;
+}
+
+message SubmitAgentMemoryDraftBatchRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  repeated MemoryDraftId draft_ids = 3;
+  string idempotency_key = 4;
+}
+
+message SubmitAgentMemoryDraftBatchResponse {
+  EvolutionMutationDisposition disposition = 1;
+  MemoryDraftBatchId batch_id = 2;
+  repeated AgentMemoryDraft drafts = 3;
+}

@@ -1,0 +1,55 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+
+message PublicDeliveryCandidateProofV1 {
+  InvocationId invocation_id = 1;
+  MessageId assistant_message_id = 2;
+  OutputId assistant_output_id = 3;
+  uint64 ledger_cutoff = 4;
+  ContentRef content_ref = 5;
+}
+
+message PublicDeliveryDiagnosticV1 { string kind = 1; string path = 2; }
+
+message PublicDeliveryFormatRejectionV1 {
+  PublicDeliveryCandidateProofV1 candidate = 1;
+  repeated PublicDeliveryDiagnosticV1 diagnostics = 2;
+  PublicDeliveryRepairCutV1 cut = 3;
+}
+
+message PublicDeliveryRejectionV1 {
+  PublicDeliveryCandidateProofV1 candidate = 1;
+  repeated PublicDeliveryDiagnosticV1 diagnostics = 2;
+  string disposition = 3;
+  PublicDeliveryRepairCutV1 cut = 4;
+}
+
+message PublicDeliveryRepairBindingV1 {
+  string contract_ref = 1;
+  Sha256 contract_prompt_sha256 = 2;
+  string repair_spec_ref = 3;
+  Sha256 repair_spec_sha256 = 4;
+  InvocationId rejection_invocation_id = 5;
+  PublicDeliveryCandidateProofV1 candidate = 6;
+  Sha256 diagnostic_hash = 7;
+  string disposition = 8;
+  PublicDeliveryRepairCutV1 cut = 9;
+}
+
+message PublicDeliveryRepairCutV1 {
+  optional uint64 progress_sequence = 1;
+  optional uint64 control_sequence = 2;
+}
+
+message PublicDeliveryUnreplayableOutputV1 {
+  InvocationId invocation_id = 1;
+  MessageId assistant_message_id = 2;
+  OutputId assistant_output_id = 3;
+  uint64 ledger_cutoff = 4;
+  uint64 byte_length = 5;
+  Sha256 sha256 = 6;
+  PublicDeliveryRepairCutV1 cut = 7;
+}

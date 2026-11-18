@@ -1,0 +1,15 @@
+[package]
+name = "musteragent-policy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-content-ref = { version = "0.1.0", path = "../content-ref" }
+musteragent-identity = { version = "0.1.0", path = "../identity" }
+thiserror.workspace = true
+
+[lints]
+workspace = true

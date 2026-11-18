@@ -1,0 +1,43 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "agent_dialogue.proto";
+
+enum DialogueAdmissionBlocker {
+  DIALOGUE_ADMISSION_BLOCKER_NONE = 0;
+  DIALOGUE_ADMISSION_BLOCKER_AUTHORIZATION_CHECK_FAILED = 1;
+  DIALOGUE_ADMISSION_BLOCKER_DEPENDENCY_UNAVAILABLE = 2;
+  // Only the original source Owner may produce this after transactional checks.
+  DIALOGUE_ADMISSION_BLOCKER_SOURCE_CHANGED = 3;
+  // A qualified device rejected preparation of the current material.
+  // Nonterminal: the accepted input remains, and a receipt may still resolve it.
+  DIALOGUE_ADMISSION_BLOCKER_RUNTIME_CONTRACT_REJECTED = 4;
+}
+
+message DialogueAdmissionProgress {
+  UserIntentId intent_id = 1;
+  AgentId agent_id = 2;
+  AgentDialogueId dialogue_id = 3;
+  DialogueEntryId entry_id = 4;
+  uint64 revision = 5;
+  DialogueAdmissionStage stage = 6;
+  DialogueAdmissionBlocker blocker = 7;
+  int64 observed_at_ms = 8;
+  // Original execution is terminal. Ends the temporary receipt reaction only;
+  // never changes admission or explicit message reactions.
+  bool execution_finished = 9;
+}
+
+enum DialogueAdmissionStage {
+  DIALOGUE_ADMISSION_STAGE_UNSPECIFIED = 0;
+  DIALOGUE_ADMISSION_STAGE_WAITING_DEVICE = 1;
+  DIALOGUE_ADMISSION_STAGE_CONFIRMATION_PENDING = 2;
+  DIALOGUE_ADMISSION_STAGE_ADMITTED = 3;
+  // Definitive original pre-Run failure. No Run or device execution was admitted.
+  // Its original failure message owns the explanation; this ends pending UI.
+  DIALOGUE_ADMISSION_STAGE_FAILED = 4;
+  // Original pre-admission terminal or device NotAdmitted fence; no Run outcome.
+  DIALOGUE_ADMISSION_STAGE_CANCELLED = 5;
+}

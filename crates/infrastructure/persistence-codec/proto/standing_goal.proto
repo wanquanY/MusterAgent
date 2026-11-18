@@ -1,0 +1,37 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+
+message GoalProcessingRules {
+  AgentId target_agent_id = 1;
+  string title = 2;
+  ContentRef objective_ref = 3;
+  repeated string constraints = 4;
+  StandingGoalCompletionContract completion = 5;
+}
+
+message StandingGoalBudget {
+  // Deprecated compatibility fields. They are persisted for rolling upgrades
+  // but never stop, fail, or pause a Standing Goal.
+  uint32 max_runs = 1;
+  uint64 max_elapsed_millis = 2;
+  uint64 max_model_tokens = 3;
+  uint64 max_tool_invocations = 4;
+  uint32 max_consecutive_failures = 5;
+}
+
+message StandingGoalCompletionContract {
+  repeated string success_criteria = 1;
+  repeated string evidence_requirements = 2;
+  repeated string failure_conditions = 3;
+  uint32 minimum_evidence_items = 4;
+  StandingGoalRiskClass risk_class = 5;
+}
+
+enum StandingGoalRiskClass {
+  STANDING_GOAL_RISK_CLASS_UNSPECIFIED = 0;
+  STANDING_GOAL_RISK_CLASS_STANDARD = 1;
+  STANDING_GOAL_RISK_CLASS_HIGH_RISK = 2;
+}

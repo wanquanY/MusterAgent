@@ -1,0 +1,267 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+import "rpc_common.proto";
+import "standing_goal.proto";
+
+message ChangeStandingGoalStatusRequest {
+  Actor actor = 1;
+  GoalId goal_id = 2;
+  uint64 expected_goal_revision = 3;
+  optional uint64 expected_pursuit_revision = 4;
+  StandingGoalStatus status = 5;
+  optional GoalPursuitId new_pursuit_id = 6;
+  optional RunId initial_run_id = 7;
+
+  optional MessageId initial_message_id = 8;
+}
+
+message ConfirmStandingGoalCompletionRequest {
+  Actor actor = 1;
+  GoalId goal_id = 2;
+  GoalPursuitId pursuit_id = 3;
+  uint64 expected_goal_revision = 4;
+  uint64 expected_pursuit_revision = 5;
+}
+
+message CreateStandingGoalRequest {
+  Actor actor = 1;
+  optional GoalId goal_id = 2;
+  optional GoalPursuitId pursuit_id = 3;
+  StandingGoalOrigin origin = 4;
+  optional AgentId creator_agent_id = 5;
+  StandingGoalDefinition definition = 6;
+  bool activate = 7;
+  optional RunId initial_run_id = 8;
+}
+
+message DeleteStandingGoalRequest {
+  Actor actor = 1;
+  GoalId goal_id = 2;
+  uint64 expected_revision = 3;
+}
+
+message DeleteStandingGoalResponse {}
+
+message GetStandingGoalRequest {
+  Actor actor = 1;
+  GoalId goal_id = 2;
+}
+
+message GetStandingGoalResponse {
+  StandingGoalView goal = 1;
+}
+
+message GoalEvaluation {
+  GoalEvaluationId evaluation_id = 1;
+  optional RunId run_id = 2;
+  GoalVerdict verdict = 3;
+  uint32 evidence_count = 4;
+  string summary = 5;
+  bool deterministic = 6;
+  google.protobuf.Timestamp occurred_at = 7;
+}
+
+message GoalPursuit {
+  GoalPursuitId pursuit_id = 1;
+  uint64 revision = 2;
+  GoalPursuitStatus status = 3;
+  optional RunId active_run_id = 4;
+  optional GoalWaitBarrier wait_barrier = 5;
+  StandingGoalBudgetUsage budget_usage = 6;
+  optional google.protobuf.Timestamp continuation_due_at = 7;
+  google.protobuf.Timestamp started_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  optional google.protobuf.Timestamp completed_at = 10;
+}
+
+enum GoalPursuitStatus {
+  GOAL_PURSUIT_STATUS_UNSPECIFIED = 0;
+  GOAL_PURSUIT_STATUS_PENDING = 1;
+  GOAL_PURSUIT_STATUS_RUNNING = 2;
+  GOAL_PURSUIT_STATUS_WAITING = 3;
+  GOAL_PURSUIT_STATUS_PAUSED = 4;
+  GOAL_PURSUIT_STATUS_ACHIEVED = 5;
+  GOAL_PURSUIT_STATUS_FAILED = 6;
+  GOAL_PURSUIT_STATUS_CANCELLED = 7;
+}
+
+enum GoalVerdict {
+  GOAL_VERDICT_UNSPECIFIED = 0;
+  GOAL_VERDICT_CONTINUE = 1;
+  GOAL_VERDICT_WAITING = 2;
+  GOAL_VERDICT_ACHIEVED = 3;
+  GOAL_VERDICT_FAILED = 4;
+}
+
+message GoalWaitBarrier {
+  GoalWaitKind kind = 1;
+  string correlation_key = 2;
+  string reason = 3;
+  optional google.protobuf.Timestamp resume_not_before = 4;
+  optional google.protobuf.Timestamp expires_at = 5;
+}
+
+enum GoalWaitKind {
+  GOAL_WAIT_KIND_UNSPECIFIED = 0;
+  GOAL_WAIT_KIND_USER_INPUT = 1;
+  GOAL_WAIT_KIND_APPROVAL = 2;
+  GOAL_WAIT_KIND_EXTERNAL_DEPENDENCY = 3;
+  GOAL_WAIT_KIND_RETRY_BACKOFF = 4;
+  GOAL_WAIT_KIND_COMPLETION_CONFIRMATION = 5;
+}
+
+message ListStandingGoalsRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+}
+
+message ListStandingGoalsResponse {
+  repeated StandingGoalView goals = 1;
+}
+
+message MutateStandingGoalResponse {
+  StandingGoalView goal = 1;
+}
+
+message RecordStandingGoalWakeSignalRequest {
+  Actor actor = 1;
+  string signal_id = 2;
+  string correlation_key = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+}
+
+message RecordStandingGoalWakeSignalResponse {
+  StandingGoalWakeSignalDisposition disposition = 1;
+}
+
+message ReplaceStandingGoalRequest {
+  Actor actor = 1;
+  GoalId goal_id = 2;
+  uint64 expected_revision = 3;
+  StandingGoalDefinition definition = 4;
+}
+
+message ResumeStandingGoalWaitRequest {
+  Actor actor = 1;
+  GoalId goal_id = 2;
+  GoalPursuitId pursuit_id = 3;
+  string correlation_key = 4;
+}
+
+message StandingGoalBudgetUsage {
+  uint32 runs = 1;
+  uint64 elapsed_millis = 2;
+  uint64 model_tokens = 3;
+  uint64 tool_invocations = 4;
+  uint32 consecutive_failures = 5;
+}
+
+message StandingGoalDefinition {
+  AgentId target_agent_id = 1;
+  ConversationId conversation_id = 2;
+  string title = 3;
+  bytes objective_markdown = 4;
+  repeated string constraints = 5;
+  StandingGoalCompletionContract completion = 6;
+  StandingGoalBudget budget = 7;
+  StandingGoalMode mode = 8;
+}
+
+message StandingGoalEvaluationRetry {
+  string stage = 1;
+  bool retryable = 2;
+  optional string runtime_code = 3;
+  optional string correlation_id = 4;
+  int64 first_failed_at_unix_ms = 5;
+  int64 last_failed_at_unix_ms = 6;
+  int64 retry_at_unix_ms = 7;
+  uint32 attempts = 8;
+  optional string recovery_run_id = 9;
+  optional uint32 recovery_attempt = 10;
+}
+
+message StandingGoalInputProgress {
+  uint64 accepted_seq = 1;
+  uint64 consumed_seq = 2;
+}
+
+enum StandingGoalMode {
+  STANDING_GOAL_MODE_UNSPECIFIED = 0;
+  STANDING_GOAL_MODE_FINITE = 1;
+  STANDING_GOAL_MODE_CONTINUOUS = 2;
+}
+
+enum StandingGoalOrigin {
+  STANDING_GOAL_ORIGIN_UNSPECIFIED = 0;
+  STANDING_GOAL_ORIGIN_USER = 1;
+  STANDING_GOAL_ORIGIN_AGENT = 2;
+}
+
+message StandingGoalProgress {
+  StandingGoalProgressPhase phase = 1;
+  uint32 run_number = 2;
+  google.protobuf.Timestamp phase_started_at = 3;
+  optional StandingGoalEvaluationRetry evaluation_retry = 4;
+}
+
+enum StandingGoalProgressPhase {
+  STANDING_GOAL_PROGRESS_PHASE_UNSPECIFIED = 0;
+  STANDING_GOAL_PROGRESS_PHASE_READY = 1;
+  STANDING_GOAL_PROGRESS_PHASE_CONTINUING = 2;
+  STANDING_GOAL_PROGRESS_PHASE_EXECUTING = 3;
+  STANDING_GOAL_PROGRESS_PHASE_EVALUATING = 4;
+  STANDING_GOAL_PROGRESS_PHASE_WAITING = 5;
+  STANDING_GOAL_PROGRESS_PHASE_PAUSED = 6;
+  STANDING_GOAL_PROGRESS_PHASE_ACHIEVED = 7;
+  STANDING_GOAL_PROGRESS_PHASE_FAILED = 8;
+  STANDING_GOAL_PROGRESS_PHASE_CANCELLED = 9;
+}
+
+service StandingGoalService {
+  rpc List(ListStandingGoalsRequest) returns (ListStandingGoalsResponse);
+  rpc Get(GetStandingGoalRequest) returns (GetStandingGoalResponse);
+  rpc Create(CreateStandingGoalRequest) returns (MutateStandingGoalResponse);
+  rpc Replace(ReplaceStandingGoalRequest) returns (MutateStandingGoalResponse);
+  rpc ChangeStatus(ChangeStandingGoalStatusRequest) returns (MutateStandingGoalResponse);
+  rpc ResumeWait(ResumeStandingGoalWaitRequest) returns (MutateStandingGoalResponse);
+  rpc ConfirmCompletion(ConfirmStandingGoalCompletionRequest) returns (MutateStandingGoalResponse);
+  rpc Delete(DeleteStandingGoalRequest) returns (DeleteStandingGoalResponse);
+  rpc RecordWakeSignal(RecordStandingGoalWakeSignalRequest)
+      returns (RecordStandingGoalWakeSignalResponse);
+}
+
+enum StandingGoalStatus {
+  STANDING_GOAL_STATUS_UNSPECIFIED = 0;
+  STANDING_GOAL_STATUS_DRAFT = 1;
+  STANDING_GOAL_STATUS_ACTIVE = 2;
+  STANDING_GOAL_STATUS_PAUSED = 3;
+  STANDING_GOAL_STATUS_ACHIEVED = 4;
+  STANDING_GOAL_STATUS_FAILED = 5;
+  STANDING_GOAL_STATUS_CANCELLED = 6;
+}
+
+message StandingGoalView {
+  GoalId goal_id = 1;
+  uint64 revision = 2;
+  PrincipalId owner_principal_id = 3;
+  StandingGoalOrigin origin = 4;
+  optional AgentId creator_agent_id = 5;
+  StandingGoalDefinition definition = 6;
+  StandingGoalStatus status = 7;
+  optional GoalPursuit pursuit = 8;
+  optional GoalEvaluation latest_evaluation = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  StandingGoalProgress progress = 12;
+  optional StandingGoalInputProgress input_progress = 13;
+}
+
+enum StandingGoalWakeSignalDisposition {
+  STANDING_GOAL_WAKE_SIGNAL_DISPOSITION_UNSPECIFIED = 0;
+  STANDING_GOAL_WAKE_SIGNAL_DISPOSITION_RECORDED = 1;
+  STANDING_GOAL_WAKE_SIGNAL_DISPOSITION_EXISTING = 2;
+}

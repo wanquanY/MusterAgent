@@ -1,0 +1,69 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "agent_dialogue.proto";
+import "snapshot.proto";
+
+message GetOwnerGoalExecutionGrantFactsResponse {
+  OwnerGoalExecutionGrantFacts facts = 1;
+  // SHA256 of deterministic protobuf facts. This binds the signed Run nonce.
+  bytes facts_sha256 = 2;
+  // Opaque original standing authority; verified by Backend, never by a prompt.
+  bytes standing_authority = 3;
+}
+
+message OwnerGoalAdmissionClaim {
+  Actor actor = 1;
+  OwnerSpaceId space_id = 2;
+  AgentId agent_id = 3;
+  AgentDialogueId dialogue_id = 4;
+  GoalId goal_id = 5;
+  GoalPursuitId pursuit_id = 6;
+  uint64 goal_revision = 7;
+  uint64 pursuit_revision = 8;
+  string claim_token = 9;
+  // Absent is the original execution claim. Only the original evaluation
+  // claim over this terminal Run can authorize the independent Judge.
+  optional OwnerGoalEvaluationSource evaluation = 10;
+}
+
+message OwnerGoalDraftReceipt {
+  CommandId command_id = 1;
+  Actor owner = 2;
+  OwnerSpaceId space_id = 3;
+  AgentId agent_id = 4;
+  AgentDialogueId dialogue_id = 5;
+  GoalId goal_id = 6;
+  AgentId requesting_agent_id = 7;
+  AgentDialogueId source_dialogue_id = 8;
+  uint64 binding_revision = 9;
+  int64 created_at_ms = 10;
+}
+
+message OwnerGoalEvaluationSource {
+  RunId source_run_id = 1;
+  ContentRef judge_input_ref = 2;
+}
+
+message OwnerGoalExecutionGrantFacts {
+  OwnerGoalAdmissionClaim claim = 1;
+  ConversationId context_conversation_id = 2;
+  AgentVersionId agent_version_id = 3;
+  CommandId command_id = 4;
+  RunId run_id = 5;
+  uint64 run_ordinal = 6;
+  uint64 input_first = 7;
+  uint64 input_last = 8;
+  optional RunId previous_run_id = 9;
+  OwnerGoalSnapshotAuthority snapshot_authority = 10;
+  bytes processing_rules_sha256 = 11;
+  repeated ContentRef input_refs = 12;
+  ProductReleaseRef product_release = 13;
+  PermissionMode permission_mode = 14;
+  bytes standing_authority_sha256 = 15;
+  uint64 private_context_home_epoch = 16;
+  uint64 private_context_offset = 17;
+  optional ContentRef previous_evaluation_summary_ref = 18;
+}

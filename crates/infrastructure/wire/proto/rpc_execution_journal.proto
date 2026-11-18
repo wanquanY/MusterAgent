@@ -1,0 +1,52 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "execution_liveness.proto";
+
+message ExecutionJournalCommandV1 {
+  oneof operation {
+    ExecutionJournalScopeV1 load = 1;
+    ExecutionJournalObservationV1 observe = 2;
+    ExecutionJournalMutationV1 mutate = 3;
+  }
+}
+
+message ExecutionJournalMutationV1 {
+  ExecutionJournalScopeV1 scope = 1;
+  uint64 expected_revision = 2;
+  oneof mutation {
+    ExecutionStopReasonV1 stop = 3;
+    ExecutionJournalUnitV1 stop_confirmed = 4;
+    ExecutionJournalUnitV1 check_due = 5;
+    ExecutionBindingV1 begin_recovery = 6;
+    ExecutionBindingV1 rebind_passive = 7;
+    ExecutionBindingV1 abandon_recovery = 8;
+  }
+  Sha256 recovery_nonce = 9;
+}
+
+message ExecutionJournalObservationV1 {
+  ExecutionBindingV1 binding = 1;
+  uint64 expected_revision = 2;
+  bool accepted = 3;
+  bool ended = 4;
+  repeated ExecutionActivityCursorV1 cursors = 5;
+
+  optional uint64 oldest_age_nanos = 6;
+  bytes freshness_proof = 7;
+}
+
+message ExecutionJournalReplyV1 {
+  ExecutionLivenessRecordV1 record = 1;
+  ExecutionClockSampleV1 home_now = 2;
+  bytes freshness_proof = 3;
+}
+
+message ExecutionJournalScopeV1 {
+  InvocationId invocation_id = 1;
+  bool handoff = 2;
+}
+
+message ExecutionJournalUnitV1 {}

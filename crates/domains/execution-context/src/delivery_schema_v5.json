@@ -1,0 +1,172 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "deliveries"
+  ],
+  "properties": {
+    "deliveries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "anyOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "purpose",
+              "text"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "message"
+                ]
+              },
+              "purpose": {
+                "type": "string",
+                "enum": [
+                  "reply",
+                  "result",
+                  "important_update",
+                  "clarification",
+                  "required_decision",
+                  "blocked"
+                ]
+              },
+              "text": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 65536,
+                "pattern": "\\S",
+                "description": "Only the useful user-facing Markdown answer; no completion status or internal tool logs."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "purpose",
+              "interaction_id"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "interaction"
+                ]
+              },
+              "purpose": {
+                "type": "string",
+                "enum": [
+                  "clarification",
+                  "required_decision",
+                  "blocked"
+                ]
+              },
+              "interaction_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Exact interaction_id returned by the original interaction owner in this task."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "purpose",
+              "artifact_ref",
+              "artifact_tool_call_id"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "artifact"
+                ]
+              },
+              "purpose": {
+                "type": "string",
+                "enum": [
+                  "reply",
+                  "result",
+                  "important_update"
+                ]
+              },
+              "artifact_ref": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "kind",
+                  "id"
+                ],
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "artifact",
+                      "file_node"
+                    ]
+                  },
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                }
+              },
+              "artifact_tool_call_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^[!-~]+$",
+                "description": "Exact tool_call_id of the successful creation/update/export Tool message. Opaque; never use invocation_id or another task id."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "purpose",
+              "creation_command_id",
+              "partner_tool_call_id"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "partner_created"
+                ]
+              },
+              "purpose": {
+                "type": "string",
+                "enum": [
+                  "result"
+                ]
+              },
+              "creation_command_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "partner_tool_call_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256,
+                "pattern": "^[!-~]+$",
+                "description": "Exact tool_call_id of the successful agents.create receipt for this creation command. Confirms its existing public card; does not create another card."
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

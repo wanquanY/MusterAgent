@@ -1,0 +1,65 @@
+[package]
+name = "musteragent-model-providers"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = ["direct-aws-signing", "system-proxy"]
+# Gateway clients still decode Bedrock event streams without upstream signing.
+direct-aws-signing = ["dep:aws-credential-types", "dep:aws-sigv4"]
+system-proxy = ["reqwest/system-proxy"]
+
+[dependencies]
+musteragent-execution-liveness.workspace = true
+async-stream = "0.3.6"
+aws-credential-types = { version = "1.2.14", optional = true }
+aws-sigv4 = { version = "1.4.5", optional = true }
+aws-smithy-eventstream = "0.60.21"
+aws-smithy-types = "1.5.0"
+base64 = "0.23.0"
+bytes = "1.12.1"
+musteragent-content-ref = { version = "0.1.0", path = "../../foundation/content-ref" }
+musteragent-identity = { version = "0.1.0", path = "../../foundation/identity" }
+musteragent-model = { version = "0.1.0", path = "../../domains/model" }
+musteragent-runtime-contract = { version = "0.1.0", path = "../../foundation/runtime-contract" }
+musteragent-runtime-content.workspace = true
+musteragent-execution-grant.workspace = true
+musteragent-runtime-model = { version = "0.1.0", path = "../../runtime/model" }
+musteragent-runtime-memory.workspace = true
+musteragent-runtime-snapshot = { version = "0.1.0", path = "../../runtime/snapshot" }
+musteragent-telemetry.workspace = true
+musteragent-tool = { version = "0.1.0", path = "../../domains/tool" }
+eventsource-stream = "0.2.3"
+futures-util = "0.3.33"
+http = "1.4.2"
+httpdate = "1.0.3"
+# Desktop/Cloud retain OS proxy support through the default feature above.
+# Mobile qualifies its platform network lifecycle without desktop proxy discovery.
+reqwest = { version = "0.13.4", default-features = false, features = ["rustls", "stream", "json", "http2"] }
+secrecy = "0.10.3"
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { version = "1.53.1", features = ["time"] }
+tokio-util = { version = "0.7.19", features = ["rt"] }
+tracing.workspace = true
+url = "2.5.8"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+musteragent-execution-context.workspace = true
+axum = "0.8.9"
+musteragent-discovery.workspace = true
+musteragent-activity = { version = "0.1.0", path = "../../domains/activity" }
+musteragent-context = { version = "0.1.0", path = "../../runtime/context" }
+musteragent-event-envelope = { version = "0.1.0", path = "../../foundation/event-envelope" }
+musteragent-run = { version = "0.1.0", path = "../../runtime/run" }
+musteragent-testkit = { version = "0.1.0", path = "../../../tests/testkit" }
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+uuid.workspace = true

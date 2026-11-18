@@ -1,0 +1,273 @@
+use std::collections::BTreeMap;
+
+use musteragent_content_ref::{SchemaRef, Sha256};
+use musteragent_identity::VersionedKey;
+use musteragent_runtime_model::JsonValue;
+use musteragent_tool::{ToolKey, WireName};
+
+use super::*;
+
+fn tool(key: &str, name: &str) -> CanonicalToolDefinition {
+    CanonicalToolDefinition {
+        key: ToolKey::from_versioned_key(VersionedKey::new(key).expect("valid fixture for tool")),
+        name: WireName::new("internal_alias").expect("valid fixture for tool"),
+        model_name: WireName::new(name).expect("valid fixture for tool"),
+        description: ModelText::new("fixture").expect("valid fixture for tool"),
+        input_schema_ref: SchemaRef {
+            schema_key: VersionedKey::new("fixture.input@1").expect("valid fixture for tool"),
+            schema_hash: Sha256::digest(b"fixture"),
+        },
+        input_schema: JsonValue::Object(BTreeMap::from([(
+            "type".into(),
+            JsonValue::String("object".into()),
+        )])),
+        strict: true,
+    }
+}
+
+#[test]
+fn uses_only_actual_exposed_function_names_and_keeps_user_choice() {
+    let mut instructions = Vec::new();
+    append(
+        &mut instructions,
+        &[
+            tool("device.workspace.file.read@4", "read_file_2"),
+            tool("device.workspace.file.search@2", "search_files"),
+        ],
+    )
+    .expect("valid fixture for uses only actual exposed function names and keeps user choice");
+    let text = instructions[0].as_str();
+    assert!(text.contains("`read_file_2`"));
+    assert!(text.contains("`search_files`"));
+    assert!(!text.contains("internal_alias"));
+    assert!(!text.contains("`edit_file`"));
+    assert!(text.contains("user instructions take precedence"));
+    assert!(text.contains("cursor that does not advance must not be repeated"));
+    assert!(text.contains("not a workaround for denied file access"));
+    assert!(text.len() < 5500);
+}
+
+#[test]
+fn cloud_uses_resource_id_workflow_without_advertising_local_tools() {
+    let mut instructions = Vec::new();
+    append(
+        &mut instructions,
+        &[
+            tool("resource.file.read@3", "project_file_read"),
+            tool("resource.file.edit.begin@3", "project_edit_begin"),
+            tool("resource.file.edit.finalize@2", "project_edit_commit"),
+        ],
+    )
+    .expect("valid fixture for cloud uses resource id workflow without advertising local tools");
+    let text = instructions[0].as_str();
+    assert!(text.contains("`project_file_read`"));
+    assert!(text.contains("retain the returned session reference"));
+    assert!(!text.contains("`read_file`"));
+    assert!(!text.contains("`project_edit_patch`"));
+}
+
+#[test]
+fn terminal_and_mcp_aliases_do_not_enable_builtin_file_guidance() {
+    let mut instructions = Vec::new();
+    append(
+        &mut instructions,
+        &[
+            tool("device.terminal.exec@1", "exec_command"),
+            tool("mcp.example.read@1", "read_file"),
+        ],
+    )
+    .expect("valid fixture for terminal and mcp aliases do not enable builtin file guidance");
+    assert!(instructions.is_empty());
+}
+
+#[test]
+fn newly_exposed_tools_get_guidance_without_retaining_retired_aliases() {
+    let mut first = Vec::new();
+    append(&mut first, &[tool("resource.search@2", "lookup_files")]).expect(
+        "valid fixture for newly exposed tools get guidance without retaining retired aliases",
+    );
+    let mut next = Vec::new();
+    append(&mut next, &[tool("resource.file.read@3", "file_read_new")]).expect(
+        "valid fixture for newly exposed tools get guidance without retaining retired aliases",
+    );
+    assert!(!first[0].as_str().contains("`file_read_new`"));
+    assert!(!next[0].as_str().contains("`lookup_files`"));
+    assert!(next[0].as_str().contains("`file_read_new`"));
+}
+
+#[test]
+fn current_device_file_catalog_receives_bounded_guidance_with_its_real_names() {
+    let catalog =
+        musteragent_tool::BuiltinToolCatalog::load_device().expect("valid fixture for tests");
+    let tools = catalog
+        .definitions()
+        .iter()
+        .filter(|definition| {
+            definition
+                .key
+                .logical_key()
+                .starts_with("device.workspace.file.")
+        })
+        .map(|definition| tool(definition.key.as_str(), definition.wire_name.as_str()))
+        .collect::<Vec<_>>();
+    assert!(tools.len() >= 8);
+    let mut instructions = Vec::new();
+    append(&mut instructions, &tools).expect("valid fixture for tests");
+    let text = instructions[0].as_str();
+    for tool in &tools {
+        assert!(text.contains(&format!("`{}`", tool.model_name.as_str())));
+    }
+    assert!(text.len() < 6500);
+}
+
+#[test]
+fn legacy_agent_file_guidance_retains_its_physically_sealed_hash() {
+    // Exact exposed file names/order in the pre-v2 real qualification request.
+    // This digest was recorded before this change, not generated by this test.
+    let mut instructions = Vec::new();
+    append(
+        &mut instructions,
+        &[
+            tool("files.list@3", "files_list"),
+            tool("files.inspect@3", "files_inspect"),
+            tool("files.read@4", "files_read"),
+        ],
+    )
+    .unwrap();
+    assert_eq!(
+        Sha256::digest(instructions[0].as_str().as_bytes()).to_string(),
+        "d70f7e208c9866fd9ed673ef03da4213faa2e019bbfe5795bbdad25af70b9455"
+    );
+}
+
+#[test]
+fn dialogue_forward_file_guidance_uses_real_target_and_exposed_names() {
+    let mut instructions = Vec::new();
+    append_profile(
+        &mut instructions,
+        &[
+            tool("files.list@3", "list_my_files"),
+            tool("files.search@3", "search_my_files"),
+            tool("files.read@4", "read_my_file"),
+        ],
+        Profile::Account,
+    )
+    .unwrap();
+    let text = instructions[0].as_str();
+    assert!(text.contains("target=\"owned_agent\""));
+    assert!(text.contains("`list_my_files`"));
+    assert!(text.contains("`search_my_files`"));
+    assert!(text.contains("scope=owned_agent"));
+    assert!(!text.contains("Discover effective conversation files"));
+    assert!(!text.contains("Use traversal=subtree to search a project"));
+    assert!(!text.contains("`files_list`"));
+    assert!(text.contains("does not imply that the current request needs source files"));
+    assert!(text.contains("does not grant additional access"));
+    assert!(text.contains("the exposed Skill-view function"));
+    assert!(!text.contains("skills.view"));
+}
+
+#[test]
+fn dialogue_forward_guidance_does_not_advertise_missing_file_functions() {
+    let mut instructions = Vec::new();
+    append_profile(
+        &mut instructions,
+        &[tool("mcp.example.read@1", "read_file")],
+        Profile::Account,
+    )
+    .unwrap();
+    assert!(instructions.is_empty());
+    append_profile(
+        &mut instructions,
+        &[tool("files.read@4", "read_one")],
+        Profile::Account,
+    )
+    .unwrap();
+    assert!(instructions[0].as_str().contains("`read_one`"));
+    assert!(!instructions[0].as_str().contains("files.list"));
+    assert!(!instructions[0].as_str().contains("files.search"));
+}
+
+#[test]
+fn conversation_quality_keeps_the_exact_existing_owned_agent_scope_rendering() {
+    let tools = [tool("files.read@4", "read_one")];
+    let mut previous = Vec::new();
+    let mut candidate = Vec::new();
+    for (policy, output) in [
+        (DIALOGUE_DISCOVERY_POLICY, &mut previous),
+        (DIALOGUE_DISCOVERY_POLICY, &mut candidate),
+    ] {
+        let profile = profile_for_scope(SNAPSHOT_SCHEMA_VERSION, Some(policy)).unwrap();
+        append_profile(output, &tools, profile).unwrap();
+        assert!(profile_for_scope("musteragent.runtime-snapshot.v15", Some(policy)).is_err());
+    }
+    assert_eq!(previous, candidate);
+    assert_eq!(
+        profile_for_scope(
+            SNAPSHOT_SCHEMA_VERSION,
+            Some("musteragent.dialogue-discovery@1")
+        )
+        .unwrap(),
+        Profile::General
+    );
+    assert_eq!(
+        profile_for_scope("musteragent.runtime-snapshot.v15", None).unwrap(),
+        Profile::General
+    );
+}
+
+#[test]
+fn terminal_only_surface_receives_execution_guidance_without_fictitious_file_tools() {
+    let mut instructions = Vec::new();
+    super::super::terminal_tool_guidance::append(
+        &mut instructions,
+        &[tool("device.terminal.exec@3", "run_terminal_command_2")],
+    )
+    .unwrap();
+    let text = instructions[0].as_str();
+    assert!(text.contains("`run_terminal_command_2`"));
+    assert!(text.contains("$MUSTERAGENT_TASK_OUTPUT_DIR"));
+    assert!(!text.contains("`write_file`"));
+    let mut retired = Vec::new();
+    super::super::terminal_tool_guidance::append(
+        &mut retired,
+        &[tool("device.terminal.exec@1", "run_terminal_command")],
+    )
+    .unwrap();
+    assert!(retired.is_empty());
+}
+
+#[test]
+fn forward_terminal_guidance_reports_frozen_mode_and_original_approval() {
+    let mut instructions = Vec::new();
+    super::super::terminal_tool_guidance::append_current(
+        &mut instructions,
+        &[tool("device.terminal.exec@4", "terminal_current")],
+        "trusted",
+    )
+    .unwrap();
+    let text = instructions[0].as_str();
+    assert!(text.contains("permission_mode=\"trusted\""));
+    assert!(text.contains("`terminal_current`"));
+    assert!(text.contains("request_host_access=true"));
+    assert!(text.contains("HOME is the task scratch home"));
+    assert!(text.contains("execution_boundary"));
+    assert!(text.contains("Finder/osascript"));
+    assert!(text.contains("not evidence of missing macOS permissions"));
+}
+
+#[test]
+fn full_access_guidance_does_not_promise_a_task_sandbox_output_directory() {
+    let mut out = Vec::new();
+    super::super::terminal_tool_guidance::append_current(
+        &mut out,
+        &[tool("device.terminal.exec@4", "terminal_current")],
+        "full_access",
+    )
+    .unwrap();
+    let text = out[0].as_str();
+    assert!(text.contains("after checking that it is set"));
+    assert!(text.contains("authorized project destination"));
+    assert!(text.contains("non-interactive execution"));
+    assert!(!text.contains("$MUSTERAGENT_TASK_OUTPUT_DIR"));
+}

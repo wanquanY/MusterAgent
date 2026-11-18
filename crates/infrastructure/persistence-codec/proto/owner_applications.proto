@@ -1,0 +1,99 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "managed_component.proto";
+
+message OwnerApplicationBinding {
+  OwnerApplicationBindingId binding_id = 1;
+  TenantId tenant_id = 2;
+  PrincipalId owner_id = 3;
+  AgentId agent_id = 4;
+  AgentPinnedApplication application = 5;
+  repeated OwnerApplicationSourceRef source_refs = 6;
+  OwnerApplicationBindingStatus status = 7;
+  OwnerApplicationGuard guard = 8;
+  int64 created_at_ms = 9;
+  int64 updated_at_ms = 10;
+  // Agent-owned exclusions by stable operation key, retained across reconnects/releases.
+  // Absent in historical snapshots means revision zero with every authorized tool on.
+  OwnerApplicationOperationPolicy operation_policy = 11;
+}
+
+message OwnerApplicationBindingId { string value = 1; }
+
+enum OwnerApplicationBindingStatus {
+  OWNER_APPLICATION_BINDING_STATUS_UNSPECIFIED = 0;
+  OWNER_APPLICATION_BINDING_STATUS_PREPARING = 1;
+  OWNER_APPLICATION_BINDING_STATUS_ENABLED = 2;
+  OWNER_APPLICATION_BINDING_STATUS_DISABLED = 3;
+  OWNER_APPLICATION_BINDING_STATUS_REMOVED = 4;
+}
+
+message OwnerApplicationGuard {
+  uint64 revision = 1;
+  uint64 authority_epoch = 2;
+}
+
+message OwnerApplicationOperationPolicy {
+  uint64 revision = 1;
+  repeated string disabled_operations = 2;
+  // Frozen custody uses an exact immutable key-set reference. Inline and
+  // referenced representations are exclusive; management returns resolved keys.
+  OwnerApplicationPolicyReference content = 3;
+}
+
+message OwnerApplicationPolicyReference {
+  bytes sha256 = 1;
+  uint32 operation_count = 2;
+  uint32 byte_length = 3;
+}
+
+message OwnerApplicationSourceRef {
+  string connection_id = 1;
+  OwnerSourceGrantId source_grant_id = 2;
+  // Exact original grant version, not a duplicate current-scope authority.
+  uint64 source_grant_revision = 3;
+}
+
+message AgentPinnedApplication {
+  oneof reference {
+    AgentPinnedSkill skill = 1;
+    AgentPinnedPlugin plugin = 2;
+    AgentPinnedMcp mcp = 3;
+  }
+}
+
+message AgentPinnedMcp {
+  DeviceId device_id = 1;
+  DeviceInstallationId installation_id = 2;
+  string membership_id = 3;
+  uint64 membership_epoch = 4;
+  string server_name = 5;
+  string instance_id = 6;
+  uint64 configuration_revision = 7;
+  uint64 inventory_revision = 8;
+  uint64 transport_revision = 9;
+  repeated string tool_names = 10;
+  CommandId observation_command_id = 11;
+  ManagedComponentAuthorityPin managed_component = 12;
+}
+
+message AgentPinnedPlugin {
+  string plugin_id = 1;
+  string release_version = 2;
+  bytes release_sha256 = 3;
+  string connection_id = 4;
+  repeated AgentPinnedSkill skills = 5;
+}
+
+message AgentPinnedSkill {
+  SkillId skill_id = 1;
+  SkillVersionId skill_version_id = 2;
+  string skill_ref = 3;
+  bytes manifest_sha256 = 4;
+  bytes payload_sha256 = 5;
+}
+
+message OwnerSourceGrantId { string value = 1; }

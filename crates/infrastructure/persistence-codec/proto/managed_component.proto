@@ -1,0 +1,17 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+
+
+message ManagedComponentAuthorityPin {
+  string product_id = 1;
+  string entry_id = 2;
+  string release_id = 3;
+  string installation_authority_id = 4;
+  uint64 authorization_epoch = 5;
+  string component_id = 6;
+  string target = 7;
+  bytes archive_sha256 = 8;
+  bytes bundle_sha256 = 9;
+}

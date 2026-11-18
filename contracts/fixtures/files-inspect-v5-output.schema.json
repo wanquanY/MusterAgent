@@ -1,0 +1,457 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "file_ref": {
+      "$ref": "#/$defs/reference"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "is_directory": {
+      "type": "boolean"
+    },
+    "media_type": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "byte_length": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "modified_at_ms": {
+      "type": "integer"
+    },
+    "associated_at_ms": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "semantic_kind": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "availability": {
+      "enum": [
+        "available",
+        "draft",
+        "archived",
+        "failed",
+        "unavailable"
+      ]
+    },
+    "native_workspace_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "production": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "execution_home": {
+          "enum": [
+            "cloud",
+            "native"
+          ]
+        },
+        "agent_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "dialogue_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "intent_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "run_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "invocation_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "task_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "committed_at_ms": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "execution_home",
+        "agent_id",
+        "dialogue_id",
+        "intent_id",
+        "task_id",
+        "run_id",
+        "invocation_id",
+        "committed_at_ms"
+      ],
+      "description": "Verified producer of this exact current file version, not the node creator. Absent means no currently authorized reliable Dialogue execution provenance; never infer it from a filename."
+    }
+  },
+  "required": [
+    "file_ref",
+    "name",
+    "is_directory",
+    "media_type",
+    "byte_length",
+    "modified_at_ms",
+    "associated_at_ms",
+    "semantic_kind",
+    "availability"
+  ],
+  "$defs": {
+    "reference": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema": {
+              "const": "musteragent.file-reference.v1"
+            },
+            "conversation_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "scope": {
+              "enum": [
+                "conversation",
+                "project"
+              ]
+            },
+            "source": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "attachment"
+                    },
+                    "message_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "content_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "message_id",
+                    "content_id"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "artifact"
+                    },
+                    "artifact_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "artifact_id"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "resource"
+                    },
+                    "node_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "node_id"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "native"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "path"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "native_creation"
+                    },
+                    "invocation_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "invocation_id",
+                    "path"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "hosted"
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "project_id",
+                    "path"
+                  ]
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "kind": {
+                      "const": "hosted_creation"
+                    },
+                    "project_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "run_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "attempt_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "capture_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "path": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4096
+                    }
+                  },
+                  "required": [
+                    "kind",
+                    "project_id",
+                    "run_id",
+                    "attempt_id",
+                    "capture_id",
+                    "path"
+                  ]
+                }
+              ]
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "schema",
+            "conversation_id",
+            "scope",
+            "source",
+            "revision"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema": {
+              "const": "musteragent.file-reference.v2"
+            },
+            "owned_agent_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "scope": {
+              "const": "owned_agent"
+            },
+            "source": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "resource"
+                },
+                "node_id": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "required": [
+                "kind",
+                "node_id"
+              ]
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "schema",
+            "owned_agent_id",
+            "scope",
+            "source",
+            "revision"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "schema": {
+              "const": "musteragent.file-reference.v3"
+            },
+            "owned_agent_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "scope": {
+              "const": "owned_agent"
+            },
+            "source": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "kind": {
+                  "const": "dialogue_input"
+                },
+                "dialogue_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "entry_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "epoch": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "seq": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "ordinal": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 63
+                }
+              },
+              "required": [
+                "kind",
+                "dialogue_id",
+                "entry_id",
+                "epoch",
+                "seq",
+                "ordinal"
+              ]
+            },
+            "revision": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            }
+          },
+          "required": [
+            "schema",
+            "owned_agent_id",
+            "scope",
+            "source",
+            "revision"
+          ]
+        }
+      ]
+    }
+  }
+}

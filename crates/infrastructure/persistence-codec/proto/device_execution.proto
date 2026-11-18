@@ -1,0 +1,70 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "owned_agent.proto";
+import "dialogue_context.proto";
+import "agent_dialogue.proto";
+
+message DeviceExecutionSource {
+  // v1 requires absent workspace; v2 requires one exact physical workspace.
+  uint32 schema_version = 1;
+  DeviceId device_id = 2;
+  AgentId default_agent_id = 3;
+  DialogueUserIntent intent = 4;
+  OwnedAgentInstance agent = 5;
+  OwnedAgentConfiguration configuration = 6;
+  PublishedAgentDefinitionMaterial definition = 8;
+  PublishedAgentVersionMaterial version = 9;
+  DialogueContextCut context_cut = 10;
+  bool context_has_input_attachments = 11;
+  // Device source supports the registered Tool delivery contract only.
+  VersionedRef delivery_contract = 12;
+  optional WorkspaceId device_workspace_id = 13;
+}
+
+message PublishedAgentDefinitionMaterial {
+  AgentId agent_id = 1;
+  string agent_key = 2;
+  optional string system_slot = 3;
+  string display_name = 4;
+  AgentKind kind = 5;
+  bool built_in = 6;
+  bool deletable = 7;
+  bool replaceable = 8;
+  bool default_for_product = 9;
+  PublishedAgentLifecycle lifecycle = 10;
+}
+
+enum PublishedAgentLifecycle {
+  PUBLISHED_AGENT_LIFECYCLE_UNSPECIFIED = 0;
+  PUBLISHED_AGENT_LIFECYCLE_ACTIVE = 1;
+  PUBLISHED_AGENT_LIFECYCLE_RETIRED = 2;
+  PUBLISHED_AGENT_LIFECYCLE_DELETED = 3;
+}
+
+message PublishedAgentVersionMaterial {
+  AgentVersionId agent_version_id = 1;
+  AgentId agent_id = 2;
+  uint64 version = 3;
+  uint64 persona_version = 4;
+  ContentRef persona_content_ref = 5;
+  repeated VersionedRef base_skill_refs = 6;
+  VersionedRef policy_ref = 7;
+  Sha256 policy_hash = 8;
+  VersionedRef memory_policy_ref = 9;
+  VersionedRef model_requirement_ref = 10;
+  VersionedRef supported_runtime_contract = 11;
+  AgentReleaseChannel release_channel = 12;
+  int64 published_at_ms = 13;
+  int64 activated_at_ms = 14;
+  optional AgentVersionId supersedes = 15;
+  ContentRef manifest_ref = 16;
+  Sha256 manifest_hash = 17;
+  ContentRef policy_content_ref = 18;
+  ContentRef memory_policy_content_ref = 19;
+  Sha256 memory_policy_hash = 20;
+  optional MemoryCollectionId user_memory_collection_id = 21;
+  optional MemoryCollectionId long_term_memory_collection_id = 22;
+}

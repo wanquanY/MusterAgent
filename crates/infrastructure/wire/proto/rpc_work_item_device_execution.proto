@@ -1,0 +1,139 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "execution_grant.proto";
+import "rpc_device_execution.proto";
+import "rpc_dialogue_execution_services.proto";
+import "rpc_runtime.proto";
+import "rpc_work_item_execution_services.proto";
+
+message DeferWorkItemDevicePreparationRequest {
+  Actor actor = 1;
+  OriginDeviceExecutionTarget target = 2;
+  WorkItemDeviceClaim claim = 3;
+  bytes source_digest = 4;
+  WorkItemDevicePreparationBlocker blocker = 5;
+}
+
+message DeferWorkItemDevicePreparationResponse {
+  WorkItemDeviceClaim claim = 1;
+  bytes source_digest = 2;
+  bool recorded = 3;
+}
+
+message GetWorkItemDeviceControlsRequest {
+  Actor actor = 1;
+  OriginDeviceExecutionTarget target = 2;
+  WorkItemDeviceControlCursor after = 3;
+}
+
+message GetWorkItemDeviceControlsResponse {
+  
+  repeated bytes controls = 1;
+
+  WorkItemDeviceControlCursor next_cursor = 2;
+  bool scan_exhausted = 3;
+}
+
+message GetWorkItemDeviceMaterialRequest {
+  Actor actor = 1;
+  OriginDeviceExecutionTarget target = 2;
+  WorkItemDeviceClaim claim = 3;
+  bytes source_digest = 4;
+  
+  optional bytes retained_grant_hash = 5;
+}
+
+message GetWorkItemDeviceMaterialResponse {
+  WorkItemDeviceClaim claim = 1;
+  bytes source_digest = 2;
+  bytes signed_grant_hash = 3;
+  int64 resolved_at_ms = 4;
+  int64 valid_until_ms = 5;
+  repeated WorkItemDeviceSourceMaterial materials = 6;
+  optional SignedExecutionGrant retained_signed_grant = 7;
+}
+
+message GetWorkItemDeviceMemoryResponse {
+  WorkItemDeviceClaim claim = 1;
+  bytes source_digest = 2;
+  bytes signed_grant_hash = 3;
+  int64 resolved_at_ms = 4;
+  int64 valid_until_ms = 5;
+  optional DeviceProfilePrompt profile = 6;
+  repeated DeviceInstinctMaterial instincts = 7;
+}
+
+message PickupWorkItemDeviceExecutionRequest {
+  Actor actor = 1;
+  OriginDeviceExecutionTarget target = 2;
+  string owner = 3;
+  optional GetWorkItemExecutionGrantFactsRequest expected = 4;
+  optional WorkspaceId chosen_workspace_id = 5;
+  
+  bool retained_workspace_only = 6;
+}
+
+message PickupWorkItemDeviceExecutionResponse {
+  reserved 5;
+  optional WorkItemDeviceClaim claim = 1;
+  bytes source_envelope = 2;
+  optional SignedExecutionGrant signed_execution_grant = 3;
+  optional AdmissionSelection admission_selection = 4;
+}
+
+message RecordWorkItemDeviceNotAdmittedRequest {
+  Actor actor = 1;
+  OriginDeviceExecutionTarget target = 2;
+  bytes receipt = 3;
+}
+
+message WorkItemDeviceClaim {
+  GetWorkItemExecutionGrantFactsRequest request = 1;
+  uint64 event_seq = 2;
+  string owner = 3;
+  uint64 generation = 4;
+  uint64 attempt_count = 5;
+  int64 lease_expires_at_ms = 6;
+}
+
+message WorkItemDeviceControlCursor {
+  int64 created_at_ms = 1;
+  RunId run_id = 2;
+}
+
+service WorkItemDeviceExecutionService {
+  rpc DeferPreparation(DeferWorkItemDevicePreparationRequest) returns (DeferWorkItemDevicePreparationResponse);
+  rpc GetControls(GetWorkItemDeviceControlsRequest) returns (GetWorkItemDeviceControlsResponse);
+  rpc RecordNotAdmitted(RecordWorkItemDeviceNotAdmittedRequest) returns (WorkItemDeviceFactResponse);
+  rpc Pickup(PickupWorkItemDeviceExecutionRequest) returns (PickupWorkItemDeviceExecutionResponse);
+  rpc AcknowledgeAdmission(WorkItemDeviceFactRequest) returns (WorkItemDeviceFactResponse);
+  rpc RecordTerminal(WorkItemDeviceFactRequest) returns (WorkItemDeviceFactResponse);
+  rpc GetSourceMaterial(GetWorkItemDeviceMaterialRequest) returns (GetWorkItemDeviceMaterialResponse);
+  rpc GetMemory(GetWorkItemDeviceMaterialRequest) returns (GetWorkItemDeviceMemoryResponse);
+}
+
+message WorkItemDeviceFactRequest {
+  Actor actor = 1;
+  OriginDeviceExecutionTarget target = 2;
+  WorkItemDeviceClaim claim = 3;
+  
+  bytes receipt = 4;
+}
+
+message WorkItemDeviceFactResponse {
+  bytes receipt_commitment = 1;
+  bool recorded = 2;
+}
+
+enum WorkItemDevicePreparationBlocker {
+  WORK_ITEM_DEVICE_PREPARATION_BLOCKER_UNSPECIFIED = 0;
+  WORK_ITEM_DEVICE_PREPARATION_BLOCKER_WORKSPACE_UNAVAILABLE = 1;
+}
+
+message WorkItemDeviceSourceMaterial {
+  ContentRef reference = 1;
+  bytes content = 2;
+}

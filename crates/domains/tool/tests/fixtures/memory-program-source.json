@@ -1,0 +1,973 @@
+{
+  "release_id": "745aa886-eac2-5e4a-affd-0edc541ed274",
+  "plugin_id": "platform-memory",
+  "version": "0.2.0",
+  "release_sha256": "7da4674bf02a77fc1479fa23654fe9c245feea91302935c284f2f078ad4cbf1e",
+  "provider_key": "workspace_platform_memory",
+  "retires": [
+    "experience.propose",
+    "experience.publish",
+    "memory.search",
+    "user_memory.remember"
+  ],
+  "tools": [
+    {
+      "key": "platform.experience.propose.v2.h_bd772dae880a45c600e95d7b18f2120ad439b79547d0f4927348d7a6ac0409e2@1",
+      "operation_key": "platform.experience.propose.v2",
+      "operation_sha256": "bd772dae880a45c600e95d7b18f2120ad439b79547d0f4927348d7a6ac0409e2",
+      "title": "Propose an evidence-backed experience candidate",
+      "description": "Propose a reusable experience only when it is supported by concrete Runtime-owned run and ledger evidence; proposals are not active memory.",
+      "effect": "write_reversible",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "claim": {
+            "maxLength": 8000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "conditions": {
+            "maxProperties": 50,
+            "type": "object"
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "kind": {
+            "enum": [
+              "semantic",
+              "procedure",
+              "failure",
+              "preference",
+              "policy_proposal"
+            ],
+            "type": "string"
+          },
+          "outcome": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "user",
+              "agent_profile"
+            ],
+            "type": "string"
+          },
+          "sensitivity": {
+            "enum": [
+              "private",
+              "internal"
+            ],
+            "type": "string"
+          },
+          "supersedes_candidate_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "kind",
+          "claim",
+          "conditions",
+          "outcome",
+          "confidence",
+          "sensitivity"
+        ],
+        "type": "object"
+      },
+      "scope_alternatives": [
+        []
+      ],
+      "runtime_definition": {
+        "approval": "policy",
+        "capability_key": "experience.propose@2",
+        "concurrency_class": "sequential_write",
+        "data_classification": "internal",
+        "description": "Propose a reusable experience only when it is supported by concrete Runtime-owned run and ledger evidence; proposals are not active memory.",
+        "effect": "write_reversible",
+        "egress_policy": "database_only",
+        "idempotency": "runtime_transaction",
+        "input_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "claim": {
+              "maxLength": 8000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "conditions": {
+              "maxProperties": 50,
+              "type": "object"
+            },
+            "confidence": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "kind": {
+              "enum": [
+                "semantic",
+                "procedure",
+                "failure",
+                "preference",
+                "policy_proposal"
+              ],
+              "type": "string"
+            },
+            "outcome": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string"
+            },
+            "scope": {
+              "enum": [
+                "user",
+                "agent_profile"
+              ],
+              "type": "string"
+            },
+            "sensitivity": {
+              "enum": [
+                "private",
+                "internal"
+              ],
+              "type": "string"
+            },
+            "supersedes_candidate_id": {
+              "format": "uuid",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "scope",
+            "kind",
+            "claim",
+            "conditions",
+            "outcome",
+            "confidence",
+            "sensitivity"
+          ],
+          "type": "object"
+        },
+        "input_schema_sha256": "601073c3963e9905e3d73bbbc86b7ed5cbd5cd3735a5582e0ce86821c151c4a0",
+        "max_attempts": 1,
+        "metadata": {
+          "policy_capability": "experience_candidate_write",
+          "sandbox_compatibility": "server_required"
+        },
+        "output_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "candidate_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "published": {
+              "const": false,
+              "type": "boolean"
+            },
+            "status": {
+              "const": "candidate",
+              "type": "string"
+            }
+          },
+          "required": [
+            "candidate_id",
+            "status",
+            "published"
+          ],
+          "type": "object"
+        },
+        "output_schema_sha256": "280075502389812f7da62dc6ec8784faac7fc9dcb58b7dfb4cdbcaed2115081e",
+        "required_contexts": [],
+        "required_scopes": [
+          "experience.propose"
+        ],
+        "surfaces": [
+          "api",
+          "channel",
+          "desktop",
+          "studio",
+          "web"
+        ],
+        "target": {
+          "binding": "experience.propose@2",
+          "owner": "rust_runtime"
+        },
+        "timeout_ms": 5000,
+        "title": "Propose an evidence-backed experience candidate",
+        "tool_key": "experience.propose@2"
+      },
+      "provides": "experience.propose@2",
+      "implementation": {
+        "component": {
+          "archive_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bundle_sha256": "27600b4b12f3689fdc915886c587c4140f510e656dee1109f16c63ffa48fa212",
+          "release_id": "1d106d93-e928-4141-a19e-917d1b5ea011"
+        },
+        "schema_version": "musteragent.memory-program.v1"
+      }
+    },
+    {
+      "key": "platform.experience.propose.v3.h_dffc599260ca95bcb16ae0caffb5fb539f35cfdf13179fc935358bc858f3d9e5@1",
+      "operation_key": "platform.experience.propose.v3",
+      "operation_sha256": "dffc599260ca95bcb16ae0caffb5fb539f35cfdf13179fc935358bc858f3d9e5",
+      "title": "Propose memory content and applicability for review",
+      "description": "Create an unpublished memory candidate from factual content and ordered human-readable applicability conditions. Choose scope=agent_profile only for this exact current Agent, or scope=user for the current account; Runtime binds the selected scope to the trusted caller. Runtime derives a neutral future-use description from kind. Do not send outcome, status, published, approved, Agent IDs or account IDs: none are input fields. This tool does not publish memory, grant consent or prove success. Original evaluation, inspection and exact experience.publish approval remain required.",
+      "effect": "write_reversible",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "claim": {
+            "description": "The complete factual statement or preference proposed for memory, in the user's language. Include any substantive lesson or observed result here. This is content to review, not a claim that storage or approval has completed.",
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "conditions": {
+            "description": "Ordered applicability conditions in complete user-readable text. Use an empty list when unconditional. Include all meaningful restrictions, but no arbitrary machine field names, nested objects, authority IDs or operation status.",
+            "items": {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 50,
+            "type": "array"
+          },
+          "confidence": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "kind": {
+            "enum": [
+              "semantic",
+              "procedure",
+              "failure",
+              "preference",
+              "policy_proposal"
+            ],
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "user",
+              "agent_profile"
+            ],
+            "type": "string"
+          },
+          "sensitivity": {
+            "enum": [
+              "private",
+              "internal"
+            ],
+            "type": "string"
+          },
+          "supersedes_candidate_id": {
+            "format": "uuid",
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "scope",
+          "kind",
+          "claim",
+          "conditions",
+          "confidence",
+          "sensitivity"
+        ],
+        "type": "object"
+      },
+      "scope_alternatives": [
+        []
+      ],
+      "runtime_definition": {
+        "approval": "policy",
+        "capability_key": "experience.propose@3",
+        "concurrency_class": "sequential_write",
+        "data_classification": "internal",
+        "description": "Create an unpublished memory candidate from factual content and ordered human-readable applicability conditions. Choose scope=agent_profile only for this exact current Agent, or scope=user for the current account; Runtime binds the selected scope to the trusted caller. Runtime derives a neutral future-use description from kind. Do not send outcome, status, published, approved, Agent IDs or account IDs: none are input fields. This tool does not publish memory, grant consent or prove success. Original evaluation, inspection and exact experience.publish approval remain required.",
+        "effect": "write_reversible",
+        "egress_policy": "database_only",
+        "idempotency": "runtime_transaction",
+        "input_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "claim": {
+              "description": "The complete factual statement or preference proposed for memory, in the user's language. Include any substantive lesson or observed result here. This is content to review, not a claim that storage or approval has completed.",
+              "maxLength": 2000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "conditions": {
+              "description": "Ordered applicability conditions in complete user-readable text. Use an empty list when unconditional. Include all meaningful restrictions, but no arbitrary machine field names, nested objects, authority IDs or operation status.",
+              "items": {
+                "maxLength": 512,
+                "minLength": 1,
+                "type": "string"
+              },
+              "maxItems": 50,
+              "type": "array"
+            },
+            "confidence": {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            "kind": {
+              "enum": [
+                "semantic",
+                "procedure",
+                "failure",
+                "preference",
+                "policy_proposal"
+              ],
+              "type": "string"
+            },
+            "scope": {
+              "enum": [
+                "user",
+                "agent_profile"
+              ],
+              "type": "string"
+            },
+            "sensitivity": {
+              "enum": [
+                "private",
+                "internal"
+              ],
+              "type": "string"
+            },
+            "supersedes_candidate_id": {
+              "format": "uuid",
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "scope",
+            "kind",
+            "claim",
+            "conditions",
+            "confidence",
+            "sensitivity"
+          ],
+          "type": "object"
+        },
+        "input_schema_sha256": "c632dcbe1d26fe15b8b7e9949486304c804ad4f15cb0796354f91331c18d8778",
+        "max_attempts": 1,
+        "metadata": {
+          "policy_capability": "experience_candidate_write",
+          "sandbox_compatibility": "server_required"
+        },
+        "output_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "candidate_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "published": {
+              "const": false,
+              "type": "boolean"
+            },
+            "status": {
+              "const": "candidate",
+              "type": "string"
+            }
+          },
+          "required": [
+            "candidate_id",
+            "status",
+            "published"
+          ],
+          "type": "object"
+        },
+        "output_schema_sha256": "280075502389812f7da62dc6ec8784faac7fc9dcb58b7dfb4cdbcaed2115081e",
+        "required_contexts": [],
+        "required_scopes": [
+          "experience.propose"
+        ],
+        "surfaces": [
+          "desktop",
+          "mobile",
+          "web"
+        ],
+        "target": {
+          "binding": "experience.propose@3",
+          "owner": "rust_runtime"
+        },
+        "timeout_ms": 5000,
+        "title": "Propose memory content and applicability for review",
+        "tool_key": "experience.propose@3"
+      },
+      "provides": "experience.propose@3",
+      "implementation": {
+        "component": {
+          "archive_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bundle_sha256": "27600b4b12f3689fdc915886c587c4140f510e656dee1109f16c63ffa48fa212",
+          "release_id": "1d106d93-e928-4141-a19e-917d1b5ea011"
+        },
+        "schema_version": "musteragent.memory-program.v1"
+      }
+    },
+    {
+      "key": "platform.experience.publish.v1.h_c9c9e57b6cdbe53900b9bb3702f8343ceb07eb3a7db0f9172c20a04f8835694c@1",
+      "operation_key": "platform.experience.publish.v1",
+      "operation_sha256": "c9c9e57b6cdbe53900b9bb3702f8343ceb07eb3a7db0f9172c20a04f8835694c",
+      "title": "Approve and publish the exact evaluated memory",
+      "description": "Request original business approval for a passing evaluated candidate in the current Agent or current account scope, then atomically publish its immutable Memory version. The original approval envelope binds the exact proposal, evaluation, content, scope, request and current head. An approval response alone is not a saved result. Only a successful committed published receipt proves the effect; pending, rejected, expired, failed, stale or unknown outcomes do not.",
+      "effect": "write_reversible",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "proposal_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposal_id"
+        ],
+        "type": "object"
+      },
+      "scope_alternatives": [
+        []
+      ],
+      "runtime_definition": {
+        "approval": "always",
+        "capability_key": "experience.publish@1",
+        "concurrency_class": "sequential_write",
+        "data_classification": "internal",
+        "description": "Request original business approval for a passing evaluated candidate in the current Agent or current account scope, then atomically publish its immutable Memory version. The original approval envelope binds the exact proposal, evaluation, content, scope, request and current head. An approval response alone is not a saved result. Only a successful committed published receipt proves the effect; pending, rejected, expired, failed, stale or unknown outcomes do not.",
+        "effect": "write_reversible",
+        "egress_policy": "database_only",
+        "idempotency": "runtime_transaction",
+        "input_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "proposal_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "proposal_id"
+          ],
+          "type": "object"
+        },
+        "input_schema_sha256": "e7219fe0996807fb6febfb512b3d95b1ed72d981355cd27d080d6fae8801947d",
+        "max_attempts": 1,
+        "metadata": {
+          "policy_capability": "governed_experience_publication",
+          "sandbox_compatibility": "server_required"
+        },
+        "output_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "memory_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "memory_version_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "proposal_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "status": {
+              "const": "published",
+              "type": "string"
+            }
+          },
+          "required": [
+            "proposal_id",
+            "memory_id",
+            "memory_version_id",
+            "status"
+          ],
+          "type": "object"
+        },
+        "output_schema_sha256": "09349aad02b1362f64bf4d5da356c0291b7b81680c9ca166b7a62bcc9285be0d",
+        "required_contexts": [],
+        "required_scopes": [
+          "experience.publish"
+        ],
+        "surfaces": [
+          "desktop",
+          "mobile",
+          "web"
+        ],
+        "target": {
+          "binding": "experience.publish@1",
+          "owner": "rust_runtime"
+        },
+        "timeout_ms": 5000,
+        "title": "Approve and publish the exact evaluated memory",
+        "tool_key": "experience.publish@1"
+      },
+      "provides": "experience.publish@1",
+      "implementation": {
+        "component": {
+          "archive_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bundle_sha256": "27600b4b12f3689fdc915886c587c4140f510e656dee1109f16c63ffa48fa212",
+          "release_id": "1d106d93-e928-4141-a19e-917d1b5ea011"
+        },
+        "schema_version": "musteragent.memory-program.v1"
+      }
+    },
+    {
+      "key": "platform.memory.search.v1.h_e4e124678553c2ee402e9517a0c057f777935bafc529aa5cac75c39517b3333c@1",
+      "operation_key": "platform.memory.search.v1",
+      "operation_sha256": "e4e124678553c2ee402e9517a0c057f777935bafc529aa5cac75c39517b3333c",
+      "title": "Search long-term memory",
+      "description": "Search the user, workspace and current Agent long-term Memory only when the current execution needs prior facts. Refine the query when results are broad; zero matches are valid and must not be replaced with guesses.",
+      "effect": "read",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "limit": {
+            "default": 8,
+            "maximum": 20,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "query": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "scope_alternatives": [
+        []
+      ],
+      "runtime_definition": {
+        "approval": "never",
+        "capability_key": "memory.search@1",
+        "concurrency_class": "bounded_database_read",
+        "data_classification": "private",
+        "description": "Search the user, workspace and current Agent long-term Memory only when the current execution needs prior facts. Refine the query when results are broad; zero matches are valid and must not be replaced with guesses.",
+        "effect": "read",
+        "egress_policy": "database_only",
+        "idempotency": "native",
+        "input_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "limit": {
+              "default": 8,
+              "maximum": 20,
+              "minimum": 1,
+              "type": "integer"
+            },
+            "query": {
+              "maxLength": 1000,
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "type": "object"
+        },
+        "input_schema_sha256": "fb1dd063de1d585f8db283dd79cef9a1c5279fae78fec824706b5ef01347aa66",
+        "max_attempts": 2,
+        "metadata": {
+          "wire_name": "memory_search",
+          "sandbox_compatibility": "server_required"
+        },
+        "output_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "degradation_reason": {
+              "enum": [
+                "embedding_unavailable",
+                "embedding_timeout",
+                "embedding_invalid_response",
+                "vector_unavailable",
+                "vector_dimension_mismatch",
+                "vector_corrupt",
+                "fts_unavailable",
+                "fts_corrupt",
+                null
+              ],
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "degraded": {
+              "type": "boolean"
+            },
+            "hits": {
+              "items": {
+                "additionalProperties": false,
+                "properties": {
+                  "confidence_bps": {
+                    "maximum": 10000,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "content": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "enum": [
+                      "preference",
+                      "semantic",
+                      "procedure",
+                      "failure_lesson"
+                    ],
+                    "type": "string"
+                  },
+                  "lexical_relevance_bps": {
+                    "maximum": 10000,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "memory_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "memory_key": {
+                    "type": "string"
+                  },
+                  "memory_version_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  },
+                  "rank": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "relevance_bps": {
+                    "maximum": 10000,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "scope": {
+                    "enum": [
+                      "user",
+                      "tenant",
+                      "workspace",
+                      "agent"
+                    ],
+                    "type": "string"
+                  },
+                  "semantic_similarity_bps": {
+                    "maximum": 10000,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "updated_at_unix_ms": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "rank",
+                  "memory_id",
+                  "memory_version_id",
+                  "memory_key",
+                  "kind",
+                  "scope",
+                  "content",
+                  "lexical_relevance_bps",
+                  "semantic_similarity_bps",
+                  "relevance_bps",
+                  "confidence_bps",
+                  "updated_at_unix_ms"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "rejected_count": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "retrieval_mode": {
+              "enum": [
+                "hybrid",
+                "fts",
+                "fts_fallback",
+                "authoritative_list",
+                "authoritative_get"
+              ],
+              "type": "string"
+            },
+            "trace": {
+              "additionalProperties": false,
+              "properties": {
+                "degradation_reason": {
+                  "enum": [
+                    "embedding_unavailable",
+                    "embedding_timeout",
+                    "embedding_invalid_response",
+                    "vector_unavailable",
+                    "vector_dimension_mismatch",
+                    "vector_corrupt",
+                    "fts_unavailable",
+                    "fts_corrupt",
+                    null
+                  ],
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "degraded": {
+                  "type": "boolean"
+                },
+                "latency_ms": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "lexical_candidate_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "mode": {
+                  "enum": [
+                    "hybrid",
+                    "fts",
+                    "fts_fallback",
+                    "authoritative_list",
+                    "authoritative_get"
+                  ],
+                  "type": "string"
+                },
+                "normalized_query_sha256": {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "rejected_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "returned_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                "vector_candidate_count": {
+                  "minimum": 0,
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "normalized_query_sha256",
+                "mode",
+                "degraded",
+                "degradation_reason",
+                "lexical_candidate_count",
+                "vector_candidate_count",
+                "returned_count",
+                "rejected_count",
+                "latency_ms"
+              ],
+              "type": "object"
+            }
+          },
+          "required": [
+            "retrieval_mode",
+            "degraded",
+            "degradation_reason",
+            "hits",
+            "rejected_count",
+            "trace"
+          ],
+          "type": "object"
+        },
+        "output_schema_sha256": "497f3b5c4e0ddb20e1d5df703890ce6674a0244604f0f84a55faa106af850a13",
+        "required_contexts": [],
+        "required_scopes": [
+          "memory.read"
+        ],
+        "surfaces": [
+          "api",
+          "channel",
+          "desktop",
+          "mobile",
+          "studio",
+          "web"
+        ],
+        "target": {
+          "binding": "memory.search@1",
+          "owner": "rust_runtime"
+        },
+        "timeout_ms": 5000,
+        "title": "Search long-term memory",
+        "tool_key": "memory.search@1"
+      },
+      "provides": "memory.search@1"
+    },
+    {
+      "key": "platform.user_memory.remember.v2.h_a0f8d37b19cbe08eadd565f9365862b5ca4addf98baff143d61c069c72e953d8@1",
+      "operation_key": "platform.user_memory.remember.v2",
+      "operation_sha256": "a0f8d37b19cbe08eadd565f9365862b5ca4addf98baff143d61c069c72e953d8",
+      "title": "Remember an explicitly requested account fact",
+      "description": "Store an explicitly requested stable account-level fact after this exact invocation receives original business approval. Scope is always the current account and may apply across its Agent conversations; never use this tool for a current-Agent-only or current-task-only request. A successful committed receipt proves account memory, never private Agent memory. User intent or service-managed execution does not waive this approval.",
+      "effect": "write_reversible",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "content": {
+            "description": "Compact declarative memory summarized from conversation context; write facts, not instructions.",
+            "maxLength": 2000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "fact_key": {
+            "description": "Stable semantic key such as identity.name or preference.language.",
+            "pattern": "^[a-z][a-z0-9_.-]{1,63}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "fact_key",
+          "content"
+        ],
+        "type": "object"
+      },
+      "scope_alternatives": [
+        []
+      ],
+      "runtime_definition": {
+        "approval": "always",
+        "capability_key": "user_memory.remember@2",
+        "concurrency_class": "sequential_write",
+        "data_classification": "private",
+        "description": "Store an explicitly requested stable account-level fact after this exact invocation receives original business approval. Scope is always the current account and may apply across its Agent conversations; never use this tool for a current-Agent-only or current-task-only request. A successful committed receipt proves account memory, never private Agent memory. User intent or service-managed execution does not waive this approval.",
+        "effect": "write_reversible",
+        "egress_policy": "database_only",
+        "idempotency": "runtime_transaction",
+        "input_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "content": {
+              "description": "Compact declarative memory summarized from conversation context; write facts, not instructions.",
+              "maxLength": 2000,
+              "minLength": 1,
+              "type": "string"
+            },
+            "fact_key": {
+              "description": "Stable semantic key such as identity.name or preference.language.",
+              "pattern": "^[a-z][a-z0-9_.-]{1,63}$",
+              "type": "string"
+            }
+          },
+          "required": [
+            "fact_key",
+            "content"
+          ],
+          "type": "object"
+        },
+        "input_schema_sha256": "cbba892e963bbe645d0440b0c2d530ad180ec2cd56486a4af9b205370e8bf7c9",
+        "max_attempts": 1,
+        "metadata": {
+          "policy_capability": "curated_user_memory_write",
+          "wire_name": "user_memory_remember",
+          "sandbox_compatibility": "server_required"
+        },
+        "output_schema": {
+          "$schema": "https://json-schema.org/draft/2020-12/schema",
+          "additionalProperties": false,
+          "properties": {
+            "changed": {
+              "type": "boolean"
+            },
+            "experience_id": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "revision": {
+              "minimum": 0,
+              "type": "integer"
+            },
+            "status": {
+              "const": "active",
+              "type": "string"
+            },
+            "version_id": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "required": [
+            "experience_id",
+            "version_id",
+            "revision",
+            "status",
+            "changed"
+          ],
+          "type": "object"
+        },
+        "output_schema_sha256": "9fee6cd8b42ffe97dbad9a66735610450c01e168db822316c3c5f2a7025fd2e2",
+        "required_contexts": [],
+        "required_scopes": [
+          "user_memory.write"
+        ],
+        "surfaces": [
+          "desktop",
+          "mobile",
+          "web"
+        ],
+        "target": {
+          "binding": "user_memory.remember@2",
+          "owner": "rust_runtime"
+        },
+        "timeout_ms": 5000,
+        "title": "Remember an explicitly requested account fact",
+        "tool_key": "user_memory.remember@2"
+      },
+      "provides": "user_memory.remember@2",
+      "implementation": {
+        "component": {
+          "archive_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bundle_sha256": "27600b4b12f3689fdc915886c587c4140f510e656dee1109f16c63ffa48fa212",
+          "release_id": "1d106d93-e928-4141-a19e-917d1b5ea011"
+        },
+        "schema_version": "musteragent.memory-program.v1"
+      }
+    }
+  ]
+}

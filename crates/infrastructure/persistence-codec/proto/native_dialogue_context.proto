@@ -1,0 +1,118 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "dialogue_context.proto";
+import "device_tool_delivery.proto";
+import "dialogue_execution_context.proto";
+
+message NativeDialogueContextChunk {
+  DeviceDeliveryBinding binding = 1;
+  bytes fingerprint = 2;
+  NativeDialogueContextContentLocator locator = 3;
+  ContentRef content_ref = 4;
+  uint64 offset = 5;
+  uint64 total = 6;
+  // Exactly min(1MiB,total-offset); only the entire verified content is usable.
+  bytes content = 7;
+  // Iff offset + content.length == total == content_ref.byte_length.
+  bool eof = 8;
+  VersionedRef compaction_policy_ref = 9;
+}
+
+message NativeDialogueContextContentLocator {
+  oneof source {
+    uint64 entry_body_seq = 1;
+    NativeDialogueContextEntryAttachment entry_attachment = 2;
+    NativeDialogueContextMarker checkpoint_summary = 3;
+    NativeDialogueContextMarker checkpoint_manifest = 4;
+    NativeDialogueContextMarker current_instructions = 5;
+    // Zero-based index in the ORIGINAL accepted Intent/Task input attachments.
+    uint32 accepted_input_attachment_ordinal = 6;
+    uint32 accepted_reply_content_ordinal = 7;
+  }
+}
+
+message NativeDialogueContextContentQuery {
+  DeviceDeliveryBinding binding = 1;
+  bytes fingerprint = 2;
+  NativeDialogueContextContentLocator locator = 3;
+  uint64 offset = 4;
+  VersionedRef compaction_policy_ref = 5;
+  bool include_approval_context = 6;
+  bool include_execution_context = 7;
+}
+
+message NativeDialogueContextContents {
+  repeated NativeDialogueContextChunk chunks = 1;
+}
+
+message NativeDialogueContextContentsQuery {
+  DeviceDeliveryBinding binding = 1;
+  VersionedRef compaction_policy_ref = 2;
+  bytes fingerprint = 3;
+  bool include_approval_context = 4;
+  repeated NativeDialogueContextContentLocator locators = 5;
+}
+
+message NativeDialogueContextEntryAttachment {
+  uint64 seq = 1;
+  uint32 ordinal = 2;
+}
+
+message NativeDialogueContextInstructions {
+  uint64 revision = 1;
+  optional ContentRef content_ref = 2;
+}
+
+message NativeDialogueContextMarker {}
+
+message NativeDialogueContextPage {
+  DeviceDeliveryBinding binding = 1;
+  bytes fingerprint = 2;
+  // Existing complete, contiguous, at most 64-entry source-page contract.
+  DialogueContextSourcePage page = 3;
+  VersionedRef compaction_policy_ref = 4;
+}
+
+message NativeDialogueContextPageQuery {
+  DeviceDeliveryBinding binding = 1;
+  bytes fingerprint = 2;
+  // 1..frozen_cut.through.seq. Empty history (seq0) needs no page, not an empty one.
+  uint64 from_seq = 3;
+  VersionedRef compaction_policy_ref = 4;
+  bool include_approval_context = 5;
+  bool include_execution_context = 6;
+  // Return original dialogue entries even when a compacted prefix exists.
+  bool original_entries = 7;
+}
+
+message NativeDialogueContextState {
+  repeated AgentSceneMember scene_members = 12;
+  DeviceDeliveryBinding binding = 1;
+  oneof source {
+    // Original canonical source envelopes, <=4MiB; no rewritten configuration.
+    bytes intent_source = 2;
+    bytes work_item_source = 3;
+  }
+  // Nonzero 32 bytes. Same-read consistency observation, NEVER authorization.
+  bytes fingerprint = 4;
+  NativeDialogueContextInstructions instructions = 5;
+  optional DialogueContextCheckpoint checkpoint = 6;
+  VersionedRef compaction_policy_ref = 7;
+  // Nonzero 32-byte observation of this cut's original ordered source/erasure
+  // facts. Excludes current instructions and checkpoint selection. No authority.
+  bytes source_observation_sha256 = 8;
+  // Only returned for explicit include_approval_context requests.
+  optional DialogueApprovalContext approval_context = 9;
+  optional DialogueExecutionContext execution_context = 10;
+}
+
+message NativeDialogueContextStateQuery {
+  bool include_scene_members = 5;
+  DeviceDeliveryBinding binding = 1;
+  VersionedRef compaction_policy_ref = 2;
+  bool include_approval_context = 3;
+  bool include_execution_context = 4;
+}

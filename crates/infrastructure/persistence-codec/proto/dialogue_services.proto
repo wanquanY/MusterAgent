@@ -1,0 +1,11 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "agent_dialogue.proto";
+
+message AccountCursor {
+  OwnerSpaceId space_id = 1;
+  uint64 epoch = 2;
+  uint64 seq = 3;
+}

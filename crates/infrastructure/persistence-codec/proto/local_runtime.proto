@@ -1,0 +1,24 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+
+
+enum LocalSkillOrigin {
+  LOCAL_SKILL_ORIGIN_UNSPECIFIED = 0;
+  LOCAL_SKILL_ORIGIN_BUILT_IN = 1;
+  LOCAL_SKILL_ORIGIN_LOCAL = 2;
+  LOCAL_SKILL_ORIGIN_MARKETPLACE = 3;
+  LOCAL_SKILL_ORIGIN_HUB = 4;
+  LOCAL_SKILL_ORIGIN_GITHUB = 5;
+  LOCAL_SKILL_ORIGIN_URL = 6;
+  reserved 7; // Retired product plugin origin.
+}
+
+enum LocalSkillTrust {
+  LOCAL_SKILL_TRUST_UNSPECIFIED = 0;
+  LOCAL_SKILL_TRUST_OFFICIAL = 1;
+  LOCAL_SKILL_TRUST_VERIFIED = 2;
+  LOCAL_SKILL_TRUST_COMMUNITY = 3;
+  LOCAL_SKILL_TRUST_LOCAL = 4;
+}

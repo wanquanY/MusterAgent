@@ -1,0 +1,259 @@
+[workspace]
+exclude = ["vendor/sqlx-postgres"]
+resolver = "3"
+members = [
+  "crates/runtime/application",
+  "applications/reference-api",
+  "crates/domains/schedule",
+    "crates/runtime/maintenance",
+  "applications/cloud-projector",
+  "applications/database-migrator",
+  "applications/cloud-worker",
+  "crates/runtime/worker",
+  "crates/infrastructure/cloud-config",
+  "crates/infrastructure/cloud-lifecycle",
+  "crates/infrastructure/object-store",
+  "crates/infrastructure/telemetry-otlp",
+
+  "tests/conformance",
+  "crates/infrastructure/wire",
+  "crates/runtime/extension",
+  "crates/infrastructure/persistence-codec",
+  "crates/domains/device-authority",
+  "crates/domains/work-item",
+  "crates/runtime/session",
+  "crates/infrastructure/storage-protection",
+  "crates/runtime/audit",
+  "crates/runtime/privacy",
+  "crates/domains/sandbox",
+  "crates/domains/activity",
+  "crates/domains/agent",
+  "crates/domains/approval",
+  "crates/domains/artifact",
+  "crates/domains/capability",
+  "crates/domains/conversation",
+  "crates/domains/device-interaction",
+  "crates/domains/discovery",
+  "crates/domains/evolution",
+  "crates/domains/execution-context",
+  "crates/domains/goal",
+  "crates/domains/mcp",
+  "crates/domains/memory",
+  "crates/domains/model",
+  "crates/domains/placement",
+  "crates/domains/resource",
+  "crates/domains/skill",
+  "crates/domains/tool",
+  "crates/foundation/content-ref",
+  "crates/foundation/event-envelope",
+  "crates/foundation/identity",
+  "crates/foundation/policy",
+  "crates/foundation/runtime-contract",
+  "crates/foundation/telemetry",
+  "crates/infrastructure/continuous-clock",
+  "crates/infrastructure/execution-liveness-io",
+  "crates/infrastructure/mcp-client",
+  "crates/infrastructure/postgres",
+  "crates/infrastructure/sandbox-server",
+  "crates/integrations/model-providers",
+  "crates/plugins/memory-business",
+  "crates/runtime/admission",
+  "crates/runtime/agent-loop",
+  "crates/runtime/artifact",
+  "crates/runtime/automation",
+  "crates/runtime/capability",
+  "crates/runtime/content",
+  "crates/runtime/context",
+  "crates/runtime/data-access",
+  "crates/runtime/discovery",
+  "crates/runtime/execution-grant",
+  "crates/runtime/execution-liveness",
+  "crates/runtime/execution-plan",
+  "crates/runtime/execution-supervision",
+  "crates/runtime/file-query",
+  "crates/runtime/interaction",
+  "crates/runtime/ledger",
+  "crates/runtime/memory",
+  "crates/runtime/model",
+  "crates/runtime/projection",
+  "crates/runtime/resource",
+  "crates/runtime/run",
+  "crates/runtime/scheduler",
+  "crates/runtime/skill",
+  "crates/runtime/skill-release",
+  "crates/runtime/snapshot",
+  "crates/runtime/tool-executor",
+  "tests/testkit",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.92"
+license = "Apache-2.0"
+repository = "https://github.com/wanquanY/MusterAgent"
+publish = false
+
+[workspace.dependencies]
+musteragent-runtime-application = { version = "0.1.0", path = "crates/runtime/application" }
+musteragent-schedule = { version = "0.1.0", path = "crates/domains/schedule" }
+musteragent-conformance = { version = "0.1.0", path = "tests/conformance" }
+musteragent-model-providers = { version = "0.1.0", path = "crates/integrations/model-providers" }
+musteragent-postgres = { version = "0.1.0", path = "crates/infrastructure/postgres" }
+musteragent-cloud-worker = { version = "0.1.0", path = "applications/cloud-worker" }
+musteragent-runtime-maintenance = { version = "0.1.0", path = "crates/runtime/maintenance" }
+musteragent-runtime-worker = { version = "0.1.0", path = "crates/runtime/worker" }
+musteragent-cloud-config = { version = "0.1.0", path = "crates/infrastructure/cloud-config" }
+musteragent-cloud-lifecycle = { version = "0.1.0", path = "crates/infrastructure/cloud-lifecycle" }
+musteragent-object-store = { version = "0.1.0", path = "crates/infrastructure/object-store" }
+musteragent-telemetry-otlp = { version = "0.1.0", path = "crates/infrastructure/telemetry-otlp" }
+
+musteragent-wire = { version = "0.1.0", path = "crates/infrastructure/wire" }
+musteragent-extension = { version = "0.1.0", path = "crates/runtime/extension" }
+musteragent-persistence-codec = { version = "0.1.0", path = "crates/infrastructure/persistence-codec" }
+musteragent-device-authority = { version = "0.1.0", path = "crates/domains/device-authority" }
+musteragent-work-item = { version = "0.1.0", path = "crates/domains/work-item" }
+musteragent-runtime-session = { version = "0.1.0", path = "crates/runtime/session" }
+musteragent-storage-protection = { version = "0.1.0", path = "crates/infrastructure/storage-protection" }
+musteragent-runtime-audit = { version = "0.1.0", path = "crates/runtime/audit" }
+musteragent-runtime-privacy = { version = "0.1.0", path = "crates/runtime/privacy" }
+musteragent-sandbox = { version = "0.1.0", path = "crates/domains/sandbox" }
+musteragent-sandbox-server = { version = "0.1.0", path = "crates/infrastructure/sandbox-server" }
+musteragent-runtime-automation = { version = "0.1.0", path = "crates/runtime/automation" }
+musteragent-memory-business = { version = "0.1.0", path = "crates/plugins/memory-business" }
+musteragent-evolution = { version = "0.1.0", path = "crates/domains/evolution" }
+musteragent-goal = { version = "0.1.0", path = "crates/domains/goal" }
+musteragent-placement = { version = "0.1.0", path = "crates/domains/placement" }
+musteragent-execution-context = { version = "0.1.0", path = "crates/domains/execution-context" }
+musteragent-activity = { version = "0.1.0", path = "crates/domains/activity" }
+musteragent-approval = { version = "0.1.0", path = "crates/domains/approval" }
+musteragent-artifact = { version = "0.1.0", path = "crates/domains/artifact" }
+musteragent-capability = { version = "0.1.0", path = "crates/domains/capability" }
+musteragent-content-ref = { version = "0.1.0", path = "crates/foundation/content-ref" }
+musteragent-conversation = { version = "0.1.0", path = "crates/domains/conversation" }
+musteragent-definition = { version = "0.1.0", path = "crates/domains/agent" }
+musteragent-discovery = { version = "0.1.0", path = "crates/domains/discovery" }
+musteragent-event-envelope = { version = "0.1.0", path = "crates/foundation/event-envelope" }
+musteragent-continuous-clock = { version = "0.1.0", path = "crates/infrastructure/continuous-clock" }
+musteragent-execution-liveness-io = { version = "0.1.0", path = "crates/infrastructure/execution-liveness-io" }
+musteragent-identity = { version = "0.1.0", path = "crates/foundation/identity" }
+musteragent-ledger = { version = "0.1.0", path = "crates/runtime/ledger" }
+musteragent-runtime-admission = { version = "0.1.0", path = "crates/runtime/admission" }
+musteragent-runtime-memory = { version = "0.1.0", path = "crates/runtime/memory" }
+musteragent-execution-grant = { version = "0.1.0", path = "crates/runtime/execution-grant" }
+musteragent-runtime-execution-plan = { version = "0.1.0", path = "crates/runtime/execution-plan" }
+musteragent-runtime-model = { version = "0.1.0", path = "crates/runtime/model" }
+musteragent-runtime-file-query = { version = "0.1.0", path = "crates/runtime/file-query" }
+musteragent-runtime-resource = { version = "0.1.0", path = "crates/runtime/resource" }
+musteragent-context = { version = "0.1.0", path = "crates/runtime/context" }
+musteragent-memory = { version = "0.1.0", path = "crates/domains/memory" }
+musteragent-mcp = { version = "0.1.0", path = "crates/domains/mcp" }
+musteragent-mcp-client = { version = "0.1.0", path = "crates/infrastructure/mcp-client" }
+musteragent-model = { version = "0.1.0", path = "crates/domains/model" }
+musteragent-resource = { version = "0.1.0", path = "crates/domains/resource" }
+musteragent-policy = { version = "0.1.0", path = "crates/foundation/policy" }
+musteragent-projection = { version = "0.1.0", path = "crates/runtime/projection" }
+musteragent-device-interaction = { version = "0.1.0", path = "crates/domains/device-interaction" }
+musteragent-run = { version = "0.1.0", path = "crates/runtime/run" }
+musteragent-scheduler = { version = "0.1.0", path = "crates/runtime/scheduler" }
+musteragent-runtime-snapshot = { version = "0.1.0", path = "crates/runtime/snapshot" }
+musteragent-execution-supervision = { version = "0.1.0", path = "crates/runtime/execution-supervision" }
+musteragent-execution-liveness = { version = "0.1.0", path = "crates/runtime/execution-liveness" }
+musteragent-runtime-contract = { version = "0.1.0", path = "crates/foundation/runtime-contract" }
+musteragent-tool-executor = { version = "0.1.0", path = "crates/runtime/tool-executor" }
+musteragent-loop = { version = "0.1.0", path = "crates/runtime/agent-loop" }
+musteragent-runtime-artifact = { version = "0.1.0", path = "crates/runtime/artifact" }
+musteragent-runtime-capability = { version = "0.1.0", path = "crates/runtime/capability" }
+musteragent-runtime-interaction = { version = "0.1.0", path = "crates/runtime/interaction" }
+musteragent-runtime-skill = { version = "0.1.0", path = "crates/runtime/skill" }
+musteragent-skill-release = { version = "0.1.0", path = "crates/runtime/skill-release" }
+musteragent-telemetry = { version = "0.1.0", path = "crates/foundation/telemetry" }
+musteragent-runtime-content = { version = "0.1.0", path = "crates/runtime/content" }
+musteragent-runtime-data-access = { version = "0.1.0", path = "crates/runtime/data-access" }
+musteragent-runtime-discovery = { version = "0.1.0", path = "crates/runtime/discovery" }
+musteragent-skill = { version = "0.1.0", path = "crates/domains/skill" }
+musteragent-tool = { version = "0.1.0", path = "crates/domains/tool" }
+musteragent-testkit = { version = "0.1.0", path = "tests/testkit" }
+prost = "0.14.4"
+prost-build = "0.14.4"
+prost-types = "0.14.4"
+protoc-bin-vendored = "3.2.0"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.149"
+serde_yaml = { package = "yaml_serde", version = "0.10.4" }
+zip = { version = "9.0.5", default-features = false, features = ["deflate"] }
+jsonschema = { version = "0.49.3", default-features = false }
+sha2 = "0.11.0"
+thiserror = "2.0.17"
+toml = "0.9.10"
+tonic = { version = "0.14.6", default-features = false, features = ["codegen", "transport"] }
+tonic-prost = "0.14.6"
+tonic-prost-build = "0.14.6"
+tracing = "0.1.44"
+opentelemetry = { version = "0.32.0", default-features = false, features = ["metrics", "trace"] }
+unicode-normalization = "0.1.25"
+uuid = { version = "1.24.0", features = ["serde", "v7"] }
+flate2 = "1.1.9"
+fs4 = "1.1.0"
+cap-std = "4.0.3"
+cap-fs-ext = "4.0.3"
+
+[patch.crates-io]
+# SQLx 0.8.6 predates the upstream cancellation fix. Keep its API and backport
+# the driver-owned fix; see vendor/sqlx-postgres/UPSTREAM.md for provenance.
+sqlx-postgres = { path = "vendor/sqlx-postgres" }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unused_must_use = "deny"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+todo = "deny"
+unimplemented = "deny"
+unwrap_used = "deny"
+
+[profile.release]
+codegen-units = 1
+lto = "thin"
+panic = "unwind"
+strip = "symbols"
+
+# Extension hooks require unwinding so panics become typed failures. Mobile
+# scope/FFI owners also unwind and join cleanup rather than aborting the host.
+[profile.mobile-release]
+inherits = "release"
+panic = "unwind"
+
+# Unbounded incremental state was the largest source of worktree-local target
+# growth. Dependency artifacts remain reusable; changed crates rebuild without
+# retaining multi-gigabyte incremental graphs.
+[profile.dev]
+debug = "line-tables-only"
+incremental = false
+
+# Desktop admission hashes large signed executables. Compile these stable byte
+# primitives with optimization in the shared development profile; application
+# code remains unoptimized and debuggable. Every desktop uses the same cache.
+[profile.dev.package.sha2]
+opt-level = 3
+
+[profile.dev.package.digest]
+opt-level = 3
+
+[profile.dev.package.block-buffer]
+opt-level = 3
+
+[profile.dev.package.crypto-common]
+opt-level = 3
+
+# Gate builds are disposable proof artifacts, not a second developer cache. Keeping
+# debug information and incremental state out of this profile bounds target growth.
+[profile.gate]
+inherits = "test"
+debug = 0
+incremental = false
+
+[profile.test]
+debug = 0
+incremental = false

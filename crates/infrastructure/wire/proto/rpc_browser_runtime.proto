@@ -1,0 +1,184 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "browser_runtime.proto";
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+
+message BrowserCandidateRecoveryFrame {
+  string schema_version = 1;
+  BrowserLeaseProof lease = 2;
+  BrowserJobId job_id = 3;
+  Sha256 request_sha256 = 4;
+}
+
+message BrowserCandidateRecoveryResponse {
+  string schema_version = 1;
+  BrowserLeaseProof lease = 2;
+  BrowserJobId job_id = 3;
+  Sha256 request_sha256 = 4;
+  BrowserCandidateRecoveryStatus status = 5;
+  BrowserJobDeliveryFrame delivery = 6;
+  BrowserJobResult terminal_result = 7;
+  BrowserCandidateSettlement settlement = 8;
+}
+
+enum BrowserCandidateRecoveryStatus {
+  BROWSER_CANDIDATE_RECOVERY_STATUS_UNSPECIFIED = 0;
+  BROWSER_CANDIDATE_RECOVERY_STATUS_DELIVER = 1;
+  BROWSER_CANDIDATE_RECOVERY_STATUS_TERMINAL = 2;
+  BROWSER_CANDIDATE_RECOVERY_STATUS_OWNER_ACTIVE = 3;
+  BROWSER_CANDIDATE_RECOVERY_STATUS_UNAVAILABLE = 4;
+}
+
+enum BrowserCandidateSettlement {
+  BROWSER_CANDIDATE_SETTLEMENT_PENDING = 0;
+  BROWSER_CANDIDATE_SETTLEMENT_COMMITTED = 1;
+  BROWSER_CANDIDATE_SETTLEMENT_NOT_COMMITTED = 2;
+}
+
+message BrowserExecutionProgress {
+  string phase = 1;
+  optional string package_name = 2;
+  optional uint64 transferred_bytes = 3;
+  optional uint64 total_bytes = 4;
+  optional string message = 5;
+}
+
+message BrowserGatewayFatalFrame {
+  string schema_version = 1;
+  string code = 2;
+  string message = 3;
+  bool reconnectable = 4;
+}
+
+message BrowserJobCancelFrame {
+  string schema_version = 1;
+  BrowserLeaseProof lease = 2;
+  uint64 delivery_sequence = 3;
+  BrowserJobId job_id = 4;
+}
+
+message BrowserJobClaimFrame {
+  string schema_version = 1;
+  BrowserLeaseProof lease = 2;
+  BrowserJobId job_id = 3;
+  uint64 delivery_sequence = 4;
+  uint64 provider_sequence = 5;
+}
+
+message BrowserJobDeliveryFrame {
+  string schema_version = 1;
+  BrowserLeaseProof lease = 2;
+  uint64 delivery_sequence = 3;
+  BrowserJobRequest request = 4;
+  
+  BrowserJobRecoveryState recovery_state = 5;
+  uint64 last_provider_sequence = 6;
+}
+
+message BrowserJobProgressFrame {
+  string schema_version = 1;
+  BrowserLeaseProof lease = 2;
+  BrowserJobId job_id = 3;
+  uint64 provider_sequence = 4;
+  BrowserJobProgressPhase phase = 5;
+  uint32 completed_permyriad = 6;
+  BrowserExecutionProgress detail = 7;
+}
+
+enum BrowserJobProgressPhase {
+  BROWSER_JOB_PROGRESS_PHASE_UNSPECIFIED = 0;
+  BROWSER_JOB_PROGRESS_PHASE_MOUNTING_INPUTS = 1;
+  BROWSER_JOB_PROGRESS_PHASE_INITIALIZING_RUNTIME = 2;
+  BROWSER_JOB_PROGRESS_PHASE_EXECUTING = 3;
+  BROWSER_JOB_PROGRESS_PHASE_COLLECTING_OUTPUTS = 4;
+  BROWSER_JOB_PROGRESS_PHASE_STAGING_OUTPUTS = 5;
+}
+
+enum BrowserJobRecoveryState {
+  BROWSER_JOB_RECOVERY_STATE_UNSPECIFIED = 0;
+  BROWSER_JOB_RECOVERY_STATE_QUEUED = 1;
+  BROWSER_JOB_RECOVERY_STATE_CLAIMED = 2;
+  BROWSER_JOB_RECOVERY_STATE_RUNNING = 3;
+  BROWSER_JOB_RECOVERY_STATE_CANCEL_REQUESTED = 4;
+  BROWSER_JOB_RECOVERY_STATE_TERMINAL = 5;
+}
+
+message BrowserJobStartedFrame {
+  string schema_version = 1;
+  BrowserLeaseProof lease = 2;
+  BrowserJobId job_id = 3;
+  uint64 provider_sequence = 4;
+}
+
+message BrowserJobTerminalAcceptedFrame {
+  string schema_version = 1;
+  BrowserLeaseProof lease = 2;
+  BrowserJobId job_id = 3;
+  uint64 provider_sequence = 4;
+  Sha256 result_hash = 5;
+  google.protobuf.Timestamp sealed_at = 6;
+}
+
+message BrowserJobTerminalFrame {
+  string schema_version = 1;
+  BrowserLeaseProof lease = 2;
+  uint64 provider_sequence = 3;
+  BrowserJobResult result = 4;
+}
+
+message BrowserProviderClientFrame {
+  oneof frame {
+    BrowserProviderRegistrationFrame register = 1;
+    BrowserProviderRenewFrame renew = 2;
+    BrowserProviderReleaseFrame release = 3;
+    BrowserJobClaimFrame claim = 4;
+    BrowserJobStartedFrame started = 5;
+    BrowserJobProgressFrame progress = 6;
+    BrowserJobTerminalFrame terminal = 7;
+    BrowserCandidateRecoveryFrame recover_candidate = 8;
+  }
+}
+
+message BrowserProviderRegisteredFrame {
+  string schema_version = 1;
+  BrowserProviderLease lease = 2;
+}
+
+message BrowserProviderRegistrationFrame {
+  string schema_version = 1;
+  BrowserSessionId browser_session_id = 2;
+  PageInstanceId page_instance_id = 3;
+  CapabilityProviderId provider_id = 4;
+  VersionedRef runtime_release_ref = 5;
+  repeated string capability_keys = 6;
+  VersionedRef resource_profile_ref = 7;
+  BrowserRuntimeFeatureProbe feature_probe = 8;
+  uint64 requested_ttl_millis = 9;
+}
+
+message BrowserProviderReleaseFrame {
+  string schema_version = 1;
+  BrowserLeaseProof lease = 2;
+}
+
+message BrowserProviderRenewFrame {
+  string schema_version = 1;
+  BrowserLeaseProof lease = 2;
+  uint64 requested_ttl_millis = 3;
+  
+  repeated BrowserJobId recover_job_ids = 4;
+}
+
+message BrowserProviderServerFrame {
+  oneof frame {
+    BrowserProviderRegisteredFrame registered = 1;
+    BrowserJobDeliveryFrame delivery = 2;
+    BrowserJobCancelFrame cancel = 3;
+    BrowserGatewayFatalFrame fatal = 4;
+    BrowserJobTerminalAcceptedFrame terminal_accepted = 5;
+    BrowserCandidateRecoveryResponse candidate_recovery = 6;
+  }
+}

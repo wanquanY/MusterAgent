@@ -1,0 +1,50 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "owned_agent.proto";
+import "dialogue_context.proto";
+import "device_execution.proto";
+import "work_item_execution_services.proto";
+
+message WorkItemDependencyResult {
+  WorkItemId work_item_id = 1;
+  uint64 goal_revision = 2;
+  uint64 control_revision = 3;
+  uint64 assignment_epoch = 4;
+  RunId producing_run_id = 5;
+  ContentRef content_ref = 6;
+}
+
+message WorkItemDeviceExecutionSource {
+  // v1 requires facts.workspace absent; v2 requires the exact physical workspace.
+  uint32 schema_version = 1;
+  WorkItemExecutionGrantFacts facts = 2;
+  WorkItemDeviceSourceMetadata metadata = 3;
+  OwnedAgentInstance agent = 4;
+  OwnedAgentConfiguration configuration = 5;
+  PublishedAgentDefinitionMaterial definition = 6;
+  PublishedAgentVersionMaterial version = 7;
+  DialogueContextCut context_cut = 8;
+  repeated AttachmentRef input_attachments = 9;
+  WorkItemDelegationCeiling approved_delegation = 10;
+  // v3 carries exact verified prerequisite Content in its signed source.
+  repeated WorkItemDependencyResult dependency_results = 11;
+  ContentRef previous_result = 12;
+  ContentRef feedback_request = 13;
+  repeated ContentRef feedback_files = 14;
+}
+
+message WorkItemDeviceSourceMetadata {
+  uint64 state_revision = 1;
+  string status = 2;
+  string priority = 3;
+  repeated WorkItemId dependencies = 4;
+  optional WorkItemId follow_up_of = 5;
+  optional WorkItemId parent_work_item_id = 6;
+  ContentRef goal_content_ref = 7;
+  int64 created_at_ms = 8;
+  int64 updated_at_ms = 9;
+  uint64 directory_seq = 10;
+}

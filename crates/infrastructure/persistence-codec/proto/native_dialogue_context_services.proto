@@ -1,0 +1,13 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "native_dialogue_context.proto";
+
+message GetNativeDialogueContextStateResponse { NativeDialogueContextState state = 1; }
+
+message ReadNativeDialogueContextContentResponse { NativeDialogueContextChunk chunk = 1; }
+
+message ReadNativeDialogueContextContentsResponse { NativeDialogueContextContents contents = 1; }
+
+message ReadNativeDialogueContextPageResponse { NativeDialogueContextPage page = 1; }

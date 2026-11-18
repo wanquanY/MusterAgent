@@ -1,0 +1,52 @@
+[package]
+name = "musteragent-wire"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-runtime-audit.workspace = true
+musteragent-schedule.workspace = true
+musteragent-loop.workspace = true
+musteragent-execution-context.workspace = true
+prost-reflect = "0.16.3"
+serde_json.workspace = true
+serde.workspace = true
+musteragent-runtime-snapshot.workspace = true
+musteragent-sandbox.workspace = true
+musteragent-activity.workspace = true
+musteragent-approval.workspace = true
+musteragent-artifact.workspace = true
+musteragent-content-ref.workspace = true
+musteragent-context.workspace = true
+musteragent-conversation.workspace = true
+musteragent-discovery.workspace = true
+musteragent-event-envelope.workspace = true
+musteragent-goal.workspace = true
+musteragent-identity.workspace = true
+musteragent-ledger.workspace = true
+musteragent-model.workspace = true
+musteragent-persistence-codec.workspace = true
+musteragent-policy.workspace = true
+musteragent-projection.workspace = true
+musteragent-run.workspace = true
+musteragent-runtime-contract.workspace = true
+musteragent-runtime-model.workspace = true
+musteragent-scheduler.workspace = true
+musteragent-tool.workspace = true
+tonic.workspace = true
+tonic-prost.workspace = true
+prost.workspace = true
+prost-types.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
+[build-dependencies]
+prost-build.workspace = true
+protoc-bin-vendored.workspace = true
+tonic-prost-build.workspace = true

@@ -1,0 +1,85 @@
+[package]
+name = "musteragent-conformance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-runtime-admission.workspace = true
+musteragent-execution-context.workspace = true
+musteragent-runtime-application.workspace = true
+musteragent-object-store.workspace = true
+musteragent-runtime-discovery.workspace = true
+musteragent-runtime-artifact.workspace = true
+musteragent-runtime-file-query.workspace = true
+musteragent-runtime-data-access.workspace = true
+musteragent-cloud-worker.workspace = true
+musteragent-runtime-worker.workspace = true
+secrecy = "0.10.3"
+url = "2.5.8"
+futures-util = "0.3.33"
+musteragent-model-providers.workspace = true
+musteragent-sandbox.workspace = true
+tokio-util = { version = "0.7.19", features = ["rt"] }
+tokio-stream = "0.1.19"
+tracing-subscriber = { version = "0.3.23", features = ["fmt"] }
+musteragent-postgres = { workspace = true, features = ["test-support"] }
+musteragent-activity.workspace = true
+musteragent-approval.workspace = true
+musteragent-artifact.workspace = true
+musteragent-capability.workspace = true
+musteragent-content-ref.workspace = true
+musteragent-context.workspace = true
+musteragent-conversation.workspace = true
+musteragent-definition.workspace = true
+musteragent-discovery.workspace = true
+musteragent-event-envelope.workspace = true
+musteragent-evolution.workspace = true
+musteragent-execution-grant.workspace = true
+musteragent-execution-liveness.workspace = true
+musteragent-execution-liveness-io.workspace = true
+musteragent-goal.workspace = true
+musteragent-identity.workspace = true
+musteragent-ledger.workspace = true
+musteragent-loop.workspace = true
+musteragent-memory.workspace = true
+musteragent-model.workspace = true
+musteragent-policy.workspace = true
+musteragent-projection.workspace = true
+musteragent-resource.workspace = true
+musteragent-run.workspace = true
+musteragent-runtime-audit.workspace = true
+musteragent-runtime-automation.workspace = true
+musteragent-runtime-capability.workspace = true
+musteragent-runtime-content.workspace = true
+musteragent-runtime-contract.workspace = true
+musteragent-runtime-execution-plan.workspace = true
+musteragent-runtime-interaction.workspace = true
+musteragent-runtime-memory.workspace = true
+musteragent-runtime-model.workspace = true
+musteragent-runtime-privacy.workspace = true
+musteragent-runtime-resource.workspace = true
+musteragent-runtime-session.workspace = true
+musteragent-runtime-skill.workspace = true
+musteragent-runtime-snapshot.workspace = true
+musteragent-scheduler.workspace = true
+musteragent-skill.workspace = true
+musteragent-skill-release.workspace = true
+musteragent-storage-protection.workspace = true
+musteragent-telemetry.workspace = true
+musteragent-testkit.workspace = true
+musteragent-tool.workspace = true
+musteragent-tool-executor.workspace = true
+musteragent-wire.workspace = true
+prost.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-native-roots", "postgres", "uuid", "migrate", "macros"] }
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "time", "sync", "net"] }
+uuid.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

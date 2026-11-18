@@ -1,0 +1,66 @@
+[package]
+name = "musteragent-tool-executor"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+default = []
+release-acceptance = []
+
+[dependencies]
+musteragent-runtime-session.workspace = true
+musteragent-sandbox.workspace = true
+base64 = "0.22.1"
+musteragent-runtime-skill.workspace = true
+musteragent-execution-liveness.workspace = true
+musteragent-runtime-data-access.workspace = true
+musteragent-approval.workspace = true
+musteragent-artifact.workspace = true
+musteragent-capability.workspace = true
+musteragent-content-ref.workspace = true
+musteragent-discovery.workspace = true
+musteragent-event-envelope.workspace = true
+musteragent-goal.workspace = true
+musteragent-identity.workspace = true
+musteragent-loop = { version = "0.1.0", path = "../agent-loop" }
+musteragent-execution-context.workspace = true
+musteragent-model.workspace = true
+musteragent-policy.workspace = true
+musteragent-run.workspace = true
+musteragent-runtime-capability = { version = "0.1.0", path = "../capability" }
+musteragent-runtime-artifact = { version = "0.1.0", path = "../artifact" }
+musteragent-runtime-automation.workspace = true
+musteragent-runtime-content = { version = "0.1.0", path = "../content" }
+musteragent-runtime-contract.workspace = true
+musteragent-runtime-discovery.workspace = true
+musteragent-runtime-execution-plan.workspace = true
+musteragent-runtime-interaction = { version = "0.1.0", path = "../interaction" }
+musteragent-runtime-memory = { version = "0.1.0", path = "../memory" }
+musteragent-runtime-model.workspace = true
+musteragent-runtime-resource.workspace = true
+musteragent-runtime-file-query.workspace = true
+musteragent-runtime-snapshot.workspace = true
+musteragent-skill.workspace = true
+musteragent-telemetry.workspace = true
+musteragent-tool.workspace = true
+jsonschema.workspace = true
+futures-util = { version = "0.3.33", default-features = false, features = ["std"] }
+flume = { version = "0.11.1", default-features = false, features = ["async"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { version = "1.53.1", default-features = false, features = ["fs", "time"] }
+tracing.workspace = true
+uuid = { workspace = true, features = ["v5", "v7"] }
+
+[dev-dependencies]
+musteragent-activity.workspace = true
+musteragent-definition.workspace = true
+musteragent-ledger.workspace = true
+musteragent-resource.workspace = true
+
+[lints]
+workspace = true

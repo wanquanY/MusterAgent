@@ -1,0 +1,31 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "public_delivery_repair.proto";
+
+message AgentJournalDeliveryRejectionV6 {
+  string contract_ref = 1;
+  string issue = 2;
+  PublicDeliveryRejectionV1 repair = 3;
+}
+
+message AgentJournalDeliveryRejectionV7 {
+  string contract_ref = 1;
+  string issue = 2;
+  oneof evidence {
+    PublicDeliveryRejectionV1 prerequisite = 3;
+    PublicDeliveryFormatRejectionV1 format_terminal = 4;
+    PublicDeliveryUnreplayableOutputV1 unreplayable = 5;
+  }
+}
+
+message AgentJournalDeliveryRepairViolationV6 {
+  PublicDeliveryRepairBindingV1 binding = 1;
+  string violation = 2;
+}
+
+message AgentJournalDeliveryUnreplayableV6 {
+  string contract_ref = 1;
+  PublicDeliveryUnreplayableOutputV1 output = 2;
+}

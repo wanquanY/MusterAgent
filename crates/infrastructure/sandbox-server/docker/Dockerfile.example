@@ -1,0 +1,23 @@
+# Example server-sandbox image. Hosts build and pin their own image and pass
+# its reference and environment through `ServerSandboxConfig.image`; nothing
+# in the kernel depends on this file.
+#
+#   docker build -f docker/Dockerfile.example -t my-registry/sandbox-python:dev .
+#
+# Add packages your jobs need with `uv pip install --system <pkg>` below.
+FROM python:3.12-slim
+
+ENV UV_PYTHON=/usr/local/bin/python3 \
+    UV_SYSTEM_PYTHON=1 \
+    PYTHON_BIN=/usr/local/bin/python3 \
+    PYTHONNOUSERSITE=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    MPLCONFIGDIR=/tmp/matplotlib
+
+RUN python3 -m pip install --no-cache-dir uv \
+    && rm -rf /root/.cache
+
+# Jobs run as the unprivileged `nobody` user (65534:65534) with a read-only
+# root filesystem; /tmp is a tmpfs provided at run time.
+USER 65534:65534
+WORKDIR /sandbox/work

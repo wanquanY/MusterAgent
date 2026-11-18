@@ -1,0 +1,107 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "agent_dialogue.proto";
+
+message DialogueApprovalContext {
+  DialogueContextCut frozen_cut = 1;
+  uint64 from_seq = 2;
+  repeated DialogueApprovalContextObservation observations = 3;
+}
+
+message DialogueApprovalContextObservation {
+  DialogueEntryId entry_id = 1;
+  uint64 sequence = 2;
+  InteractionId interaction_id = 3;
+  RunId run_id = 4;
+  uint64 visible_revision = 5;
+  bytes control_revision = 6;
+  // Closed: 1 Approval, 2 Confirmation.
+  uint32 kind = 7;
+  // Closed: 1 Pending, 2 Approved, 3 Denied, 4 Expired, 5 Cancelled,
+  // 6 ResolvedDecisionUnavailable. Omission/unknown values fail closed.
+  uint32 state = 8;
+}
+
+message DialogueContextBound {
+  DialogueContextCut frozen_cut = 1;
+  uint32 page_ordinal = 2;
+  uint64 from_seq = 3;
+  uint64 through_seq = 4;
+  ContentRef source_page_ref = 5;
+  optional DialogueContextCheckpointId checkpoint_id = 6;
+  // True only after the complete fixed cut is represented. The first primary
+  // model invocation must not start while this coverage barrier is incomplete.
+  bool completes_cut = 7;
+}
+
+message DialogueContextCheckpoint {
+  DialogueContextCheckpointId checkpoint_id = 1;
+  DialogueContextCut coverage = 2;
+  optional DialogueContextCheckpointId parent_checkpoint_id = 3;
+  ContentRef summary_ref = 4;
+  ContentRef source_manifest_ref = 5;
+  InvocationId generator_invocation_id = 6;
+  VersionedRef policy_ref = 7;
+}
+
+message DialogueContextCheckpointId { string value = 1; }
+
+message DialogueContextCut {
+  TenantId tenant_id = 1;
+  PrincipalId owner_id = 2;
+  AgentId agent_id = 3;
+  AgentDialogueId dialogue_id = 4;
+  AgentDialogueCursor through = 5;
+  uint64 entry_count = 6;
+  Sha256 source_chain_sha256 = 7;
+  VersionedRef source_contract_ref = 8;
+}
+
+message DialogueContextModelObservation {
+  DialogueContextCut frozen_cut = 1;
+  uint64 from_seq = 2;
+  uint64 through_seq = 3;
+  ContentRef source_page_ref = 4;
+  string materialized_context = 5;
+  repeated DialogueInputModelObservation input_attachments = 6;
+}
+
+message DialogueContextSourcePage {
+  DialogueContextCut frozen_cut = 1;
+  uint64 from_seq = 2;
+  uint64 through_seq = 3;
+  repeated AgentDialogueEntry entries = 4;
+  optional DialogueContextCheckpoint checkpoint = 5;
+  Sha256 prefix_chain_sha256 = 6;
+  Sha256 through_chain_sha256 = 7;
+}
+
+enum DialogueInputMaterialization {
+  DIALOGUE_INPUT_MATERIALIZATION_UNSPECIFIED = 0;
+  DIALOGUE_INPUT_MATERIALIZATION_TEXT = 1;
+  DIALOGUE_INPUT_MATERIALIZATION_IMAGE = 2;
+  DIALOGUE_INPUT_MATERIALIZATION_AUDIO = 3;
+  DIALOGUE_INPUT_MATERIALIZATION_VIDEO = 4;
+  DIALOGUE_INPUT_MATERIALIZATION_FILE = 5;
+  // Retains exact input custody for file tools without uploading opaque Office
+  // bytes to a model that does not accept native documents. Media is excluded.
+  DIALOGUE_INPUT_MATERIALIZATION_FILE_METADATA = 6;
+}
+
+message DialogueInputModelObservation {
+  DialogueEntryId entry_id = 1;
+  AgentDialogueCursor cursor = 2;
+  uint32 ordinal = 3;
+  AttachmentRef attachment = 4;
+  DialogueInputMaterialization materialization = 5;
+  repeated string text_parts = 6;
+}
+
+message AgentSceneMember {
+  AgentId agent_id = 1;
+  string name = 2;
+  string responsibility = 3;
+}

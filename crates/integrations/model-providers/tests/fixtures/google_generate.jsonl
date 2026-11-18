@@ -1,0 +1,1 @@
+{"data":{"responseId":"google_fixture","candidates":[{"content":{"parts":[{"text":"hello"},{"text":"","thoughtSignature":"c2lnbmF0dXJl"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":2,"totalTokenCount":12}}}

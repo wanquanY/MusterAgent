@@ -1,0 +1,41 @@
+# Development only. Bind loopback and explicitly provision the database/bucket.
+listen = "127.0.0.1:8080"
+database_url = "postgres://kernel@127.0.0.1/kernel"
+key_id = "host.content.v1"
+keyring_file = "/absolute/path/content-keyring.json"
+
+workspace_releases_file = "examples/workspace-releases.json"
+
+[object_store]
+endpoint = "http://127.0.0.1:9000"
+region = "us-east-1"
+bucket = "kernel-content"
+prefix = "runtime"
+access_key_env = "HOST_S3_ACCESS_KEY"
+secret_key_env = "HOST_S3_SECRET_KEY"
+allow_http = true
+write_once = { strategy = "standard" }
+
+[[identities]]
+token_env = "REFERENCE_DEV_TOKEN"
+tenant_id = "01982f80-0000-7000-8000-000000000801"
+user_id = "01982f80-0000-7000-8000-000000000802"
+agents = ["development-agent"]
+routes = ["reference.chat@1"]
+
+[[agents]]
+key = "development-agent"
+id = "01982f80-0000-7000-8000-000000000805"
+version_id = "01982f80-0000-7000-8000-000000000806"
+tenant_id = "01982f80-0000-7000-8000-000000000801"
+published_by = "01982f80-0000-7000-8000-000000000802"
+instructions = "Use authorized tools when needed and report the observed results."
+tools = ["system.time.current", "delegation.spawn", "delegation.join", "delegation.list", "data.python.run", "schedules.create", "schedules.update", "schedules.list", "schedules.control", "schedules.history"]
+
+[[routes]]
+key = "reference.chat@1"
+provider_id = "01982f80-0000-7000-8000-000000000803"
+entry_id = "01982f80-0000-7000-8000-000000000804"
+model = "host-model-name"
+context_window = 131072
+max_output_tokens = 4096

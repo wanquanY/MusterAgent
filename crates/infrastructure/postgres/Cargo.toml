@@ -1,0 +1,87 @@
+[package]
+name = "musteragent-postgres"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+test-support = []
+
+[dependencies]
+musteragent-extension.workspace = true
+musteragent-sandbox.workspace = true
+musteragent-persistence-codec.workspace = true
+musteragent-device-authority.workspace = true
+musteragent-work-item.workspace = true
+musteragent-runtime-session.workspace = true
+musteragent-storage-protection.workspace = true
+musteragent-runtime-privacy.workspace = true
+musteragent-runtime-audit.workspace = true
+musteragent-mcp.workspace = true
+musteragent-execution-context.workspace = true
+musteragent-execution-liveness.workspace = true
+musteragent-activity = { version = "0.1.0", path = "../../domains/activity" }
+musteragent-approval = { version = "0.1.0", path = "../../domains/approval" }
+musteragent-artifact = { version = "0.1.0", path = "../../domains/artifact" }
+musteragent-capability.workspace = true
+musteragent-content-ref = { version = "0.1.0", path = "../../foundation/content-ref" }
+musteragent-context = { version = "0.1.0", path = "../../runtime/context" }
+musteragent-conversation = { version = "0.1.0", path = "../../domains/conversation" }
+musteragent-discovery.workspace = true
+musteragent-definition.workspace = true
+musteragent-event-envelope = { version = "0.1.0", path = "../../foundation/event-envelope" }
+musteragent-evolution = { version = "0.1.0", path = "../../domains/evolution" }
+musteragent-execution-grant.workspace = true
+musteragent-goal.workspace = true
+musteragent-identity = { version = "0.1.0", path = "../../foundation/identity" }
+musteragent-ledger = { version = "0.1.0", path = "../../runtime/ledger" }
+musteragent-loop = { version = "0.1.0", path = "../../runtime/agent-loop" }
+musteragent-memory = { version = "0.1.0", path = "../../domains/memory" }
+musteragent-model.workspace = true
+musteragent-policy = { version = "0.1.0", path = "../../foundation/policy" }
+musteragent-projection = { version = "0.1.0", path = "../../runtime/projection" }
+musteragent-resource.workspace = true
+musteragent-run = { version = "0.1.0", path = "../../runtime/run" }
+musteragent-runtime-admission.workspace = true
+musteragent-runtime-artifact = { version = "0.1.0", path = "../../runtime/artifact" }
+musteragent-runtime-automation.workspace = true
+musteragent-runtime-capability = { version = "0.1.0", path = "../../runtime/capability" }
+musteragent-runtime-content = { version = "0.1.0", path = "../../runtime/content" }
+musteragent-runtime-data-access.workspace = true
+musteragent-runtime-discovery.workspace = true
+musteragent-runtime-execution-plan.workspace = true
+musteragent-runtime-contract = { version = "0.1.0", path = "../../foundation/runtime-contract" }
+musteragent-runtime-interaction = { version = "0.1.0", path = "../../runtime/interaction" }
+musteragent-runtime-memory = { version = "0.1.0", path = "../../runtime/memory" }
+musteragent-runtime-model = { version = "0.1.0", path = "../../runtime/model" }
+musteragent-runtime-resource.workspace = true
+musteragent-runtime-file-query.workspace = true
+musteragent-runtime-snapshot = { version = "0.1.0", path = "../../runtime/snapshot" }
+musteragent-runtime-skill.workspace = true
+musteragent-telemetry.workspace = true
+musteragent-scheduler = { version = "0.1.0", path = "../../runtime/scheduler" }
+musteragent-skill = { version = "0.1.0", path = "../../domains/skill" }
+musteragent-tool = { version = "0.1.0", path = "../../domains/tool" }
+futures-util = "0.3.33"
+prost.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-native-roots", "postgres", "uuid", "migrate", "macros"] }
+thiserror.workspace = true
+tempfile = "3.27.0"
+tokio = { version = "1.53.1", features = ["sync", "time", "fs", "io-util"] }
+tokio-util = { version = "0.7.19", features = ["rt"] }
+tracing.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+musteragent-tool-executor.workspace = true
+ed25519-dalek = "3.0.0"
+musteragent-testkit.workspace = true
+jsonschema.workspace = true

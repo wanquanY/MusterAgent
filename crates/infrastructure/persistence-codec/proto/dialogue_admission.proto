@@ -1,0 +1,28 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "agent_dialogue.proto";
+
+message DialogueAdmissionRejectionClaims {
+  Actor actor = 1;
+  UserIntentId intent_id = 2;
+  CommandId decision_id = 3;
+  bytes facts_sha256 = 4;
+  DialogueAdmissionRejectionReason reason = 5;
+  int64 issued_at_ms = 6;
+  int64 expires_at_ms = 7;
+}
+
+enum DialogueAdmissionRejectionReason {
+  DIALOGUE_ADMISSION_REJECTION_REASON_UNSPECIFIED = 0;
+  DIALOGUE_ADMISSION_REJECTION_REASON_ACCOUNT_UNAVAILABLE = 1;
+  DIALOGUE_ADMISSION_REJECTION_REASON_EXECUTION_NOT_ALLOWED = 2;
+}
+
+message SignedDialogueAdmissionRejection {
+  string key_id = 1;
+  DialogueAdmissionRejectionClaims claims = 2;
+  bytes signature = 3;
+}

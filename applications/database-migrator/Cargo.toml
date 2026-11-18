@@ -1,0 +1,15 @@
+[package]
+name = "musteragent-database-migrator"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+[dependencies]
+musteragent-postgres.workspace = true
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-native-roots", "postgres"] }
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+[lints]
+workspace = true
+[dev-dependencies]
+musteragent-testkit.workspace = true

@@ -1,0 +1,265 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "conversation_records.proto";
+import "google/protobuf/timestamp.proto";
+
+message AttemptAbandoned {
+  uint32 attempt_number = 1;
+  InterruptionReason reason = 2;
+}
+
+message AttemptClaimed {
+  uint32 attempt_number = 1;
+  AttemptTrigger trigger = 2;
+  LeaseId lease_id = 3;
+  uint64 fencing_token = 4;
+  google.protobuf.Timestamp lease_expires_at = 5;
+}
+
+message AttemptFailed {
+  uint32 attempt_number = 1;
+  ErrorInfo error = 2;
+  RetryDisposition retry_disposition = 3;
+}
+
+message AttemptSucceeded {
+  uint32 attempt_number = 1;
+}
+
+message AttemptSuspended {
+  uint32 attempt_number = 1;
+  InteractionId interaction_id = 2;
+  InvocationId invocation_id = 3;
+}
+
+enum AttemptTrigger {
+  ATTEMPT_TRIGGER_UNSPECIFIED = 0;
+  ATTEMPT_TRIGGER_INITIAL = 1;
+  ATTEMPT_TRIGGER_RETRY = 2;
+  ATTEMPT_TRIGGER_RECOVERY = 3;
+  ATTEMPT_TRIGGER_INTERACTION_RESUMED = 4;
+  ATTEMPT_TRIGGER_BUDGET_AMENDED = 5;
+  ATTEMPT_TRIGGER_DELEGATION_COMPLETED = 6;
+  ATTEMPT_TRIGGER_RECONCILIATION_DUE = 7;
+}
+
+enum InterruptionReason {
+  INTERRUPTION_REASON_UNSPECIFIED = 0;
+  INTERRUPTION_REASON_LEASE_LOST = 1;
+  INTERRUPTION_REASON_WORKER_LOST = 2;
+  INTERRUPTION_REASON_CONTROL_HOME_MOVED = 3;
+  INTERRUPTION_REASON_SYSTEM_SHUTDOWN = 4;
+  INTERRUPTION_REASON_EXTERNAL_OUTCOME_UNKNOWN = 5;
+  INTERRUPTION_REASON_COORDINATION_REQUESTED = 6;
+  INTERRUPTION_REASON_COORDINATION_FORCED_ABORT = 7;
+}
+
+message ModelInvocationCancelled {
+  InvocationId invocation_id = 1;
+}
+
+message ModelInvocationCompleted {
+  InvocationId invocation_id = 1;
+  ContentRef response_ref = 2;
+  string continuation_ref = 3;
+}
+
+message ModelInvocationFailed {
+  InvocationId invocation_id = 1;
+  ErrorInfo error = 2;
+  RetryDisposition retry_disposition = 3;
+}
+
+enum ModelInvocationPurpose {
+  MODEL_INVOCATION_PURPOSE_UNSPECIFIED = 0;
+  MODEL_INVOCATION_PURPOSE_PRIMARY = 1;
+  MODEL_INVOCATION_PURPOSE_CONTEXT_COMPACTION = 2;
+  MODEL_INVOCATION_PURPOSE_FINALIZATION = 3;
+  MODEL_INVOCATION_PURPOSE_VERIFICATION = 4;
+  MODEL_INVOCATION_PURPOSE_EVOLUTION_EVALUATION = 5;
+  MODEL_INVOCATION_PURPOSE_EVOLUTION_INDUCTION = 6;
+}
+
+message ModelInvocationStarted {
+  InvocationId invocation_id = 1;
+  ModelInvocationPurpose purpose = 2;
+  ModelRouteRef model_route_ref = 3;
+  Sha256 request_hash = 4;
+}
+
+enum ResumeReason {
+  RESUME_REASON_UNSPECIFIED = 0;
+  RESUME_REASON_INTERACTION_RESPONDED = 1;
+  RESUME_REASON_RETRY_BACKOFF_ELAPSED = 2;
+  RESUME_REASON_DEVICE_AVAILABLE = 3;
+  RESUME_REASON_RECOVERY = 4;
+  RESUME_REASON_BUDGET_AMENDED = 5;
+  RESUME_REASON_DELEGATION_COMPLETED = 6;
+  RESUME_REASON_RECONCILIATION_DUE = 7;
+}
+
+enum RetryDisposition {
+  RETRY_DISPOSITION_UNSPECIFIED = 0;
+  RETRY_DISPOSITION_DO_NOT_RETRY = 1;
+  RETRY_DISPOSITION_RETRY_NEW_ATTEMPT = 2;
+  RETRY_DISPOSITION_RECONCILE_BEFORE_RETRY = 3;
+  RETRY_DISPOSITION_RETRY_FALLBACK_ROUTE = 4;
+}
+
+message RunAdmitted {
+  RuntimeSnapshotId runtime_snapshot_id = 1;
+  RuntimeHome execution_home = 2;
+  RunId parent_run_id = 3;
+  DelegationId delegation_id = 4;
+  // Present together only for a user-requested terminal Run retry. This is
+  // causal provenance, not a Context branch or a second user Message.
+  MessageId retry_source_message_id = 5;
+  uint32 retry_source_attempt_number = 6;
+}
+
+message RunBudgetAmended {
+  CommandId amendment_id = 1;
+  uint32 additional_steps = 2;
+  uint32 additional_tool_calls = 3;
+  uint64 additional_tokens = 4;
+  optional uint64 additional_cost_microusd = 5;
+}
+
+message RunBudgetExceeded {
+  RunBudgetResource resource = 1;
+}
+
+enum RunBudgetResource {
+  RUN_BUDGET_RESOURCE_UNSPECIFIED = 0;
+  RUN_BUDGET_RESOURCE_STEPS = 1;
+  RUN_BUDGET_RESOURCE_TOOL_CALLS = 2;
+  RUN_BUDGET_RESOURCE_TOKENS = 3;
+  RUN_BUDGET_RESOURCE_COST = 4;
+}
+
+message RunCancelRequested {
+  CancelReason reason = 1;
+  PrincipalId requested_by = 2;
+}
+
+message RunCancelled {
+  CancelReason reason = 1;
+  AttemptId last_attempt_id = 2;
+}
+
+message RunCompleted {
+  MessageId assistant_message_id = 1;
+  repeated ResourceRef result_refs = 2;
+}
+
+message RunControlConsumed {
+  RunControlKind kind = 1;
+  repeated MessageId message_ids = 2;
+}
+
+enum RunControlKind {
+  RUN_CONTROL_KIND_UNSPECIFIED = 0;
+  RUN_CONTROL_KIND_STEERING = 1;
+  RUN_CONTROL_KIND_FOLLOW_UP = 2;
+}
+
+message RunControlQueued {
+  RunControlKind kind = 1;
+  MessageId message_id = 2;
+}
+
+message RunExecutionPlanUpdated {
+  uint64 revision = 1;
+  ContentRef plan_ref = 2;
+  InvocationId source_invocation_id = 3;
+}
+
+message RunFailed {
+  ErrorInfo error = 1;
+  AttemptId last_attempt_id = 2;
+}
+
+message RunInterrupted {
+  InterruptionReason reason = 1;
+  AttemptId last_attempt_id = 2;
+  string reconciliation_ref = 3;
+}
+
+enum RunRecoveryAction {
+  RUN_RECOVERY_ACTION_UNSPECIFIED = 0;
+  RUN_RECOVERY_ACTION_RETRY_DEPENDENCY = 1;
+}
+
+message RunRecoveryRequested {
+  uint32 expected_attempt_number = 1;
+  RunRecoveryAction action = 2;
+  PrincipalId requested_by = 3;
+}
+
+message RunResumed {
+  AttemptId attempt_id = 1;
+  uint32 attempt_number = 2;
+  ResumeReason resume_reason = 3;
+}
+
+message RunRetryScheduled {
+  AttemptId failed_attempt_id = 1;
+  uint32 next_attempt_number = 2;
+  google.protobuf.Timestamp not_before = 3;
+  ErrorInfo error = 4;
+}
+
+message RunStarted {
+  AttemptId attempt_id = 1;
+  uint32 attempt_number = 2;
+}
+
+enum RunWaitReason {
+  RUN_WAIT_REASON_UNSPECIFIED = 0;
+  RUN_WAIT_REASON_APPROVAL = 1;
+  RUN_WAIT_REASON_INPUT = 2;
+  RUN_WAIT_REASON_DEVICE = 3;
+  RUN_WAIT_REASON_RETRY_BACKOFF = 4;
+  RUN_WAIT_REASON_BUDGET = 5;
+  RUN_WAIT_REASON_DELEGATION = 6;
+  RUN_WAIT_REASON_EXTERNAL_OPERATION = 7;
+  RUN_WAIT_REASON_DELEGATION_GROUP = 8;
+  RUN_WAIT_REASON_DELEGATION_COMPLETIONS = 9;
+  RUN_WAIT_REASON_RECOVERY_REQUIRED = 10;
+  RUN_WAIT_REASON_EXECUTION_RECOVERY = 11;
+}
+
+message RunWaiting {
+  RunWaitReason reason = 1;
+  InteractionId interaction_id = 2;
+  InvocationId invocation_id = 3;
+  google.protobuf.Timestamp resume_not_before = 4;
+  ActivityId child_activity_id = 5;
+  DelegationGroupId delegation_group_id = 6;
+  // Required only for RECOVERY_REQUIRED; no automatic retry is scheduled.
+  ErrorCode recovery_error_code = 7;
+}
+
+message UsageRecorded {
+  InvocationId invocation_id = 1;
+  ModelInvocationPurpose purpose = 2;
+  ModelRouteRef model_route_ref = 3;
+  uint64 input_tokens = 4;
+  uint64 output_tokens = 5;
+  uint64 reasoning_tokens = 6;
+  uint64 provider_cache_read_tokens = 7;
+  uint64 provider_cache_write_tokens = 8;
+  string metering_dedup_key = 9;
+  string requested_model_key = 10;
+  string pricing_version_ref = 11;
+  // Retained only for wire compatibility with the pre-F1 local slice. New
+  // canonical events leave this unset because it is not in UsageRecorded.
+  optional uint64 total_tokens = 12;
+  string credential_grant_ref = 13;
+  string response_model_key = 14;
+  uint64 provider_cache_write_1h_tokens = 15;
+  bool cancelled = 16;
+}

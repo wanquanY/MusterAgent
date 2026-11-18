@@ -1,0 +1,9 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "native_dialogue_terminal.proto";
+
+message RecordNativeDialogueTerminalResponse {
+  NativeDialogueTerminalAcknowledgement acknowledgement = 1;
+}

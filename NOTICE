@@ -1,0 +1,10 @@
+musteragent
+Copyright 2026 MusterAgent contributors
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product includes third-party software. Their licenses and notices are
+listed in THIRD_PARTY_LICENSES.md. In particular:
+
+- vendor/sqlx-postgres is derived from SQLx (https://github.com/launchbadge/sqlx),
+  Copyright 2020 LaunchBadge, LLC, licensed under MIT OR Apache-2.0.

@@ -1,0 +1,1 @@
+Select at most 32 active and unexpired current Memory versions visible to the admitting user, tenant, execution workspace or agent. Rank by confidence then recency, and seal the selected identities in canonical order.

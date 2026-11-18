@@ -1,0 +1,263 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "agent_dialogue.proto";
+import "rpc_common.proto";
+
+message DocumentExtractionIssue {
+  string code = 1;
+  optional uint32 page = 2;
+  uint64 occurrences = 3;
+}
+
+message DocumentExtractionQuality {
+  optional uint32 pages_total = 1;
+  repeated uint32 pages_with_text = 2;
+  repeated DocumentExtractionIssue issues = 3;
+}
+
+message FileQueryArtifactOrigin {
+  ArtifactId artifact_id = 1;
+  uint64 version = 2;
+}
+
+message FileQueryAttachmentSource {
+  MessageId message_id = 1;
+  ContentId content_id = 2;
+}
+
+enum FileQueryAvailability {
+  FILE_QUERY_AVAILABILITY_UNSPECIFIED = 0;
+  FILE_QUERY_AVAILABILITY_AVAILABLE = 1;
+  FILE_QUERY_AVAILABILITY_DRAFT = 2;
+  FILE_QUERY_AVAILABILITY_ARCHIVED = 3;
+  FILE_QUERY_AVAILABILITY_FAILED = 4;
+  FILE_QUERY_AVAILABILITY_UNAVAILABLE = 5;
+}
+
+message FileQueryContentDescriptor {
+  reserved 5;
+  
+  optional FileQueryReference resource_ref = 7;
+  optional FileQueryTreeDescriptor file_tree = 6;
+  FileQueryEntry entry = 1;
+  ContentRef primary = 2;
+  repeated ContentRef dependencies = 3;
+  optional FileQueryArtifactOrigin artifact_origin = 4;
+
+}
+
+enum FileQueryCoverage {
+  FILE_QUERY_COVERAGE_UNSPECIFIED = 0;
+  FILE_QUERY_COVERAGE_PROJECTED_CONVERSATION = 1;
+  FILE_QUERY_COVERAGE_PROJECT_CHILDREN = 2;
+  FILE_QUERY_COVERAGE_RESTRICTED_CONVERSATION = 3;
+  FILE_QUERY_COVERAGE_ARCHIVED_CONVERSATION = 4;
+  FILE_QUERY_COVERAGE_PROJECT_SUBTREE = 5;
+  FILE_QUERY_COVERAGE_WORK_CHILDREN = 6;
+  FILE_QUERY_COVERAGE_WORK_SUBTREE = 7;
+  FILE_QUERY_COVERAGE_OWNED_AGENT_RESOURCES = 8;
+  FILE_QUERY_COVERAGE_OWNED_AGENT_FILES = 9;
+}
+
+message FileQueryEntry {
+  optional WorkspaceId native_workspace_id = 11;
+  FileQueryReference file_ref = 1;
+  string name = 2;
+  bool is_directory = 3;
+  optional string media_type = 4;
+  optional uint64 byte_length = 5;
+  int64 modified_at_ms = 6;
+  optional int64 associated_at_ms = 7;
+  optional string semantic_kind = 8;
+  FileQueryAvailability availability = 9;
+}
+
+enum FileQueryErrorCode {
+  FILE_QUERY_ERROR_CODE_UNSPECIFIED = 0;
+  FILE_QUERY_ERROR_CODE_INVALID_QUERY = 1;
+  FILE_QUERY_ERROR_CODE_INVALID_REFERENCE = 2;
+  FILE_QUERY_ERROR_CODE_DENIED = 3;
+  FILE_QUERY_ERROR_CODE_NOT_FOUND = 4;
+  FILE_QUERY_ERROR_CODE_CHANGED = 5;
+  FILE_QUERY_ERROR_CODE_UNAVAILABLE = 6;
+  FILE_QUERY_ERROR_CODE_MISSING_CONTENT = 7;
+  FILE_QUERY_ERROR_CODE_INTEGRITY = 8;
+  FILE_QUERY_ERROR_CODE_UNSUPPORTED = 9;
+  
+  FILE_QUERY_ERROR_CODE_INCOMPLETE = 10;
+}
+
+message FileQueryFailure { FileQueryErrorCode code = 1; string message = 2; }
+
+message FileQueryLegacyAttachmentSource {
+  MessageId message_id = 1;
+  string attachment_id = 2;
+}
+
+message FileQueryNativeCreationSource {
+  InvocationId invocation_id = 1;
+  string path = 2;
+}
+
+message FileQueryNativeDocumentSource {
+  string grant_id = 1;
+  string document_id = 2;
+}
+
+message FileQueryPage {
+  optional FileQueryRetractionStatus retraction_status = 5;
+  repeated FileQueryEntry entries = 1;
+  optional string next_cursor = 2;
+  string revision = 3;
+  FileQueryCoverage coverage = 4;
+}
+
+message FileQueryDialogueInputSource {
+  AgentDialogueId dialogue_id = 1;
+  DialogueEntryId entry_id = 2;
+  AgentDialogueCursor cursor = 3;
+  uint32 ordinal = 4;
+}
+
+message FileQueryDialogueOutputSource {
+  AgentDialogueId dialogue_id = 1;
+  DialogueEntryId entry_id = 2;
+  AgentDialogueCursor cursor = 3;
+  uint32 ordinal = 4;
+}
+
+message FileQueryReadView {
+  optional string representation_revision = 10;
+  DocumentExtractionQuality quality = 11;
+  FileQueryEntry entry = 1;
+  optional string text = 2;
+  FileQueryRepresentation representation = 3;
+  string extraction_status = 4;
+  optional string parser_revision = 5;
+  optional uint64 next_offset = 6;
+  uint64 resolved_start = 7;
+  uint64 resolved_end = 8;
+  
+  repeated ContentRef referenced_content = 9;
+}
+
+message FileQueryReference {
+  string schema = 1;
+  ConversationId conversation_id = 2;
+  FileQueryScope scope = 3;
+  FileQuerySource source = 4;
+  string revision = 5;
+
+  WorkspaceId workspace_id = 6;
+  AgentId owned_agent_id = 7;
+}
+
+enum FileQueryRepresentation {
+  FILE_QUERY_REPRESENTATION_UNSPECIFIED = 0;
+  FILE_QUERY_REPRESENTATION_SOURCE_TEXT = 1;
+  FILE_QUERY_REPRESENTATION_EXTRACTED_TEXT = 2;
+  FILE_QUERY_REPRESENTATION_VISUAL_CONTENT = 3;
+  FILE_QUERY_REPRESENTATION_UNSUPPORTED = 4;
+  FILE_QUERY_REPRESENTATION_SOURCE_CONTENT = 5;
+}
+
+message FileQueryRetractionStatus {
+  uint64 pending = 1;
+  uint64 applied = 2;
+  uint64 retained = 3;
+  uint64 conflict = 4;
+  uint64 indeterminate = 5;
+}
+
+enum FileQueryScope {
+  FILE_QUERY_SCOPE_UNSPECIFIED = 0;
+  FILE_QUERY_SCOPE_CONVERSATION = 1;
+  FILE_QUERY_SCOPE_PROJECT = 2;
+  FILE_QUERY_SCOPE_WORK = 3;
+  FILE_QUERY_SCOPE_OWNED_AGENT = 4;
+}
+
+message FileQuerySource {
+  reserved 6, 8;
+  oneof identity {
+    FileQueryAttachmentSource attachment = 1;
+    ArtifactId artifact = 2;
+    ResourceNodeId resource = 3;
+    string native_path = 4;
+    FileQueryNativeCreationSource native_creation = 5;
+    FileQueryLegacyAttachmentSource legacy_attachment = 7;
+    FileQueryNativeDocumentSource native_document = 9;
+    FileQueryDialogueInputSource dialogue_input = 10;
+    FileQueryDialogueOutputSource dialogue_output = 11;
+  }
+}
+
+message FileQueryTreeDescriptor {
+  string revision = 1;
+  string entrypoint = 2;
+  repeated FileQueryTreeEntry files = 3;
+}
+
+message FileQueryTreeEntry {
+  string path = 1;
+  FileQueryReference file_ref = 2;
+  ContentRef content = 3;
+}
+
+message InspectFileRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  FileQueryReference file_ref = 3;
+  WorkspaceId workspace_id = 4;
+  
+  bool refresh_reference = 5;
+  
+  bool include_preview = 6;
+}
+
+message InspectFileResponse {
+  oneof result { FileQueryEntry entry = 1; FileQueryFailure failure = 2; }
+}
+
+message OpenFileQueryResponse {
+  oneof result { FileQueryContentDescriptor descriptor = 1; FileQueryFailure failure = 2; }
+}
+
+message QueryFilesRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  FileQueryScope scope = 3;
+  optional FileQueryReference parent = 4;
+  optional string cursor = 5;
+  uint32 limit = 6;
+  optional string name_query = 7;
+  WorkspaceId workspace_id = 8;
+}
+
+message QueryFilesResponse {
+  oneof result { FileQueryPage page = 1; FileQueryFailure failure = 2; }
+}
+
+message ReadFileContentRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  FileQueryReference file_ref = 3;
+  ContentRef content_ref = 4;
+  WorkspaceId workspace_id = 5;
+}
+
+message ReadFileQueryRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  FileQueryReference file_ref = 3;
+  uint64 offset = 4;
+  uint32 limit = 5;
+  WorkspaceId workspace_id = 6;
+}
+
+message ReadFileQueryResponse {
+  oneof result { FileQueryReadView view = 1; FileQueryFailure failure = 2; }
+}

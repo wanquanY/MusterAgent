@@ -1,0 +1,19 @@
+{
+  "request": {
+    "state": {"item": "红苹果", "evidence": "one red apple"},
+    "questions": {
+      "category": {"type": "choice", "instructions": "Classify the item", "criteria": {"fruit": "Fruit", "other": null}},
+      "quality": {"type": "score", "instructions": "Score evidence clarity", "criteria": ["unclear", "partly clear", "clear"]},
+      "is_red": {"type": "noul", "instructions": "Is it red?"}
+    }
+  },
+  "response": {
+    "model": "jev-1.13.0",
+    "answers": {
+      "category": {"type": "choice", "choice": "fruit", "probabilities": {"fruit": 0.9, "other": 0.1}, "confidence": 0.8},
+      "quality": {"type": "score", "score": 1.6, "legend": {"0": "unclear", "1": "partly clear", "2": "clear"}, "probabilities": {"0": 0.1, "1": 0.2, "2": 0.7}, "confidence": 0.6},
+      "is_red": {"type": "noul", "noul": 0.95}
+    },
+    "usage": {"input_tokens": 90, "output_tokens": 5}
+  }
+}

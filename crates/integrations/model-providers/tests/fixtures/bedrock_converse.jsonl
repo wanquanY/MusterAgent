@@ -1,0 +1,4 @@
+{"event":"messageStart","data":{"role":"assistant"}}
+{"event":"contentBlockDelta","data":{"contentBlockIndex":0,"delta":{"text":"hello"}}}
+{"event":"metadata","data":{"usage":{"inputTokens":10,"outputTokens":2,"totalTokens":12}}}
+{"event":"messageStop","data":{"stopReason":"end_turn"}}

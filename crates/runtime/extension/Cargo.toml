@@ -1,0 +1,44 @@
+[package]
+name = "musteragent-extension"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-loop.workspace = true
+musteragent-context.workspace = true
+musteragent-run.workspace = true
+musteragent-runtime-contract.workspace = true
+musteragent-runtime-content.workspace = true
+musteragent-runtime-model.workspace = true
+musteragent-runtime-snapshot.workspace = true
+musteragent-tool-executor.workspace = true
+musteragent-runtime-capability.workspace = true
+musteragent-execution-liveness.workspace = true
+musteragent-content-ref.workspace = true
+musteragent-event-envelope.workspace = true
+musteragent-identity.workspace = true
+musteragent-ledger.workspace = true
+musteragent-tool.workspace = true
+musteragent-telemetry.workspace = true
+musteragent-approval.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+futures-util = "0.3.33"
+async-stream = "0.3.6"
+tokio = { version = "1.53.1", features = ["sync"] }
+
+[dev-dependencies]
+musteragent-capability.workspace = true
+musteragent-policy.workspace = true
+musteragent-discovery.workspace = true
+musteragent-model.workspace = true
+musteragent-activity.workspace = true
+musteragent-execution-liveness-io.workspace = true
+tokio = { version = "1.53.1", features = ["macros", "rt", "time", "test-util"] }
+
+[lints]
+workspace = true

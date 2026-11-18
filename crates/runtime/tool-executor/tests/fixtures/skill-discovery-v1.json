@@ -1,0 +1,510 @@
+{
+  "purpose": "Test-only exact predecessor contracts; never loaded by production catalog",
+  "tools": [
+    {
+      "approval": "never",
+      "capability_key": "skills.search@1",
+      "concurrency_class": "parallel_read",
+      "data_classification": "private",
+      "effect": "read",
+      "egress_policy": "none",
+      "idempotency": "native",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 256,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "default": 10,
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "query": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "type": "object"
+      },
+      "input_schema_sha256": "4e7ace981dfa191d08c87bcf3b2c0f8fafe637f236745dc70f81971a17f046c6",
+      "max_attempts": 2,
+      "metadata": {
+        "wire_name": "skills_search",
+        "sandbox_compatibility": "server_required"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "availability": {
+                  "enum": [
+                    "available",
+                    "unavailable"
+                  ],
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "required_tools": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "skill_ref": {
+                  "type": "string"
+                },
+                "skill_version_id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "when_to_use": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "skill_ref",
+                "skill_version_id",
+                "title",
+                "description",
+                "when_to_use",
+                "required_tools",
+                "availability"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "type": "object"
+      },
+      "output_schema_sha256": "3ad4364e34a325a58ea42def42b813530d6744d5d32269985c3fea0cbc277a68",
+      "required_contexts": [],
+      "required_scopes": [
+        "skills.search"
+      ],
+      "target": {
+        "binding": "skills.search@1",
+        "owner": "rust_runtime"
+      },
+      "timeout_ms": 5000,
+      "title": "Search authorized skills",
+      "description": "Search bounded metadata in the immutable Skill catalog sealed for this Run without disclosing Skill instructions.",
+      "tool_key": "skills.search@1",
+      "surfaces": [
+        "api",
+        "channel",
+        "desktop",
+        "studio",
+        "web"
+      ]
+    },
+    {
+      "approval": "never",
+      "capability_key": "skills.list@1",
+      "concurrency_class": "parallel_read",
+      "data_classification": "private",
+      "effect": "read",
+      "egress_policy": "none",
+      "idempotency": "native",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "cursor": {
+            "maxLength": 256,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "limit": {
+            "default": 10,
+            "maximum": 50,
+            "minimum": 1,
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "input_schema_sha256": "3fc3d6660add288d0f204c9cb99b2016c5549877996926551fdc65f4c421f95a",
+      "max_attempts": 2,
+      "metadata": {
+        "wire_name": "skills_list",
+        "sandbox_compatibility": "server_required"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "availability": {
+                  "enum": [
+                    "available",
+                    "unavailable"
+                  ],
+                  "type": "string"
+                },
+                "description": {
+                  "type": "string"
+                },
+                "required_tools": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array",
+                  "uniqueItems": true
+                },
+                "skill_ref": {
+                  "type": "string"
+                },
+                "skill_version_id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "when_to_use": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "skill_ref",
+                "skill_version_id",
+                "title",
+                "description",
+                "when_to_use",
+                "required_tools",
+                "availability"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "type": "object"
+      },
+      "output_schema_sha256": "3ad4364e34a325a58ea42def42b813530d6744d5d32269985c3fea0cbc277a68",
+      "required_contexts": [],
+      "required_scopes": [
+        "skills.list"
+      ],
+      "target": {
+        "binding": "skills.list@1",
+        "owner": "rust_runtime"
+      },
+      "timeout_ms": 5000,
+      "title": "List authorized skills",
+      "description": "List stable pages of metadata from the immutable Skill catalog sealed for this Run without disclosing Skill instructions.",
+      "tool_key": "skills.list@1",
+      "surfaces": [
+        "api",
+        "channel",
+        "desktop",
+        "studio",
+        "web"
+      ]
+    },
+    {
+      "approval": "never",
+      "capability_key": "skills.view@1",
+      "concurrency_class": "sequential_write",
+      "data_classification": "private",
+      "effect": "write_reversible",
+      "egress_policy": "database_only",
+      "idempotency": "runtime_transaction",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "skill_ref": {
+            "maxLength": 200,
+            "minLength": 3,
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill_ref"
+        ],
+        "type": "object"
+      },
+      "input_schema_sha256": "ca8961854ebec83ff93b30cf5c673b0914e08811dc996a1f6c1074b37822c36e",
+      "max_attempts": 2,
+      "metadata": {
+        "wire_name": "skills_view",
+        "sandbox_compatibility": "server_required"
+      },
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "availability": {
+            "enum": [
+              "available",
+              "unavailable"
+            ],
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "disclosure_ordinal": {
+            "minimum": 1,
+            "type": "integer"
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "instructions_hash": {
+            "maxLength": 64,
+            "minLength": 64,
+            "type": "string"
+          },
+          "instructions_ref": {
+            "additionalProperties": false,
+            "properties": {
+              "byte_length": {
+                "minimum": 0,
+                "type": "integer"
+              },
+              "content_id": {
+                "type": "string"
+              },
+              "media_type": {
+                "type": "string"
+              },
+              "sha256": {
+                "maxLength": 64,
+                "minLength": 64,
+                "type": "string"
+              }
+            },
+            "required": [
+              "content_id",
+              "media_type",
+              "byte_length",
+              "sha256"
+            ],
+            "type": "object"
+          },
+          "required_tools": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "uniqueItems": true
+          },
+          "skill_ref": {
+            "type": "string"
+          },
+          "skill_version_id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "when_to_use": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "skill_ref",
+          "skill_version_id",
+          "title",
+          "description",
+          "when_to_use",
+          "required_tools",
+          "availability",
+          "instructions_ref",
+          "instructions_hash",
+          "instructions",
+          "disclosure_ordinal"
+        ],
+        "type": "object"
+      },
+      "output_schema_sha256": "4b8b0f3d513dca64cb6e816fd9816d4883aa753930146aa38806bebbe79242d7",
+      "required_contexts": [],
+      "required_scopes": [
+        "skills.view"
+      ],
+      "target": {
+        "binding": "skills.view@1",
+        "owner": "rust_runtime"
+      },
+      "timeout_ms": 5000,
+      "title": "View an authorized skill",
+      "description": "Read one exact Skill ContentRef from this Run's immutable authorized catalog and append only its disclosure fact.",
+      "tool_key": "skills.view@1",
+      "surfaces": [
+        "api",
+        "channel",
+        "desktop",
+        "studio",
+        "web"
+      ]
+    },
+    {
+      "tool_key": "skills.resource.read@1",
+      "title": "Read a skill package resource",
+      "description": "List files or read one UTF-8 reference, script or text asset from an exact authorized skill_ref in this Run. Omit path to list; use a returned package-relative path to read. Returns exact bytes as text with hashes, never executes code, never follows a latest installation or host filesystem path.",
+      "input_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "skill_ref": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 200
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          }
+        },
+        "required": [
+          "skill_ref"
+        ]
+      },
+      "input_schema_sha256": "dfc6c87af4c7b4ecc9900219866e2dc953ca3be714c1b7cc4f41ebd55c6aa553",
+      "output_schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "skill_ref": {
+            "type": "string"
+          },
+          "skill_version_id": {
+            "type": "string"
+          },
+          "resources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string"
+                },
+                "media_type": {
+                  "type": "string"
+                },
+                "byte_length": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "role": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "path",
+                "media_type",
+                "byte_length",
+                "sha256",
+                "role"
+              ]
+            },
+            "maxItems": 512
+          },
+          "path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "skill_ref",
+          "skill_version_id",
+          "resources",
+          "path",
+          "text"
+        ]
+      },
+      "output_schema_sha256": "b7c95012a7045b82408097d967d793f718b93ad9e61ad23dd17b5efbb7d1e91e",
+      "capability_key": "skills.resource.read@1",
+      "target": {
+        "owner": "rust_runtime",
+        "binding": "skills.resource.read@1"
+      },
+      "concurrency_class": "parallel_read",
+      "idempotency": "native",
+      "effect": "read",
+      "approval": "never",
+      "timeout_ms": 10000,
+      "max_attempts": 2,
+      "required_scopes": [
+        "skills.view"
+      ],
+      "required_contexts": [],
+      "data_classification": "private",
+      "egress_policy": "database_and_runtime_content_store",
+      "metadata": {
+        "wire_name": "skills_resource_read",
+        "sandbox_compatibility": "server_required"
+      },
+      "surfaces": [
+        "api",
+        "channel",
+        "desktop",
+        "studio",
+        "web"
+      ]
+    }
+  ]
+}

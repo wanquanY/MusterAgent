@@ -1,0 +1,464 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "application_catalog_refs.proto";
+import "common.proto";
+import "execution_liveness.proto";
+import "execution_policy.proto";
+import "google/protobuf/timestamp.proto";
+import "dialogue_context.proto";
+import "tool_records.proto";
+
+message AgentVersionSnapshot {
+  AgentVersionRef agent_ref = 1;
+  uint64 persona_version = 2;
+  ContentRef persona_content_ref = 3;
+  repeated VersionedRef base_skill_refs = 4;
+  VersionedRef policy_ref = 5;
+  AgentVersionSnapshotV5 resolved_v5 = 6;
+}
+
+message AgentVersionSnapshotV5 {
+  AgentKind kind = 1;
+  uint64 version = 2;
+  AgentVersionId parent_version_id = 3;
+  ContentRef manifest_ref = 4;
+  Sha256 manifest_hash = 5;
+  Sha256 persona_hash = 6;
+  Sha256 policy_hash = 7;
+  VersionedRef memory_policy_ref = 8;
+  Sha256 memory_policy_hash = 9;
+  VersionedRef model_requirement_ref = 10;
+  VersionedRef supported_runtime_contract = 11;
+  MemoryCollectionId user_memory_collection_id = 12;
+  MemoryCollectionId long_term_memory_collection_id = 13;
+  AgentReleaseChannel release_channel = 14;
+}
+
+message AuthorizedSkillDescriptorSnapshot {
+  SkillId skill_id = 1;
+  SkillVersionId skill_version_id = 2;
+  VersionedRef skill_ref = 3;
+  string title = 4;
+  string description = 5;
+  string when_to_use = 6;
+  ContentRef instructions_ref = 7;
+  Sha256 instructions_hash = 8;
+  repeated VersionedRef required_capabilities = 9;
+  repeated VersionedRef optional_capabilities = 10;
+  repeated VersionedRef compatible_agent_contracts = 11;
+  repeated string compatible_surfaces = 12;
+  SkillActivationPolicy activation = 13;
+  SkillLifecycle lifecycle = 14;
+  SkillCatalogOrigin origin = 15;
+  SkillCatalogTrust trust = 16;
+  SkillCatalogProvenanceKind provenance_kind = 17;
+  VersionedRef provenance_bundle_ref = 18;
+  PrincipalId provenance_created_by = 19;
+  string provenance_source = 20;
+  string provenance_source_ref = 21;
+  string provenance_publisher_ref = 22;
+  SkillCatalogInstallScopeKind install_scope_kind = 23;
+  TenantId install_scope_tenant_id = 24;
+  Sha256 spec_hash = 25;
+  repeated SkillCatalogReferenceSnapshot references = 26;
+  repeated VersionedRef missing_required_capabilities = 27;
+}
+
+enum AuxiliaryModelRole {
+  AUXILIARY_MODEL_ROLE_UNSPECIFIED = 0;
+  AUXILIARY_MODEL_ROLE_COMPRESSION = 1;
+  AUXILIARY_MODEL_ROLE_VISION = 2;
+  AUXILIARY_MODEL_ROLE_EMBEDDING = 3;
+  AUXILIARY_MODEL_ROLE_TITLE = 4;
+  AUXILIARY_MODEL_ROLE_ROUTING = 5;
+  AUXILIARY_MODEL_ROLE_EVOLUTION = 6;
+  AUXILIARY_MODEL_ROLE_GOAL_JUDGE = 7;
+  AUXILIARY_MODEL_ROLE_DECISION = 8;
+}
+
+message BoolParameter {
+  bool value = 1;
+}
+
+message CapabilityGrantSnapshot {
+  string capability_key = 1;
+  CapabilityProviderId provider_id = 2;
+  CapabilityLocation location = 3;
+  ToolEffect effect = 4;
+  repeated string allowed_scopes = 5;
+  CapabilityPolicyDecision policy_decision = 6;
+}
+
+enum CapabilityLocation {
+  CAPABILITY_LOCATION_UNSPECIFIED = 0;
+  CAPABILITY_LOCATION_CLOUD = 1;
+  CAPABILITY_LOCATION_BACKEND = 2;
+  CAPABILITY_LOCATION_DEVICE = 3;
+  CAPABILITY_LOCATION_REMOTE_DEVICE = 4;
+  CAPABILITY_LOCATION_BROWSER = 5;
+}
+
+enum CapabilityPolicyDecision {
+  CAPABILITY_POLICY_DECISION_UNSPECIFIED = 0;
+  CAPABILITY_POLICY_DECISION_ALLOW = 1;
+  CAPABILITY_POLICY_DECISION_DENY = 2;
+  CAPABILITY_POLICY_DECISION_REQUIRE_APPROVAL = 3;
+}
+
+message ContextPolicySnapshot {
+  // Legacy @1 aliases. They retain their original field numbers and bytes.
+  // For @2 they equal hard_input_budget, trigger_budget, and
+  // reserved_output_budget respectively.
+  uint64 max_input_tokens = 1;
+  uint64 compaction_trigger_tokens = 2;
+  uint64 reserved_output_tokens = 3;
+  VersionedRef compaction_policy_ref = 4;
+  ResolvedContextBudgetsSnapshot resolved_v2 = 5;
+  // Required only in reader-first Runtime Snapshot v13; absent in v1-v12.
+  optional ContextSourceSelectionPolicy source_selection = 6;
+}
+
+enum ContextSourceSelectionPolicy {
+  CONTEXT_SOURCE_SELECTION_POLICY_UNSPECIFIED = 0;
+  CONTEXT_SOURCE_SELECTION_POLICY_LEGACY_ADMISSION_V1 = 1;
+  CONTEXT_SOURCE_SELECTION_POLICY_EXECUTION_ISOLATED_V1 = 2;
+}
+
+message DiscoverySnapshot {
+  Sha256 authorized_skill_catalog_hash = 1;
+  Sha256 authorized_tool_catalog_hash = 2;
+  repeated ToolVersionRef bootstrap_tool_keys = 3;
+  repeated ToolVersionRef initial_exposed_tool_keys = 4;
+  repeated VersionedRef initial_disclosed_skill_refs = 5;
+  repeated VersionedRef explicitly_selected_skill_refs = 6;
+  RunId carry_forward_source_run_id = 7;
+  ContentRef carry_forward_decision_ref = 8;
+  VersionedRef discovery_policy_ref = 9;
+  uint32 max_exposed_tools = 10;
+  uint32 max_search_results = 11;
+  repeated AuthorizedSkillDescriptorSnapshot authorized_skills = 12;
+  // Exact authorized defaults frozen at admission, independent of explicit user selection.
+  repeated VersionedRef default_disclosed_skill_refs = 13;
+}
+
+message DoubleParameter {
+  double value = 1;
+}
+
+message InstinctSelectionSnapshot {
+  InstinctId instinct_id = 1;
+  uint64 revision = 2;
+  ContentRef payload_ref = 3;
+}
+
+message IntParameter {
+  int64 value = 1;
+}
+
+message MaintenanceRuntimeSnapshotContent {
+  string schema_version = 1;
+  TenantId tenant_id = 2;
+  AgentId target_agent_id = 3;
+  AgentVersionId agent_version_id = 4;
+  VersionedRef agent_contract = 5;
+  VersionedRef policy_version_ref = 6;
+  PinnedModelRoute evolution_model = 7;
+  DreamJobId dream_job_id = 8;
+  InvocationId invocation_id = 9;
+  ContentRef input_manifest_ref = 10;
+  ContentRef model_input_ref = 11;
+  uint64 max_input_tokens = 12;
+  uint64 max_output_tokens = 13;
+  uint32 max_proposals = 14;
+  google.protobuf.Timestamp deadline = 15;
+  VersionedRef growth_profile_ref = 16;
+  Sha256 growth_profile_hash = 17;
+  // V3 freezes the same per-call supervision policy as ordinary Agents.
+  RunExecutionPolicySnapshot execution_policy = 18;
+}
+
+message MemorySelectionSnapshot {
+  repeated MemoryVersionRef selected_versions = 1;
+  VersionedRef selection_policy_ref = 2;
+  Sha256 selection_hash = 3;
+}
+
+message ModelParameter {
+  string name = 1;
+  oneof value {
+    BoolParameter bool_value = 2;
+    IntParameter int_value = 3;
+    DoubleParameter double_value = 4;
+    StringParameter string_value = 5;
+  }
+}
+
+message ModelRouteSnapshot {
+  string requested_model_class = 1;
+  ModelRouteRef resolved_route = 2;
+  string resolved_model_key = 3;
+  string model_provider_id = 4;
+  string model_entry_id = 5;
+  string api_format = 6;
+  string adapter_version = 7;
+  string protocol_version = 8;
+  string credential_grant_ref = 9;
+  uint64 context_window = 10;
+  uint64 max_output_tokens = 11;
+  repeated string capabilities = 12;
+  repeated ModelParameter parameters = 13;
+  repeated ModelRouteRef fallback_routes = 14;
+  PricingVersionRef pricing_version_ref = 15;
+  ProviderStatePolicy provider_state_policy = 16;
+  repeated PinnedModelRoute fallback_candidates = 17;
+}
+
+enum PermissionMode {
+  PERMISSION_MODE_UNSPECIFIED = 0;
+  PERMISSION_MODE_SUPERVISED = 1;
+  PERMISSION_MODE_TRUSTED = 2;
+  PERMISSION_MODE_DENY = 3;
+  PERMISSION_MODE_FULL_ACCESS = 4;
+  // Server-selected cloud posture. Never accepted as a Product permission preset.
+  PERMISSION_MODE_SERVICE_MANAGED = 5;
+}
+
+message OwnerGoalSnapshotAuthority {
+  GoalId goal_id = 1;
+  GoalPursuitId pursuit_id = 2;
+  uint64 binding_revision = 3;
+  uint64 permission_revision = 4;
+  uint64 manifest_revision = 5;
+  uint64 instructions_revision = 6;
+  DialogueContextCut context_cut = 7;
+  // Retired pre-release draft field; never emitted or accepted by v17. Keep
+  // its number unavailable for reuse; original published Snapshot versions do
+  // not contain this message. Authority is compact and typed, never external IO.
+}
+
+message PinnedAuxiliaryModelRoute {
+  AuxiliaryModelRole role = 1;
+  PinnedModelRoute model = 2;
+}
+
+message PinnedModelRoute {
+  ModelRouteRef route_ref = 1;
+  string resolved_model_key = 2;
+  string model_provider_id = 3;
+  string model_entry_id = 4;
+  string api_format = 5;
+  string adapter_version = 6;
+  string protocol_version = 7;
+  string credential_grant_ref = 8;
+  uint64 context_window = 9;
+  uint64 max_output_tokens = 10;
+  repeated string capabilities = 11;
+  repeated ModelParameter parameters = 12;
+  PricingVersionRef pricing_version_ref = 13;
+  ProviderStatePolicy provider_state_policy = 14;
+}
+
+message PolicySnapshot {
+  VersionedRef policy_ref = 1;
+  Sha256 policy_hash = 2;
+  PermissionMode permission_mode = 3;
+}
+
+message PricingVersionRef {
+  string value = 1;
+}
+
+message ProductReleaseRef {
+  string schema_version = 1;
+  string product_id = 2;
+  reserved 3;
+  string release_id = 4;
+  bytes sha256 = 5;
+}
+
+message PromptAssemblySnapshot {
+  repeated PromptSectionSnapshot sections = 1;
+  Sha256 assembled_hash = 2;
+}
+
+message PromptSectionSnapshot {
+  string section_key = 1;
+  ContentRef content_ref = 2;
+}
+
+enum ProviderStatePolicy {
+  PROVIDER_STATE_POLICY_UNSPECIFIED = 0;
+  PROVIDER_STATE_POLICY_STATELESS = 1;
+  PROVIDER_STATE_POLICY_OPAQUE_CONTINUATION = 2;
+}
+
+message ResolvedContextBudgetsSnapshot {
+  Sha256 policy_hash = 1;
+  uint64 hard_input_budget = 2;
+  uint64 trigger_budget = 3;
+  uint64 reserved_output_budget = 4;
+  uint64 recent_tail_budget = 5;
+  uint64 summary_budget = 6;
+}
+
+message RuntimeSnapshotContent {
+  // Current role-specific Goal authority; absent for ordinary Runs.
+  optional OwnerGoalSnapshotAuthority owner_goal_authority = 19;
+  // Freeze exact account selections; public metadata and schemas remain
+  // in the immutable source owner and are read by their content hashes.
+  repeated FrozenAccountApplicationCatalog application_catalogs = 18;
+  ProductReleaseRef product_release = 17;
+  string schema_version = 1;
+  AgentVersionSnapshot agent = 2;
+  PromptAssemblySnapshot prompt = 3;
+  ModelRouteSnapshot model = 4;
+  repeated SkillDefinitionSnapshot skills = 5;
+  repeated ToolManifestSnapshot tools = 6;
+  repeated CapabilityGrantSnapshot capabilities = 7;
+  PolicySnapshot policy = 8;
+  MemorySelectionSnapshot memory = 9;
+  ContextPolicySnapshot context_policy = 10;
+  ProtocolVersionSnapshot protocol_versions = 11;
+  OutputPolicySnapshot output_policy = 12;
+  RunExecutionPolicySnapshot execution_policy = 13;
+  DiscoverySnapshot discovery = 14;
+  // Strictly ascending and unique by role.
+  repeated PinnedAuxiliaryModelRoute auxiliary_models = 15;
+  // Strictly ascending and unique by instinct_id.
+  repeated InstinctSelectionSnapshot instincts = 16;
+}
+
+enum SkillActivationPolicy {
+  SKILL_ACTIVATION_POLICY_UNSPECIFIED = 0;
+  SKILL_ACTIVATION_POLICY_BASE = 1;
+  SKILL_ACTIVATION_POLICY_EXPLICIT_OR_RESOLVED = 2;
+  SKILL_ACTIVATION_POLICY_SURFACE_PINNED = 3;
+}
+
+enum SkillCatalogInstallScopeKind {
+  SKILL_CATALOG_INSTALL_SCOPE_KIND_UNSPECIFIED = 0;
+  SKILL_CATALOG_INSTALL_SCOPE_KIND_GLOBAL = 1;
+  SKILL_CATALOG_INSTALL_SCOPE_KIND_TENANT = 2;
+}
+
+enum SkillCatalogOrigin {
+  SKILL_CATALOG_ORIGIN_UNSPECIFIED = 0;
+  SKILL_CATALOG_ORIGIN_BUNDLED = 1;
+  SKILL_CATALOG_ORIGIN_CUSTOM = 2;
+  SKILL_CATALOG_ORIGIN_INSTALLED = 3;
+}
+
+enum SkillCatalogProvenanceKind {
+  SKILL_CATALOG_PROVENANCE_KIND_UNSPECIFIED = 0;
+  SKILL_CATALOG_PROVENANCE_KIND_BUNDLED = 1;
+  SKILL_CATALOG_PROVENANCE_KIND_CUSTOM = 2;
+  SKILL_CATALOG_PROVENANCE_KIND_INSTALLED = 3;
+}
+
+enum SkillCatalogReferenceKind {
+  SKILL_CATALOG_REFERENCE_KIND_UNSPECIFIED = 0;
+  SKILL_CATALOG_REFERENCE_KIND_INSTRUCTIONS = 1;
+  SKILL_CATALOG_REFERENCE_KIND_MANIFEST = 2;
+  SKILL_CATALOG_REFERENCE_KIND_PACKAGE = 3;
+}
+
+message SkillCatalogReferenceSnapshot {
+  SkillCatalogReferenceKind kind = 1;
+  ContentRef content_ref = 2;
+}
+
+enum SkillCatalogTrust {
+  SKILL_CATALOG_TRUST_UNSPECIFIED = 0;
+  SKILL_CATALOG_TRUST_OFFICIAL = 1;
+  SKILL_CATALOG_TRUST_VERIFIED = 2;
+  SKILL_CATALOG_TRUST_COMMUNITY = 3;
+  SKILL_CATALOG_TRUST_LOCAL = 4;
+}
+
+message SkillDefinitionSnapshot {
+  SkillId skill_id = 1;
+  VersionedRef skill_ref = 2;
+  string title = 3;
+  string description = 4;
+  ContentRef instructions_ref = 5;
+  Sha256 instructions_hash = 6;
+  repeated VersionedRef required_capabilities = 7;
+  repeated VersionedRef optional_capabilities = 8;
+  repeated VersionedRef compatible_agent_contracts = 9;
+  repeated SkillSurface compatible_surfaces = 10;
+  SkillActivationPolicy activation_policy = 11;
+  SkillLifecycle lifecycle = 12;
+  SkillVersionId skill_version_id = 13;
+}
+
+enum SkillLifecycle {
+  SKILL_LIFECYCLE_UNSPECIFIED = 0;
+  SKILL_LIFECYCLE_ACTIVE = 1;
+  SKILL_LIFECYCLE_RETIRED = 2;
+  SKILL_LIFECYCLE_DELETED = 3;
+}
+
+enum SkillSurface {
+  SKILL_SURFACE_UNSPECIFIED = 0;
+  SKILL_SURFACE_WEB = 1;
+  SKILL_SURFACE_STUDIO = 2;
+  SKILL_SURFACE_API = 3;
+  SKILL_SURFACE_DESKTOP = 4;
+  SKILL_SURFACE_CHANNEL = 5;
+  SKILL_SURFACE_MOBILE = 6;
+}
+
+message StringParameter {
+  string value = 1;
+}
+
+enum ToolApprovalRequirement {
+  TOOL_APPROVAL_REQUIREMENT_UNSPECIFIED = 0;
+  TOOL_APPROVAL_REQUIREMENT_NEVER = 1;
+  TOOL_APPROVAL_REQUIREMENT_BY_POLICY = 2;
+  TOOL_APPROVAL_REQUIREMENT_ALWAYS = 3;
+}
+
+message ToolManifestSnapshot {
+  ToolVersionRef tool_ref = 1;
+  string wire_name = 2;
+  SchemaRef input_schema = 3;
+  SchemaRef output_schema = 4;
+  ToolEffect effect = 5;
+  ToolApprovalRequirement approval = 6;
+  ToolRetryContract retry_contract = 7;
+  uint64 timeout_ms = 8;
+  uint32 max_attempts = 9;
+  repeated string required_scopes = 10;
+  repeated string required_contexts = 11;
+  string data_classification = 12;
+  string egress_policy = 13;
+  string capability_key = 14;
+  CapabilityProviderId capability_provider_id = 15;
+  string title = 16;
+  string description = 17;
+  bytes input_schema_json = 18;
+  bytes output_schema_json = 19;
+  string execution_target = 20;
+  string concurrency_class = 21;
+  string idempotency = 22;
+  string file_operation = 23;
+  string file_identity_argument = 24;
+  // v14+: exactly one of timeout_ms > 0 or sealed activity policy. Legacy
+  // fields are never reinterpreted as a sliding deadline.
+  ExecutionLivenessPolicyV1 execution_liveness_v1 = 25;
+  // Exact application release/operation provenance sealed at admission.
+  // Empty for kernel and non-marketplace tools. This is material, not consent.
+  bytes application_binding_json = 26;
+  optional string backend_artifact_type = 27;
+}
+
+enum ToolRetryContract {
+  TOOL_RETRY_CONTRACT_UNSPECIFIED = 0;
+  TOOL_RETRY_CONTRACT_READ_ONLY = 1;
+  TOOL_RETRY_CONTRACT_IDEMPOTENT_BY_KEY = 2;
+  TOOL_RETRY_CONTRACT_QUERY_BEFORE_RETRY = 3;
+  TOOL_RETRY_CONTRACT_NOT_REPLAYABLE = 4;
+}

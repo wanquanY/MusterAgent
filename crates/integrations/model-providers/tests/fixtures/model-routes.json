@@ -1,0 +1,25 @@
+{
+  "schema_version": "musteragent.legacy.runtime.production-model-routes.v1",
+  "source": {
+    "kind": "synthetic",
+    "contains_credentials": false
+  },
+  "routes": [
+    {"provider": "fixture-gateway", "provider_type": "gateway", "api_format": "openai", "model_key": "fixture-chat-01"},
+    {"provider": "fixture-gateway", "provider_type": "gateway", "api_format": "openai", "model_key": "fixture-chat-02"},
+    {"provider": "fixture-gateway", "provider_type": "gateway", "api_format": "openai", "model_key": "fixture-chat-03"},
+    {"provider": "fixture-gateway", "provider_type": "gateway", "api_format": "openai", "model_key": "fixture-chat-04"},
+    {"provider": "fixture-gateway", "provider_type": "gateway", "api_format": "openai", "model_key": "fixture-chat-05"},
+    {"provider": "fixture-gateway", "provider_type": "gateway", "api_format": "openai", "model_key": "fixture-chat-06"},
+    {"provider": "fixture-direct", "provider_type": "direct", "api_format": "openai", "model_key": "fixture-chat-07"},
+    {"provider": "fixture-multiprotocol", "provider_type": "multiprotocol", "api_format": "openai", "model_key": "fixture-chat-08"},
+    {"provider": "fixture-multiprotocol", "provider_type": "multiprotocol", "api_format": "anthropic", "model_key": "fixture-chat-09"},
+    {"provider": "fixture-multiprotocol", "provider_type": "multiprotocol", "api_format": "openai", "model_key": "fixture-chat-10"},
+    {"provider": "fixture-multiprotocol", "provider_type": "multiprotocol", "api_format": "openai", "model_key": "fixture-chat-11"},
+    {"provider": "fixture-multiprotocol", "provider_type": "multiprotocol", "api_format": "openai", "model_key": "fixture-chat-12"},
+    {"provider": "fixture-multiprotocol", "provider_type": "multiprotocol", "api_format": "openai", "model_key": "fixture-chat-13"},
+    {"provider": "fixture-multiprotocol", "provider_type": "multiprotocol", "api_format": "openai_responses", "model_key": "fixture-chat-14"},
+    {"provider": "fixture-multiprotocol", "provider_type": "multiprotocol", "api_format": "openai", "model_key": "fixture-chat-15"},
+    {"provider": "fixture-router", "provider_type": "router", "api_format": "openai", "model_key": "fixture-chat-16"}
+  ]
+}

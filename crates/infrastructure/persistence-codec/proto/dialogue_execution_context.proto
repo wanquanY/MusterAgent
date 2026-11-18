@@ -1,0 +1,47 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "dialogue_context.proto";
+import "agent_dialogue.proto";
+import "work_item_execution_services.proto";
+
+message DialogueExecutionContext {
+  DialogueContextCut frozen_cut = 1;
+  DialogueExecutionObservation current = 2;
+  repeated DialogueExecutionObservation active = 3; // <=16
+  bool active_truncated = 4;
+  repeated DialogueExecutionObservation recent_terminal = 5; // <=8
+  bool recent_terminal_truncated = 6;
+  bytes fingerprint = 7; // exact semantic projection, never authorization
+  optional DialogueReplyBinding reply_binding = 8;
+}
+
+message DialogueExecutionInputReference {
+  DialogueEntryId entry_id = 1;
+  uint64 epoch = 2;
+  uint64 sequence = 3;
+}
+
+message DialogueExecutionObservation {
+  // Exactly one of intent_id or goal is present. Existing Intent/Task bytes
+  // retain their original field numbers and fingerprint domain.
+  UserIntentId intent_id = 1;
+  optional WorkItemId task_id = 2;
+  RunId run_id = 3;
+  optional DialogueExecutionInputReference input = 4;
+  uint64 accepted_epoch = 5;
+  uint64 accepted_sequence = 6;
+  // Closed DialogueExecutionContextPhase codes, 1..14; unknown fails closed.
+  uint32 phase = 7;
+  uint64 committed_publications = 8;
+  uint64 committed_results = 9;
+  uint64 committed_artifact_cards = 10;
+  optional OwnerGoalExecutionReference goal = 11;
+}
+
+message OwnerGoalExecutionReference {
+  GoalId goal_id = 1;
+  GoalPursuitId pursuit_id = 2;
+}

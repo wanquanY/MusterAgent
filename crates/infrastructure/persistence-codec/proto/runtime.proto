@@ -1,0 +1,42 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+import "tool_records.proto";
+
+message CommandAck {
+  CommandId command_id = 1;
+  CommandDisposition disposition = 2;
+  google.protobuf.Timestamp committed_at = 3;
+  optional uint64 first_conversation_seq = 4;
+  optional uint64 last_conversation_seq = 5;
+  repeated ResourceRef resource_refs = 6;
+}
+
+enum CommandDisposition {
+  COMMAND_DISPOSITION_UNSPECIFIED = 0;
+  COMMAND_DISPOSITION_COMMITTED = 1;
+  COMMAND_DISPOSITION_DUPLICATE = 2;
+}
+
+enum InteractionStatus {
+  INTERACTION_STATUS_UNSPECIFIED = 0;
+  INTERACTION_STATUS_PENDING = 1;
+  INTERACTION_STATUS_RESPONDED = 2;
+  INTERACTION_STATUS_EXPIRED = 3;
+  INTERACTION_STATUS_CANCELLED = 4;
+}
+
+message InteractionView {
+  InteractionId interaction_id = 1;
+  RunId run_id = 2;
+  InteractionKind kind = 3;
+  InteractionStatus status = 4;
+  ContentRef prompt_ref = 5;
+  SchemaRef response_schema = 6;
+  google.protobuf.Timestamp requested_at = 7;
+  google.protobuf.Timestamp expires_at = 8;
+  google.protobuf.Timestamp responded_at = 9;
+}

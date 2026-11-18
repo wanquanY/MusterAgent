@@ -1,0 +1,13 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+message AgentJournalModelUsage {
+  uint64 input_tokens_uncached = 1;
+  uint64 output_tokens = 2;
+  uint64 reasoning_tokens = 3;
+  uint64 provider_cache_read_tokens = 4;
+  uint64 provider_cache_write_tokens = 5;
+  uint64 provider_cache_write_1h_tokens = 6;
+  optional uint64 total_tokens = 7;
+}

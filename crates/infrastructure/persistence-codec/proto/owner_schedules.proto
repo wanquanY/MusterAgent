@@ -1,0 +1,33 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+
+message OwnerSchedule {
+  string schedule_id = 1;
+  AgentId agent_id = 2;
+  uint64 revision = 3;
+  OwnerScheduleDefinition definition = 4;
+  string status = 5;
+  optional int64 next_run_at_unix_ms = 6;
+  repeated OwnerScheduleOccurrence recent_runs = 7;
+}
+
+message OwnerScheduleDefinition {
+  string title = 1;
+  string instructions = 2;
+  string timezone = 3;
+  oneof timing {
+    int64 once_at_unix_ms = 4;
+    string cron_expression = 5;
+  }
+}
+
+message OwnerScheduleOccurrence {
+  string occurrence_id = 1;
+  int64 scheduled_at_unix_ms = 2;
+  string status = 3;
+  optional string entry_id = 4;
+  optional string error_code = 5;
+}

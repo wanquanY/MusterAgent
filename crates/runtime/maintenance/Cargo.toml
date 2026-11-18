@@ -1,0 +1,35 @@
+[package]
+name = "musteragent-runtime-maintenance"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-execution-liveness.workspace = true
+musteragent-policy.workspace = true
+musteragent-activity.workspace = true
+musteragent-content-ref.workspace = true
+musteragent-execution-grant.workspace = true
+musteragent-context = { version = "0.1.0", path = "../context" }
+musteragent-identity.workspace = true
+musteragent-model.workspace = true
+musteragent-run.workspace = true
+musteragent-runtime-capability = { version = "0.1.0", path = "../capability" }
+musteragent-runtime-content.workspace = true
+musteragent-runtime-contract.workspace = true
+musteragent-runtime-memory.workspace = true
+musteragent-runtime-model.workspace = true
+musteragent-runtime-snapshot.workspace = true
+musteragent-loop.workspace = true
+musteragent-telemetry.workspace = true
+musteragent-tool = { version = "0.1.0", path = "../../domains/tool" }
+futures-util = "0.3.33"
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { version = "1.53.1", features = ["time"] }
+uuid.workspace = true
+
+[lints]
+workspace = true

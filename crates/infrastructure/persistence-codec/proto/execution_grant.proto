@@ -1,0 +1,139 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+import "snapshot.proto";
+import "tool_records.proto";
+
+message CapabilityEntitlement {
+  string capability_key = 1;
+  CapabilityProviderId provider_id = 2;
+  CapabilityLocation location = 3;
+  ToolEffect effect = 4;
+  repeated string allowed_scopes = 5;
+  CapabilityPolicyDecision policy_decision = 6;
+}
+
+message DeviceDirectProvider {
+  string base_url = 1;
+  // Canonical API format, identical to the primary route's api_format.
+  string api_format = 2;
+  // Upstream model key, identical to the primary route's resolved_model_key.
+  string model = 3;
+  // Opaque Device-local credential reference (a host credential-broker URI). The
+  // Backend signs it verbatim and can never decrypt it.
+  string credential_ref = 4;
+}
+
+message ExecutionGrantClaims {
+  // Signed together with all original execution claims using the product-release v1 domain.
+  ProductReleaseRef product_release = 27;
+  // Sorted unique exact application source digests approved by the sealed Policy.
+  // Non-empty values wrap canonical claims in a distinct signing domain, so an
+  // older verifier that ignores this field cannot accept the signature.
+  repeated bytes reviewed_application_source_sha256 = 28;
+  string grant_ref = 1;
+  string issuer = 2;
+  string audience = 3;
+  TenantId tenant_id = 4;
+  string model_provider_id = 5;
+  string model_entry_id = 6;
+  RunId run_id = 7;
+  google.protobuf.Timestamp issued_at = 8;
+  google.protobuf.Timestamp expires_at = 9;
+  string nonce = 10;
+  reserved 11;
+  reserved "max_invocations";
+  string requested_model_class = 12;
+  GrantedModelRoute model_route = 13;
+  // Required current schema: execution-grant.v10, evolution-maintenance.v1,
+  // or standing-goal-judge.v1 in the musteragent namespace. Older/empty values
+  // are rejected; model routes sign their complete ordered fallback chain.
+  string schema_version = 14;
+  string agent_contract = 15;
+  string surface = 16;
+  repeated CapabilityEntitlement capability_entitlements = 17;
+  // Signed, canonically ordered auxiliary routes. Purpose-specific autonomous
+  // grants reject this ordinary execution route bundle.
+  repeated GrantedAuxiliaryModelRoute auxiliary_model_routes = 18;
+  // The authenticated host actor and durable authority scope are signed.
+  PrincipalId principal_id = 19;
+  // Tenant/workspace authority must match the command exactly. Hosted scopes
+  // also bind the resource owner and immutable Home; hosted_project_execution
+  // additionally binds the assignment separately from the logical scope.
+  // device_private is never a host control-plane authority.
+  ExecutionScope authority_scope = 20;
+  // Device-targeted grants only. Hosted scope binds its Home; hosted execution
+  // binds the assigned executor.
+  DeviceId device_id = 21;
+  // Exact signed approval posture. Unspecified must never imply trusted mode.
+  PermissionMode permission_mode = 22;
+  // An optional private workspace requires tenant authority and a Device.
+  // Hosted grants require the shared logical workspace from their scope,
+  // never an arbitrary host path or handle. Cloud grants leave this empty.
+  WorkspaceId device_workspace_id = 23;
+  // Optional device-direct (BYOK) provider binding. Cloud grants reject it.
+  DeviceDirectProvider device_direct_provider = 24;
+  // Optional BYOK vision auxiliary provider binding for Device grants.
+  // Present only together with device_direct_provider when the grant carries a
+  // byok.vision.* auxiliary route; it binds that route's base_url, api_format,
+  // model and credential_ref. A byok.vision.* route without this binding MUST
+  // be rejected, and this binding without a byok.vision.* route MUST be
+  // rejected as well.
+  DeviceDirectProvider vision_direct_provider = 25;
+  // Signs the complete, canonically ordered set of dynamic built-in Tool
+  // contracts. Private model/provider identity, credentials and pricing are
+  // forbidden from this projection. An unavailable release disables only its
+  // Tool; it never makes the whole conversational Runtime unavailable.
+  repeated GrantedToolContractRelease tool_contract_releases = 26;
+}
+
+message GrantedAuxiliaryModelRoute {
+  AuxiliaryModelRole role = 1;
+  GrantedModelRoute model_route = 2;
+  string credential_grant_ref = 3;
+}
+
+message GrantedModelRoute {
+  ModelRouteRef route_ref = 1;
+  string resolved_model_key = 2;
+  string model_provider_id = 3;
+  string model_entry_id = 4;
+  string api_format = 5;
+  string adapter_version = 6;
+  string protocol_version = 7;
+  uint64 context_window = 8;
+  uint64 max_output_tokens = 9;
+  repeated string capabilities = 10;
+  repeated ModelParameter parameters = 11;
+  PricingVersionRef pricing_version_ref = 12;
+  ProviderStatePolicy provider_state_policy = 13;
+  // Ordered, complete and credential-free fallback routes. Nested candidates
+  // MUST leave this field empty; only the primary route owns the chain.
+  repeated GrantedModelRoute fallback_candidates = 14;
+}
+
+message GrantedToolContractRelease {
+  string release_ref = 1;
+  string schema_version = 2;
+  string tool_key = 3;
+  bool available = 4;
+  optional string description = 5;
+  optional bytes input_schema_json = 6;
+  bytes content_sha256 = 7;
+  // Signed, opaque Backend execution binding. It is never projected into
+  // model-visible Tool material, but pins the immutable control-plane version
+  // that must execute the advertised contract.
+  optional string execution_binding_ref = 8;
+}
+
+message SignedExecutionGrant {
+  string key_id = 1;
+  ExecutionGrantClaims claims = 2;
+  bytes signature = 3;
+  // Canonical ContextTransportAdmission protobuf. Separately signed; not part
+  // of the historical ExecutionGrant canonical claims/signature domain.
+  bytes context_transport_annex = 4;
+}

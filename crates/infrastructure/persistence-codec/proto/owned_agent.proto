@@ -1,0 +1,115 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+import "dialogue_admission_progress.proto";
+import "agent_dialogue.proto";
+import "owner_event_sources.proto";
+import "dialogue_execution_activity.proto";
+import "owner_goal_execution.proto";
+import "public_reactions.proto";
+import "agent_work.proto";
+import "snapshot.proto";
+
+enum OwnedAgentActivationDisposition {
+  OWNED_AGENT_ACTIVATION_DISPOSITION_UNSPECIFIED = 0;
+  OWNED_AGENT_ACTIVATION_DISPOSITION_CREATED = 1;
+  OWNED_AGENT_ACTIVATION_DISPOSITION_EXISTING_DEFAULT = 2;
+  OWNED_AGENT_ACTIVATION_DISPOSITION_REPLAYED = 3;
+}
+
+message OwnedAgentActivationReceipt {
+  OwnerSpace space = 1;
+  OwnedAgentInstance agent = 2;
+  OwnedAgentConfiguration configuration = 3;
+  OwnedAgentActivationDisposition disposition = 4;
+}
+
+message OwnedAgentConfiguration {
+  AgentId agent_id = 1;
+  uint64 manifest_revision = 2;
+  OwnedAgentProfile profile = 3;
+  uint64 instructions_revision = 4;
+  optional ContentRef instructions_ref = 5;
+  uint64 permission_revision = 6;
+  PermissionMode permission_mode = 7;
+}
+
+message OwnedAgentInstance {
+  AgentId agent_id = 1;
+  OwnerSpaceId space_id = 2;
+  AgentDialogueId dialogue_id = 3;
+  AgentVersionId published_version_id = 4;
+  OwnedAgentStatus status = 5;
+  uint64 revision = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message OwnedAgentProfile {
+  uint64 revision = 1;
+  string display_name = 2;
+  string description = 3;
+  optional ContentRef avatar_ref = 4;
+}
+
+enum OwnedAgentStatus {
+  OWNED_AGENT_STATUS_UNSPECIFIED = 0;
+  OWNED_AGENT_STATUS_ACTIVE = 1;
+  OWNED_AGENT_STATUS_ARCHIVED = 2;
+  OWNED_AGENT_STATUS_DELETED = 3;
+}
+
+message AccountChange {
+  oneof event {
+    OwnedAgentActivationReceipt agent_activated = 1;
+    DialogueUserIntent user_intent_accepted = 2;
+    OwnedAgentConfiguration configuration_changed = 3;
+    AgentDialogueEntry public_entry_published = 4;
+    // Same logical entry and cursor; a strictly newer display revision.
+    AgentDialogueEntry public_entry_changed = 5;
+    // Internal account pin/revision refresh; never a public chat message.
+    OwnedAgentInstance agent_version_changed = 6;
+    AgentFileHeadChanged file_head_changed = 8;
+    DialogueAdmissionProgress admission_progress_changed = 11;
+    PublicEntryReactionsChanged reactions_changed = 12;
+    DialogueActivityChanged activity_changed = 13;
+    OwnedAgentInstance agent_deleted = 14;
+    OwnerEventSubscription event_subscription_changed = 16;
+    AgentWorkChanged work_changed = 17;
+  }
+}
+
+message OwnerCommandReceipt {
+  oneof result {
+    OwnedAgentActivationReceipt activated = 1;
+    AcceptedDialogueUserIntent accepted_intent = 2;
+    OwnedAgentConfiguration configured = 3;
+    PublicEntryReactionReceipt reactions = 6;
+    OwnedAgentInstance deleted_agent = 7;
+    OwnerEventSubscription event_subscription = 8;
+    OwnerSourceInputReceipt source_input = 9;
+    OwnerGoalDraftReceipt goal_draft = 10;
+  }
+}
+
+message AgentFileHeadChanged {
+  AgentId agent_id = 1;
+  AgentDialogueId dialogue_id = 2;
+  DialogueEntryId entry_id = 3;
+  ArtifactId artifact_id = 4;
+  ArtifactVersionId current_version_id = 5;
+  uint64 version = 6;
+}
+
+message OwnerSpace {
+  OwnerSpaceId space_id = 1;
+  TenantId tenant_id = 2;
+  PrincipalId owner_id = 3;
+  string product = 4; // Closed to musteragent by the application authority.
+  optional AgentId default_agent_id = 5;
+  uint64 revision = 6;
+  google.protobuf.Timestamp created_at = 7;
+}

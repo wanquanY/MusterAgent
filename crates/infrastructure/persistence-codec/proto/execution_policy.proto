@@ -1,0 +1,74 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "execution_liveness.proto";
+
+message ModelStreamBudgetSnapshot {
+  uint64 max_event_bytes = 1;
+  uint32 max_events = 2;
+  uint64 max_total_bytes = 3;
+  uint32 max_tool_calls = 4;
+  uint64 max_tool_argument_bytes = 5;
+  uint64 max_reasoning_replay_bytes = 6;
+}
+
+message OutputPolicySnapshot {
+  bool reasoning_summary = 1;
+}
+
+message PersistentRecoveryPolicyV1 {
+  uint32 fast_attempts = 1;
+  uint64 min_probe_interval_ms = 2;
+  uint64 max_probe_interval_ms = 3;
+}
+
+message BoundedBackoffPolicyV1 {
+  uint32 max_attempts = 1;
+  uint64 base_backoff_millis = 2;
+  uint32 factor = 3;
+  uint64 max_backoff_millis = 4;
+}
+
+message ProtocolVersionSnapshot {
+  string command_schema = 1;
+  string record_schema = 2;
+  string snapshot_schema = 3;
+  string model_protocol = 4;
+}
+
+message RunExecutionPolicySnapshot {
+  uint32 max_attempts = 1;
+  // Retained as deprecated wire fields because Runtime snapshots are
+  // persisted. V9 writers leave them at their zero/unset defaults and V9
+  // readers ignore them, but removing the published field numbers would make
+  // the storage protocol incompatible with historical v1-v8 snapshots.
+  uint32 max_steps = 2 [deprecated = true];
+  uint32 max_consecutive_empty_responses = 3;
+  uint32 max_tool_calls = 4 [deprecated = true];
+  uint64 max_total_tokens = 5 [deprecated = true];
+  optional uint64 max_total_cost_microusd = 6 [deprecated = true];
+  uint64 max_wall_clock_ms = 7 [deprecated = true];
+  uint64 model_invocation_timeout_ms = 8;
+  uint64 max_model_events_per_commit = 9;
+  uint64 output_frame_flush_interval_ms = 10;
+  uint64 max_output_frame_bytes = 11;
+  ToolExecutionMode default_tool_execution_mode = 12;
+  ModelStreamBudgetSnapshot model_stream = 13;
+  uint32 max_delegation_depth = 14;
+  uint32 max_active_delegated_children = 15;
+  uint32 max_delegation_group_size = 16;
+  PersistentRecoveryPolicyV1 persistent_recovery_v1 = 17;
+  RunExecutionLivenessV1 execution_liveness_v1 = 18;
+  // Frozen private Tool profile floor. Absent/zero retains historical profile
+  // digests; new admissions freeze the configured floor. Not a Run total deadline.
+  uint64 private_tool_minimum_window_ms = 19;
+  bool provider_failover_v1 = 20;
+  BoundedBackoffPolicyV1 bounded_backoff_v1 = 21;
+}
+
+enum ToolExecutionMode {
+  TOOL_EXECUTION_MODE_UNSPECIFIED = 0;
+  TOOL_EXECUTION_MODE_PARALLEL = 1;
+  TOOL_EXECUTION_MODE_SEQUENTIAL = 2;
+}

@@ -1,0 +1,33 @@
+[package]
+name = "musteragent-object-store"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+async-trait = "0.1.89"
+hex = "0.4.3"
+http = "1.4.2"
+quick-xml = { version = "0.41.0", features = ["serialize"] }
+serde.workspace = true
+tracing.workspace = true
+url = "2.5.8"
+bytes = "1.12.1"
+musteragent-content-ref = { version = "0.1.0", path = "../../foundation/content-ref" }
+musteragent-identity = { version = "0.1.0", path = "../../foundation/identity" }
+musteragent-runtime-content = { version = "0.1.0", path = "../../runtime/content" }
+object_store = { version = "0.14.1", default-features = false, features = ["aws", "fs"] }
+thiserror.workspace = true
+futures-util = "0.3.33"
+sha2.workspace = true
+uuid.workspace = true
+tokio = { version = "1.53.1", features = ["fs", "io-util", "macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
+musteragent-testkit.workspace = true

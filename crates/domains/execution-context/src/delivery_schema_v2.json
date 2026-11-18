@@ -1,0 +1,88 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "deliveries"
+  ],
+  "properties": {
+    "deliveries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "purpose",
+          "text",
+          "interaction_id",
+          "artifact_ref",
+          "artifact_tool_call_id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "message",
+              "interaction",
+              "artifact"
+            ]
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "reply",
+              "result",
+              "important_update",
+              "clarification",
+              "required_decision",
+              "blocked"
+            ]
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interaction_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "artifact_tool_call_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "artifact_ref": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "id"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "artifact",
+                  "file_node"
+                ]
+              },
+              "id": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

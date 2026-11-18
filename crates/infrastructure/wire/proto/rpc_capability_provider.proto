@@ -1,0 +1,45 @@
+// Neutral host capability transport. The host authenticates every call and
+// validates the sealed execution proof before accepting any physical effect.
+syntax = "proto3";
+package musteragent.v1;
+import "common.proto";
+import "rpc_capability_services.proto";
+
+message InvokeHostCapabilityRequest {
+  CapabilityCallContext context = 1;
+  ContentRef arguments = 2;
+}
+
+message ReconcileHostCapabilityRequest {
+  CapabilityCallContext context = 1;
+  string reconciliation_ref = 2;
+}
+
+message HostCapabilitySucceeded {
+  ContentRef result = 1;
+}
+
+message HostCapabilityPending {
+  string reconciliation_ref = 1;
+  string safe_reason = 2;
+}
+
+message HostCapabilityFailure {
+  ErrorInfo error = 1;
+  // False means the outcome remains unknown; it never authorizes redispatch.
+  bool physically_terminal = 2;
+  optional string reconciliation_ref = 3;
+}
+
+message HostCapabilityResult {
+  oneof outcome {
+    HostCapabilitySucceeded succeeded = 1;
+    HostCapabilityPending pending = 2;
+    HostCapabilityFailure failed = 3;
+  }
+}
+
+service HostCapabilityProviderService {
+  rpc Invoke(InvokeHostCapabilityRequest) returns (HostCapabilityResult);
+  rpc Reconcile(ReconcileHostCapabilityRequest) returns (HostCapabilityResult);
+}

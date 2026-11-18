@@ -1,0 +1,198 @@
+{
+  "schema_version": "musteragent.workspace-tool-releases.v1",
+  "releases": [
+    {
+      "release_id": "example-docs-v1",
+      "plugin_id": "workspace.example-docs",
+      "version": "1.0.0",
+      "release_sha256": "1111111111111111111111111111111111111111111111111111111111111111",
+      "provider_key": "workspace_example_docs",
+      "tools": [
+        {
+          "key": "workspace.example_docs.read.h_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@1",
+          "operation_key": "workspace.example_docs.read",
+          "operation_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Read document",
+          "description": "Read document in the example service.",
+          "effect": "read",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "document": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "document"
+            ],
+            "additionalProperties": false
+          },
+          "scope_alternatives": [
+            [
+              "docs.read",
+              "docs.list"
+            ],
+            [
+              "docs.admin"
+            ]
+          ]
+        },
+        {
+          "key": "workspace.example_docs.upload.h_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb@1",
+          "operation_key": "workspace.example_docs.upload",
+          "operation_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "title": "Upload document",
+          "description": "Upload document in the example service.",
+          "effect": "write_external",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "document": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "document"
+            ],
+            "additionalProperties": false,
+            "x-musteragent-require-user-approval": true
+          },
+          "scope_alternatives": [
+            [
+              "docs.write"
+            ]
+          ],
+          "input_material": "uploaded_document_v1"
+        },
+        {
+          "key": "workspace.example_docs.caption.h_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee@1",
+          "operation_key": "workspace.example_docs.caption",
+          "operation_sha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "title": "Caption image",
+          "description": "Read the supplied image and return its caption.",
+          "effect": "read",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "image_content_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "image_content_id"
+            ],
+            "additionalProperties": false
+          },
+          "scope_alternatives": [
+            [
+              "docs.read",
+              "docs.list"
+            ],
+            [
+              "docs.admin"
+            ]
+          ],
+          "input_material": "images_v1"
+        }
+      ]
+    },
+    {
+      "release_id": "example-search-v1",
+      "plugin_id": "mcp.example-search",
+      "version": "1.0.0",
+      "release_sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+      "provider_key": "workspace_example_search",
+      "tools": [
+        {
+          "key": "mcp.example_search.find.h_cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc@1",
+          "operation_key": "mcp.example_search.find",
+          "operation_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "title": "Search documents",
+          "description": "Search documents in the example service.",
+          "effect": "read",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "query"
+            ],
+            "additionalProperties": false
+          },
+          "scope_alternatives": [
+            []
+          ]
+        },
+        {
+          "key": "mcp.example_search.clear.h_dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd@1",
+          "operation_key": "mcp.example_search.clear",
+          "operation_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+          "title": "Clear index",
+          "description": "Clear index in the example service.",
+          "effect": "destructive",
+          "input_schema": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "index"
+            ],
+            "additionalProperties": false
+          },
+          "scope_alternatives": [
+            [
+              "index.clear"
+            ]
+          ]
+        }
+      ]
+    },
+    {
+      "release_id": "example-clock-v1",
+      "plugin_id": "workspace.example-clock",
+      "version": "1.0.0",
+      "release_sha256": "3333333333333333333333333333333333333333333333333333333333333333",
+      "provider_key": "workspace_example_clock",
+      "retires": [
+        "core.time"
+      ],
+      "tools": [
+        {
+          "key": "workspace.time.current.h_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@1",
+          "operation_key": "workspace.time.current",
+          "operation_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "title": "Current time",
+          "description": "Read time through the original application executor.",
+          "effect": "read",
+          "input_schema": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {}
+          },
+          "scope_alternatives": [
+            []
+          ],
+          "provides": "core.time.read@1",
+          "authority_role": {
+            "schema_version": "musteragent.workspace.authority-role.v1",
+            "capability_key": "core.time.read@1",
+            "effect": "read",
+            "approval": "never",
+            "required_scopes": [
+              "system.time.read"
+            ],
+            "required_contexts": [],
+            "data_classification": "public",
+            "egress_policy": "none"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "execution_grant.proto";
+import "owner_goal_execution.proto";
+import "rpc_runtime.proto";
+
+message GetOwnerGoalExecutionGrantFactsRequest {
+  OwnerGoalAdmissionClaim claim = 1;
+}
+
+message IssueOwnerGoalExecutionGrantRequest {
+  OwnerGoalAdmissionClaim claim = 1;
+  bytes expected_facts_sha256 = 2;
+}
+
+message IssueOwnerGoalExecutionGrantResponse {
+  SignedExecutionGrant signed_execution_grant = 1;
+  AdmissionSelection admission_selection = 2;
+  bytes facts_sha256 = 3;
+
+  bytes standing_authority = 4;
+}

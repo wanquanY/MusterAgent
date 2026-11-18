@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["deliveries"],
+  "properties": {
+    "deliveries": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "purpose", "text", "interaction_id", "artifact_id", "artifact_version_id"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["message", "interaction", "artifact"]},
+          "purpose": {"type": "string", "enum": ["reply", "result", "important_update", "clarification", "required_decision", "blocked"]},
+          "text": {"type": ["string", "null"]},
+          "interaction_id": {"type": ["string", "null"]},
+          "artifact_id": {"type": ["string", "null"]},
+          "artifact_version_id": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

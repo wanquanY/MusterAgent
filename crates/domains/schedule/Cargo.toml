@@ -1,0 +1,18 @@
+[package]
+name = "musteragent-schedule"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-identity.workspace = true
+chrono = "0.4.45"
+chrono-tz = "0.10.4"
+croner = "3.0.1"
+thiserror.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true

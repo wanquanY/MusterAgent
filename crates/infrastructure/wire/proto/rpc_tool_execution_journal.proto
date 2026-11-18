@@ -1,0 +1,260 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "application_catalog_refs.proto";
+import "common.proto";
+import "execution_liveness.proto";
+import "execution_policy.proto";
+import "google/protobuf/timestamp.proto";
+import "rpc_common.proto";
+import "snapshot.proto";
+import "tool_records.proto";
+
+message ToolJournalAuthorization {
+  ToolJournalAuthorizationQuery scope = 1;
+  string receipt_id = 2;
+  InteractionId source_interaction_id = 3;
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+message ToolJournalAuthorizationQuery {
+  TenantId tenant_id = 1;
+  PrincipalId principal_id = 2;
+  ConversationId conversation_id = 3;
+  WorkspaceId workspace_id = 4;
+  string capability_key = 5;
+  CapabilityProviderId capability_provider_id = 6;
+  PermissionMode permission_mode = 7;
+  Sha256 scope_fingerprint = 8;
+  google.protobuf.Timestamp observed_at = 9;
+}
+
+message ToolJournalAuthorizedResult {
+  ToolJournalCapabilityResult result = 1;
+  repeated ContentRef authorized_content = 2;
+}
+
+message ToolJournalCapabilityResult {
+  ContentRef result_ref = 1;
+  Sha256 result_hash = 2;
+  SchemaRef result_schema = 3;
+  optional string provider_request_ref = 4;
+}
+
+message ToolJournalCommand {
+  oneof operation {
+    ToolJournalContent write_content = 11;
+    ContentRef read_content = 12;
+    string load_material = 1;
+    ToolJournalRequest load_or_begin = 2;
+    ToolJournalRequest load_observation = 3;
+    ToolJournalInteraction request_approval = 4;
+    ToolJournalInteraction request_input = 5;
+    ToolJournalAuthorizationQuery find_authorization = 6;
+    ToolJournalAuthorization issue_authorization = 7;
+    ToolJournalStart start = 8;
+    ToolJournalWaitReconciliation wait_for_reconciliation = 9;
+    ToolJournalComplete complete = 10;
+    ToolJournalExposureCommit commit_exposure = 13;
+  }
+}
+
+message ToolJournalComplete {
+  InvocationId invocation_id = 1;
+  ToolJournalOutcome outcome = 2;
+  google.protobuf.Timestamp finished_at = 3;
+}
+
+message ToolJournalContent { ContentRef content = 1; bytes data = 2; }
+
+message ToolJournalDescriptor {
+  ToolVersionRef tool_ref = 1;
+  string capability_ref = 2;
+  string wire_name = 3;
+  string title = 4;
+  string description = 5;
+  Sha256 schema_hash = 6;
+  bytes schema_bytes = 7;
+  CapabilityProviderId provider_id = 8;
+  CapabilityLocation location = 9;
+  repeated string required_contexts = 10;
+}
+
+message ToolJournalExposureCommit {
+  repeated ToolExposureItem initial_exposures = 1;
+  ToolExposureAdded event = 2;
+  ToolJournalCapabilityResult result = 3;
+}
+
+message ToolJournalExposureResult {
+  bool already_applied = 1;
+  ToolJournalObservation observation = 2;
+}
+
+message ToolJournalFailure {
+  ErrorInfo error = 1;
+  uint32 retry_disposition = 2;
+  ToolJournalCapabilityResult diagnostic_result = 3;
+}
+
+message ToolJournalGrantProof {
+  string schema_version = 1;
+  bytes encoded_envelope = 2;
+  Sha256 content_hash = 3;
+  Sha256 claims_hash = 4;
+}
+
+message ToolJournalIndeterminate {
+  string reason = 1;
+  string reconciliation_ref = 2;
+  optional ErrorInfo observed_error = 3;
+  optional ToolJournalCapabilityResult diagnostic_result = 4;
+}
+
+message ToolJournalInteraction {
+  InteractionId interaction_id = 1;
+  InvocationId invocation_id = 2;
+  InteractionKind kind = 3;
+  ContentRef prompt_ref = 4;
+  SchemaRef response_schema = 5;
+  google.protobuf.Timestamp requested_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+}
+
+message ToolJournalInvocation {
+  InvocationId invocation_id = 1;
+  RunId run_id = 2;
+  AttemptId requested_by_attempt_id = 3;
+  AttemptId execution_attempt_id = 4;
+  ToolCallId tool_call_id = 5;
+  ToolVersionRef tool_ref = 6;
+  CapabilityProviderId capability_provider_id = 7;
+  uint32 status = 8; 
+  ToolEffect effect = 9;
+  ToolApprovalRequirement approval = 10;
+  string idempotency_key = 11;
+  ContentRef request_ref = 12;
+  ContentRef result_ref = 13;
+  InteractionId interaction_id = 14;
+  google.protobuf.Timestamp deadline = 15;
+  ActivityExecutionTimingV1 activity_timing = 16;
+}
+
+message ToolJournalInvocationAuthorization {
+  repeated string actor_scopes = 1;
+  repeated string available_contexts = 2;
+  bool policy_requires_approval = 3;
+  bool approval_forbidden = 4;
+  bool manifest_approval_not_applicable = 5;
+  bool approval_satisfied = 6;
+}
+
+message ToolJournalMaterial {
+  reserved 19;
+
+  repeated FrozenAccountApplicationCatalog application_catalogs = 24;
+  repeated CapabilityGrantSnapshot application_capabilities = 25;
+  bytes canonical_run_metadata = 1;
+  Actor actor = 2;
+  AgentId agent_id = 3;
+  ModelRouteSnapshot model = 4;
+  uint32 active_model_route_ordinal = 5;
+  repeated PinnedAuxiliaryModelRoute auxiliary_models = 6;
+  ModelStreamBudgetSnapshot model_stream_budget = 7;
+  ToolManifestSnapshot tool = 8;
+  repeated ToolJournalDescriptor authorized_tools = 9;
+  DiscoverySnapshot discovery = 10;
+  repeated ToolExposureItem exposure_state = 11;
+  CapabilityGrantSnapshot capability_grant = 12;
+  ToolJournalInvocationAuthorization authorization = 13;
+  PermissionMode permission_mode = 14;
+  ToolJournalPolicyBasis policy_basis = 15;
+  repeated ContentRef authorized_content = 16;
+  repeated ContentRef prior_tool_results = 17;
+  ToolJournalGrantProof execution_grant_proof = 18;
+  uint32 max_attempts = 20;
+  PersistentRecoveryPolicyV1 persistent_recovery_v1 = 21;
+  ExecutionLivenessPolicyV1 model_liveness_v1 = 22;
+  ProductReleaseRef product_release = 23;
+}
+
+message ToolJournalObservation {
+  LedgerRecordId transition_record_id = 1;
+  LedgerRecordId request_record_id = 2;
+  ToolJournalInvocation invocation = 3;
+  ToolRetryContract retry_contract = 4;
+  optional string prebound_reconciliation_ref = 5;
+  ToolJournalOutcome recorded_outcome = 6;
+  ToolJournalResolution interaction_resolution = 7;
+}
+
+message ToolJournalOutcome {
+  oneof outcome {
+    ToolJournalCapabilityResult succeeded = 1;
+    ToolJournalAuthorizedResult authorized = 2;
+    ToolJournalFailure failed = 3;
+    ToolJournalIndeterminate indeterminate = 4;
+    uint32 cancelled = 5;
+  }
+}
+
+message ToolJournalPolicyBasis {
+  repeated ToolJournalProvenance source_records = 1;
+  string agent_policy_ref = 2;
+  Sha256 agent_policy_hash = 3;
+  PermissionMode permission_mode = 4;
+}
+
+message ToolJournalProvenance {
+  LedgerRecordId record_id = 1;
+  uint32 source_kind = 2;
+  ContentRef content_ref = 3;
+}
+
+message ToolJournalReply {
+  oneof result {
+    ToolJournalExposureResult exposure_commit = 7;
+    ContentRef written_content = 5;
+    ToolJournalContent content = 6;
+    ToolJournalMaterial material = 1;
+    ToolJournalObservation observation = 2;
+    ToolJournalAuthorization authorization = 3;
+    ToolJournalUnit authorization_absent = 4;
+  }
+}
+
+message ToolJournalRequest {
+  ToolJournalInvocation invocation = 1;
+  ToolRetryContract retry_contract = 2;
+}
+
+message ToolJournalResolution {
+  oneof resolution {
+    ToolJournalUnit pending = 1;
+    ApprovalDecision approval = 2;
+    ContentRef content = 3;
+    SecureResponseRef secure = 4;
+    ToolJournalUnit expired = 5;
+    ToolJournalUnit cancelled = 6;
+    
+    ToolJournalUnit retired_result_review = 7;
+  }
+}
+
+message ToolJournalStart {
+  InvocationId invocation_id = 1;
+  uint32 mode = 2; 
+  optional string reconciliation_ref = 3;
+  google.protobuf.Timestamp started_at = 4;
+  google.protobuf.Timestamp execution_deadline = 5;
+  ActivityExecutionTimingV1 activity_timing = 6;
+}
+
+message ToolJournalUnit {}
+
+message ToolJournalWaitReconciliation {
+  InvocationId invocation_id = 1;
+  google.protobuf.Timestamp observed_at = 2;
+  google.protobuf.Timestamp resume_not_before = 3;
+}

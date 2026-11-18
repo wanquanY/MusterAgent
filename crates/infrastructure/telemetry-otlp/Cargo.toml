@@ -1,0 +1,35 @@
+[package]
+name = "musteragent-telemetry-otlp"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+crossbeam-channel = "0.5.15"
+musteragent-telemetry.workspace = true
+musteragent-identity.workspace = true
+musteragent-runtime-contract.workspace = true
+opentelemetry.workspace = true
+opentelemetry-otlp = { version = "0.32.0", default-features = false, features = ["grpc-tonic", "metrics", "trace", "tls-ring"] }
+opentelemetry_sdk = { version = "0.32.0", default-features = false, features = ["metrics", "trace"] }
+rustls = { version = "0.23.42", default-features = false, features = ["logging", "ring", "std", "tls12"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+time = { version = "0.3.45", features = ["formatting"] }
+tokio = { version = "1.53.1", default-features = false, features = ["rt-multi-thread", "time", "sync", "macros"] }
+tracing.workspace = true
+tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt", "json", "registry"] }
+url = "2.5.8"
+uuid.workspace = true
+
+[dev-dependencies]
+log = "0.4"
+tracing-log = "0.2"
+opentelemetry_sdk = { version = "0.32.0", features = ["testing", "trace"] }
+
+[lints]
+workspace = true

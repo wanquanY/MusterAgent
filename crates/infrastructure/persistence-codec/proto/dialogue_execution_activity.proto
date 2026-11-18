@@ -1,0 +1,69 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "agent_dialogue.proto";
+
+message DialogueActivityChanged { OwnedAgentActivity activity = 1; }
+
+enum DialogueActivityOutcome {
+  DIALOGUE_ACTIVITY_OUTCOME_UNSPECIFIED = 0;
+  DIALOGUE_ACTIVITY_OUTCOME_SUCCEEDED = 1;
+  DIALOGUE_ACTIVITY_OUTCOME_FAILED = 2;
+  DIALOGUE_ACTIVITY_OUTCOME_CANCELLED = 3;
+  DIALOGUE_ACTIVITY_OUTCOME_INTERRUPTED = 4;
+}
+
+enum DialogueActivityState {
+  DIALOGUE_ACTIVITY_STATE_UNSPECIFIED = 0;
+  DIALOGUE_ACTIVITY_STATE_IDLE = 1;
+  DIALOGUE_ACTIVITY_STATE_WORKING = 2;
+  DIALOGUE_ACTIVITY_STATE_WAITING = 3;
+  DIALOGUE_ACTIVITY_STATE_TERMINAL = 4;
+  DIALOGUE_ACTIVITY_STATE_UNCONFIRMED = 5;
+}
+
+enum DialogueActivityStep {
+  DIALOGUE_ACTIVITY_STEP_UNSPECIFIED = 0;
+  DIALOGUE_ACTIVITY_STEP_PREPARING = 1;
+  DIALOGUE_ACTIVITY_STEP_THINKING = 2;
+  DIALOGUE_ACTIVITY_STEP_USING_TOOL = 3;
+  DIALOGUE_ACTIVITY_STEP_WAITING_USER = 4;
+  DIALOGUE_ACTIVITY_STEP_WAITING_APPROVAL = 5;
+  DIALOGUE_ACTIVITY_STEP_WAITING_DEPENDENCY = 6;
+  DIALOGUE_ACTIVITY_STEP_CANCELLING = 7;
+}
+
+message OwnedAgentActivity {
+  AgentId agent_id = 1;
+  AgentDialogueId dialogue_id = 2;
+  uint64 revision = 3;
+  DialogueActivityState state = 4;
+  optional DialogueActivityStep step = 5;
+  uint32 active_execution_count = 6;
+  uint32 waiting_execution_count = 7;
+  uint32 unconfirmed_execution_count = 8;
+  optional DialogueActivityOutcome last_outcome = 9;
+  int64 observed_at_ms = 10;
+  // Subsets of waiting_execution_count, including when another Run is working.
+  uint32 waiting_approval_count = 11;
+  uint32 scheduled_retry_count = 12;
+  optional int64 earliest_retry_at_ms = 13;
+  uint32 waiting_permission_count = 14;
+  // Original foreground control obligations across actual execution Homes.
+  // Includes locally ended targets whose retained stop remains unconfirmed.
+  // Task/Goal/report background work never expands this control set.
+  uint32 foreground_execution_count = 15;
+  // Distinct foreground targets with a retained stop and no original terminal.
+  uint32 pending_cancellation_count = 16;
+  // Maximum retained stop seen in the same snapshot as foreground/pending.
+  // Zero means none. A higher activity revision alone is not acknowledgement.
+  optional uint64 observed_cancellation_sequence = 17;
+  // Qualified local terminal, but no original strong settlement receipt yet.
+  // Paired presence: missing means a historical observation, never zero proof.
+  optional uint32 locally_completed_unconfirmed_count = 18;
+  // Subset of the preceding count and pending_cancellation_count. Does not
+  // authorize a new stop or acknowledge an existing stop as physically ended.
+  optional uint32 unconfirmed_cancellation_count = 19;
+}

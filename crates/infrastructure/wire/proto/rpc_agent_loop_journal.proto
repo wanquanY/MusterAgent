@@ -1,0 +1,336 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "execution_policy.proto";
+import "google/protobuf/timestamp.proto";
+import "public_delivery_repair.proto";
+import "rpc_agent_model_stream_journal.proto";
+import "rpc_agent_model_usage.proto";
+import "rpc_agent_vision_journal.proto";
+import "rpc_common.proto";
+import "rpc_execution_journal.proto";
+import "rpc_execution_liveness.proto";
+import "rpc_public_delivery_repair.proto";
+import "rpc_tool_execution_journal.proto";
+
+message AgentJournalAcknowledgeControl { AgentJournalModelObservation observation = 1; }
+
+message AgentJournalArgumentIssue { string kind = 1; string path = 2; }
+
+message AgentJournalBeginModel {
+  uint32 iteration = 1;
+  InvocationId invocation_id = 2;
+  MessageId assistant_message_id = 3;
+  OutputId assistant_output_id = 4;
+  OutputId reasoning_output_id = 5;
+  ContentRef request_ref = 6;
+
+  bytes canonical_model_request_v2 = 7;
+  AgentJournalProviderRecovery recovery_capability = 8;
+  
+  bytes canonical_model_request_v3 = 9;
+  
+  bytes canonical_model_request_v4 = 10;
+  PublicDeliveryRepairBindingV1 delivery_repair = 11;
+  
+  bytes canonical_model_request_v5 = 12;
+  
+  bytes canonical_model_request_v6 = 13;
+  
+  bytes canonical_model_request_v7 = 14;
+  
+  bytes canonical_model_request_v8 = 15;
+}
+
+message AgentJournalCanonicalMessage {
+  AgentJournalMessageRole role = 1;
+  repeated AgentJournalContentPart content = 2;
+  repeated AgentJournalCanonicalToolCall tool_calls = 3;
+  ToolCallId tool_call_id = 4;
+  optional string tool_name = 5;
+  AgentJournalReasoningReplay reasoning = 6;
+}
+
+message AgentJournalCanonicalToolCall {
+  ToolCallId call_id = 1;
+  string wire_name = 2;
+  AgentJournalJson arguments = 3;
+  optional string provider_item_ref = 4;
+  ContentRef provider_replay_ref = 5;
+}
+
+message AgentJournalCheckpoint {
+  RunId run_id = 1;
+  AttemptId attempt_id = 2;
+  uint32 iteration = 3;
+  uint32 active_model_route_ordinal = 4;
+  uint32 completed_tool_calls = 5;
+  uint32 consecutive_empty_responses = 6;
+  uint64 total_tokens = 7;
+  uint64 total_cost_microusd = 8;
+  optional string continuation_ref = 9;
+  InvocationId continuation_source_invocation_id = 10;
+  oneof phase {
+    AgentJournalUnit ready_for_model = 20;
+    AgentJournalInvocation model_in_flight = 21;
+    AgentJournalToolsPending tools_pending = 22;
+    InteractionId waiting = 23;
+    AgentJournalUnit completed = 24;
+    AgentJournalUnit failed = 25;
+    AgentJournalUnit cancelled = 26;
+    AgentJournalUnit interrupted = 27;
+  }
+}
+
+message AgentJournalCommand {
+  reserved 43;
+  uint32 schema_version = 1;
+  oneof operation {
+    ExecutionJournalCommandV1 liveness = 45;
+    ToolJournalCommand tool = 40;
+    AgentVisionJournalCommand vision = 42;
+    AgentJournalUnit run_metadata = 41;
+    AgentJournalUnit recovery_budget = 10;
+    AgentJournalUnit load_checkpoint = 11;
+    AgentJournalRecoverCheckpoint recover_checkpoint = 12;
+    AgentJournalBeginModel begin_model = 13;
+    AgentJournalInvocation mark_model_dispatched = 14;
+    AgentJournalModelEvents append_model_events = 15;
+    AgentJournalModelCompletion stage_model_completion = 16;
+    AgentJournalModelCompletion finish_model = 17;
+    AgentJournalFailedModel finish_failed_model = 18;
+    AgentJournalRejectedAction finish_rejected_model_action = 19;
+    AgentJournalToolResult commit_tool_result = 20;
+    AgentJournalWaitReconciliation wait_for_reconciliation = 21;
+    AgentJournalUnit complete = 22;
+    AgentJournalFailRun fail = 23;
+    AgentJournalInterruptExternal interrupt_external_outcome = 24;
+    AgentJournalAcknowledgeControl acknowledge_coordination_interrupt = 25;
+    AgentJournalAcknowledgeControl acknowledge_cancellation = 26;
+    AgentJournalInvocation load_model_observation = 27;
+    AgentJournalModelCompletion validate_public_delivery = 28;
+    AgentJournalUnit completion_readiness = 29; 
+  }
+}
+
+message AgentJournalCompletionDisposition {
+  oneof disposition {
+    AgentJournalCheckpoint completed = 1;
+    AgentJournalCheckpoint cancelled = 2;
+    AgentJournalCheckpoint delegation_completions_pending = 3;
+    AgentJournalUnit context_refresh_pending = 4;
+    AgentJournalUnit controls_pending = 5;
+    AgentJournalUnit required_work_pending = 6; 
+  }
+}
+
+message AgentJournalCompletionReadiness {
+  oneof readiness {
+    AgentJournalUnit ordinary = 1;
+    AgentJournalUnit continue = 2;
+    AgentJournalUnit ready = 3;
+    
+    AgentJournalUnit capability_ready = 4;
+  }
+}
+
+message AgentJournalContentPart {
+  oneof part { string text = 1; ContentRef image = 2; ContentRef file = 3; ContentRef audio = 4; ContentRef video = 5; }
+}
+
+message AgentJournalFailRun {
+  string code = 1; bool retryable = 2; uint32 max_attempts = 3;
+  optional uint64 retry_after_ms = 4;
+  PersistentRecoveryPolicyV1 persistent_recovery_v1 = 5;
+}
+
+message AgentJournalFailedModel {
+  uint32 max_attempts = 1;
+  AgentJournalModelObservation observation = 2;
+  AgentJournalModelFailure provider_failure = 3;
+  optional uint64 retry_after_ms = 4;
+  PersistentRecoveryPolicyV1 persistent_recovery_v1 = 5;
+  oneof resolution {
+    uint32 retry_fallback_route_ordinal = 10;
+    AgentJournalUnit retry_new_attempt = 11;
+    AgentJournalModelFailure fail_run = 12;
+    AgentJournalModelFailure wait_for_action = 13;
+    AgentJournalUnit external_outcome_unknown = 14;
+    AgentJournalProviderFallback provider_fallback_v1 = 15;
+    AgentJournalProviderRound exhausted_provider_round_v1 = 16;
+  }
+}
+
+message AgentJournalInterruptExternal { string reconciliation_ref = 1; }
+
+message AgentJournalInvalidArguments {
+  string attempted_name = 1;
+  repeated AgentJournalArgumentIssue issues = 2;
+}
+
+message AgentJournalInvocation { InvocationId invocation_id = 1; }
+
+enum AgentJournalMessageRole {
+  AGENT_JOURNAL_MESSAGE_ROLE_UNSPECIFIED = 0;
+  AGENT_JOURNAL_MESSAGE_ROLE_USER = 1;
+  AGENT_JOURNAL_MESSAGE_ROLE_ASSISTANT = 2;
+  AGENT_JOURNAL_MESSAGE_ROLE_TOOL = 3;
+}
+
+message AgentJournalModelCompletion {
+  InvocationId invocation_id = 1;
+  AgentJournalModelCompletionKind kind = 2;
+  repeated AgentJournalPlannedTool tool_calls = 3;
+  optional string reasoning_replay = 4;
+  AgentJournalModelUsage usage = 5;
+  string provider_response_ref = 6;
+  string response_model_key = 7;
+  optional string continuation_ref = 8;
+}
+
+enum AgentJournalModelCompletionKind {
+  AGENT_JOURNAL_MODEL_COMPLETION_KIND_UNSPECIFIED = 0;
+  AGENT_JOURNAL_MODEL_COMPLETION_KIND_ASSISTANT_CONTINUATION = 1;
+  AGENT_JOURNAL_MODEL_COMPLETION_KIND_REASONING_CONTINUATION = 2;
+  AGENT_JOURNAL_MODEL_COMPLETION_KIND_ASSISTANT_RESPONSE = 3;
+  AGENT_JOURNAL_MODEL_COMPLETION_KIND_TOOL_CALLS = 4;
+  AGENT_JOURNAL_MODEL_COMPLETION_KIND_EMPTY_RESPONSE = 5;
+}
+
+message AgentJournalModelFailure { string code = 1; bool retryable = 2; }
+
+message AgentJournalModelObservation {
+  InvocationId invocation_id = 1;
+  optional string provider_response_ref = 2;
+  optional string response_model_key = 3;
+  AgentJournalModelUsage usage = 4;
+  bool public_output_observed = 5;
+  bool replay_barrier_observed = 6;
+}
+
+message AgentJournalPlannedTool {
+  ToolCallId call_id = 1;
+  string wire_name = 2;
+  AgentJournalJson arguments = 3;
+  AgentJournalToolReplay provider_replay = 4;
+  oneof planning_failure {
+    AgentJournalUnit truncated = 5; AgentJournalUnit malformed_json = 6;
+    AgentJournalUnit object_required = 7; AgentJournalUnit invalid_value = 8;
+  }
+  
+  optional bytes argument_diagnostic_v1 = 9;
+}
+
+message AgentJournalProviderFallback {
+  uint32 next_route_ordinal = 1;
+  string provider_failure_code = 2;
+}
+
+enum AgentJournalProviderRecovery {
+  AGENT_JOURNAL_PROVIDER_RECOVERY_UNSPECIFIED = 0;
+  AGENT_JOURNAL_PROVIDER_RECOVERY_RESUMABLE_STREAM = 1;
+  AGENT_JOURNAL_PROVIDER_RECOVERY_QUERYABLE_RESPONSE = 2;
+  AGENT_JOURNAL_PROVIDER_RECOVERY_IDEMPOTENT_REQUEST = 3;
+  AGENT_JOURNAL_PROVIDER_RECOVERY_NON_RESUMABLE = 4;
+}
+
+message AgentJournalProviderRound {
+  string provider_failure_code = 1;
+  optional uint32 retry_route_ordinal = 2;
+}
+
+message AgentJournalPublicDeliveryRejection {
+  string contract_ref = 1;
+  string issue = 2; 
+}
+
+message AgentJournalPublicDeliveryValidation {
+  oneof outcome {
+    AgentJournalUnit accepted = 1;
+    AgentJournalPublicDeliveryRejection rejected = 2;
+    AgentJournalDeliveryRejectionV6 rejected_with_candidate = 3;
+    AgentJournalDeliveryUnreplayableV6 unreplayable = 4;
+    AgentJournalDeliveryRejectionV7 strict_rejection = 5;
+  }
+}
+
+message AgentJournalReasoningReplay {
+  ContentRef content_ref = 1;
+  ModelRouteRef source_route_ref = 2;
+  optional string continuation_ref = 3;
+}
+
+message AgentJournalRecoverCheckpoint {
+  AgentJournalCheckpoint checkpoint = 1;
+  uint32 max_attempts = 2;
+  PersistentRecoveryPolicyV1 persistent_recovery_v1 = 3;
+}
+
+message AgentJournalRecoveredState {
+  AgentJournalCheckpoint checkpoint = 1;
+  repeated AgentJournalPlannedTool pending_tool_calls = 2;
+  optional AgentJournalModelCompletionKind recovered_model_completion = 3;
+  bool replacement_attempt_scheduled = 4;
+}
+
+message AgentJournalRecoveryBudget { uint32 provider_failures = 1; uint32 no_progress_failures = 2; uint32 repair_failures = 3; uint32 prior_transient_distance = 4; }
+
+message AgentJournalRejectedAction {
+  AgentJournalModelObservation observation = 1;
+  oneof rejection {
+    string tool_not_exposed = 2;
+    AgentJournalInvalidArguments invalid_arguments = 3;
+    AgentJournalPublicDeliveryRejection invalid_public_delivery = 4;
+    AgentJournalDeliveryRejectionV6 invalid_public_delivery_with_candidate = 5;
+    AgentJournalDeliveryUnreplayableV6 invalid_public_delivery_unreplayable = 6;
+    AgentJournalDeliveryRepairViolationV6 public_delivery_repair_violation = 7;
+    AgentJournalDeliveryRejectionV7 strict_delivery_rejection = 8;
+  }
+}
+
+message AgentJournalReply {
+  reserved 43;
+  uint32 schema_version = 1;
+  oneof result {
+    ExecutionJournalReplyV1 liveness = 45;
+    AgentSupervisedModelStart vision_start = 46;
+    ToolJournalReply tool = 40;
+    AgentVisionCooldownResult vision_cooldown = 44;
+    uint32 vision_disposition = 42; 
+    AgentJournalRunMetadata run_metadata = 41;
+    AgentJournalRecoveryBudget recovery_budget = 10;
+    AgentJournalCheckpoint checkpoint = 11;
+    AgentJournalRecoveredState recovered = 12;
+    AgentJournalCompletionDisposition completion = 13;
+    AgentJournalUnit reconciliation_waiting = 14;
+    AgentJournalModelObservation model_observation = 15;
+    AgentJournalPublicDeliveryValidation public_delivery_validation = 16;
+    AgentJournalCompletionReadiness completion_readiness = 17; 
+  }
+}
+
+message AgentJournalRunMetadata {
+  TenantId tenant_id = 1;
+  ConversationId conversation_id = 2;
+  ActivityId activity_id = 3;
+  RunId run_id = 4;
+  CorrelationId correlation_id = 5;
+  TraceContext trace_context = 6;
+}
+
+message AgentJournalToolResult { ToolCallId call_id = 1; AgentJournalCanonicalMessage message = 2; }
+
+message AgentJournalToolsPending {
+  InvocationId invocation_id = 1;
+  repeated ToolCallId remaining_tool_call_ids = 2;
+}
+
+message AgentJournalUnit {}
+
+message AgentJournalWaitReconciliation {
+  InvocationId invocation_id = 1;
+  google.protobuf.Timestamp observed_at = 2;
+  google.protobuf.Timestamp resume_not_before = 3;
+}

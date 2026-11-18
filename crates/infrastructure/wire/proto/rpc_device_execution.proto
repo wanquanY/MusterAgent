@@ -1,0 +1,17 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+
+message DesktopSourceHost {
+  string membership_id = 1;
+  uint64 membership_epoch = 2;
+}
+
+message OriginDeviceExecutionTarget {
+  DeviceId device_id = 1;
+  DeviceInstallationId installation_id = 2;
+  
+  bytes native_membership_authority = 3;
+}

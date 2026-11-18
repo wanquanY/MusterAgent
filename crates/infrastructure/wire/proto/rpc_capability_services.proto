@@ -1,0 +1,188 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "execution_grant.proto";
+import "google/protobuf/timestamp.proto";
+import "rpc_common.proto";
+import "rpc_context_transport.proto";
+
+message AuthorizeEvolutionMaintenanceRequest {
+  TenantId tenant_id = 1;
+  AgentId target_agent_id = 2;
+  AgentVersionId agent_version_id = 3;
+  DreamJobId dream_job_id = 4;
+  CommandId command_id = 5;
+  RunId run_id = 6;
+  string policy_version_ref = 7;
+  ModelRouteRef model_route_ref = 8;
+  Sha256 model_route_hash = 9;
+  google.protobuf.Timestamp issued_at = 10;
+  google.protobuf.Timestamp deadline = 11;
+  optional DeviceId device_id = 12;
+  optional WorkspaceId device_workspace_id = 13;
+  string growth_profile_ref = 14;
+  Sha256 growth_profile_hash = 15;
+  
+  ContextTransportNamespaceHint transport_namespace = 16;
+}
+
+message AuthorizeEvolutionMaintenanceResult {
+  SignedExecutionGrant signed_execution_grant = 1;
+  ErrorInfo error = 2;
+}
+
+message CapabilityCallContext {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  RunId run_id = 3;
+  AttemptId attempt_id = 4;
+  InvocationId invocation_id = 5;
+  CapabilityProviderId capability_provider_id = 6;
+  string idempotency_key = 7;
+  google.protobuf.Timestamp deadline = 8;
+  TraceContext trace_context = 9;
+
+  SchemaRef result_schema = 10;
+
+  uint32 attempt_number = 11;
+  optional WorkspaceId workspace_id = 12;
+
+  bytes execution_grant_proof = 13;
+
+  string capability_key = 14;
+}
+
+service ConversationTurnAdmissionService {
+  rpc PrepareTurn(PrepareConversationTurnRequest) returns (PrepareConversationTurnResult);
+}
+
+service DelegationAdmissionService {
+  rpc PrepareSpawn(PrepareDelegationSpawnRequest) returns (PrepareDelegationSpawnResult);
+}
+
+message EvolutionDreamPolicy {
+  string policy_version_ref = 1;
+  string requested_model_class = 2;
+  GrantedModelRoute model_route = 3;
+  Sha256 model_route_hash = 4;
+  uint64 max_input_tokens = 5;
+  uint64 max_output_tokens = 6;
+  uint32 max_proposals = 7;
+  string growth_profile_ref = 8;
+  Sha256 growth_profile_hash = 9;
+  uint64 model_timeout_ms = 10;
+  string model_resolution = 11;
+  uint64 manual_request_generation = 12;
+}
+
+message EvolutionDreamPolicyDeferred {
+  string reason_code = 1;
+  google.protobuf.Timestamp not_before = 2;
+  string growth_profile_ref = 3;
+  Sha256 growth_profile_hash = 4;
+}
+
+message EvolutionDreamPolicyDisabled {
+  string reason_code = 1;
+  string growth_profile_ref = 2;
+  Sha256 growth_profile_hash = 3;
+}
+
+service EvolutionMaintenanceControlService {
+  rpc ResolvePolicy(ResolveEvolutionDreamPolicyRequest) returns (ResolveEvolutionDreamPolicyResult);
+  rpc AuthorizeRun(AuthorizeEvolutionMaintenanceRequest) returns (AuthorizeEvolutionMaintenanceResult);
+}
+
+message PrepareConversationTurnRequest {
+  optional CapabilityCallContext context = 1;
+  ConversationId target_conversation_id = 2;
+  optional WorkspaceId target_workspace_id = 3;
+  InterSessionMessageId mailbox_message_id = 4;
+  CommandId target_command_id = 5;
+  RunId target_run_id = 6;
+  bytes durable_delivery_authority = 7;
+  
+  ContextTransportNamespaceHint transport_namespace = 8;
+}
+
+message PrepareConversationTurnResult {
+  SignedExecutionGrant signed_execution_grant = 1;
+  ErrorInfo error = 2;
+  bytes durable_delivery_authority = 3;
+}
+
+message PrepareDelegationSpawnRequest {
+  CapabilityCallContext context = 1;
+  CommandId child_command_id = 2;
+  RunId child_run_id = 3;
+  DelegationId delegation_id = 4;
+  uint32 child_depth = 5;
+  
+  ContextTransportNamespaceHint transport_namespace = 6;
+}
+
+message PrepareDelegationSpawnResult {
+
+  SignedExecutionGrant signed_execution_grant = 1;
+  ErrorInfo error = 2;
+}
+
+message PrepareStandingGoalContinuationRequest {
+  bytes source_execution_grant_proof = 1;
+  bytes durable_continuation_authority = 2;
+  ConversationId conversation_id = 3;
+  optional WorkspaceId workspace_id = 4;
+  GoalId goal_id = 5;
+  GoalPursuitId pursuit_id = 6;
+  CommandId target_command_id = 7;
+  RunId target_run_id = 8;
+  StandingGoalAdmissionPurpose purpose = 9;
+  
+  ContextTransportNamespaceHint transport_namespace = 10;
+}
+
+message PrepareStandingGoalContinuationResult {
+  SignedExecutionGrant signed_execution_grant = 1;
+  ErrorInfo error = 2;
+  bytes durable_continuation_authority = 3;
+}
+
+message ResolveEvolutionDreamPolicyRequest {
+  TenantId tenant_id = 1;
+  AgentId target_agent_id = 2;
+  AgentVersionId agent_version_id = 3;
+  uint64 ledger_watermark = 4;
+  uint32 signal_count = 5;
+  optional DeviceId device_id = 6;
+  optional WorkspaceId device_workspace_id = 7;
+  google.protobuf.Timestamp oldest_signal_at = 8;
+  google.protobuf.Timestamp newest_signal_at = 9;
+  uint32 source_run_count = 10;
+  bool active_ordinary_run = 11;
+  uint32 jobs_created_last_24h = 12;
+  uint64 last_manual_request_generation = 13;
+  
+  bool active_dream_job = 14;
+
+  google.protobuf.Timestamp last_dream_job_created_at = 15;
+}
+
+message ResolveEvolutionDreamPolicyResult {
+  EvolutionDreamPolicy policy = 1;
+  ErrorInfo error = 2;
+  EvolutionDreamPolicyDeferred deferred = 3;
+  EvolutionDreamPolicyDisabled disabled = 4;
+}
+
+enum StandingGoalAdmissionPurpose {
+  STANDING_GOAL_ADMISSION_PURPOSE_UNSPECIFIED = 0;
+  STANDING_GOAL_ADMISSION_PURPOSE_CONTINUATION = 1;
+  STANDING_GOAL_ADMISSION_PURPOSE_TERMINAL_JUDGE = 2;
+}
+
+service StandingGoalAdmissionService {
+  rpc PrepareContinuation(PrepareStandingGoalContinuationRequest)
+      returns (PrepareStandingGoalContinuationResult);
+}

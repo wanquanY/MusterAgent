@@ -1,0 +1,381 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "context_plan_lifecycle.proto";
+import "execution_liveness.proto";
+import "execution_policy.proto";
+import "dialogue_context.proto";
+import "public_delivery_repair.proto";
+import "dialogue_execution_context.proto";
+import "resource_records.proto";
+import "rpc_agent_compaction_model.proto";
+import "rpc_agent_loop_journal.proto";
+import "rpc_execution_liveness.proto";
+import "rpc_device_execution.proto";
+import "snapshot.proto";
+
+message AgentAssignedInputAttachments {
+  LedgerRecordId source_record_id = 1;
+  repeated ContentRef attachments = 2;
+}
+
+message AgentContextActionRejection {
+  
+  uint32 kind = 1;
+  string attempted_name = 2;
+  uint32 consecutive_count = 3;
+  repeated AgentContextArgumentIssue issues = 4;
+  string delivery_contract_ref = 5;
+  string delivery_issue = 6;
+  PublicDeliveryRejectionV1 delivery_repair = 7;
+  AgentContextMaterializedContent delivery_candidate = 8;
+}
+
+message AgentContextArgumentIssue {
+  string path = 1;
+  string code = 2;
+}
+
+message AgentContextAssistantOrigin {
+  InvocationId invocation_id = 1;
+  string model_route_ref = 2;
+  Sha256 route_identity_hash = 3;
+  string requested_model_key = 4;
+  string response_model_key = 5;
+}
+
+message AgentContextBaseline {
+  ContextSnapshotId snapshot_id = 1;
+  uint64 source_seq_to = 2;
+  repeated LedgerRecordId retained_record_ids = 3;
+  AgentContextMaterializedContent summary = 4;
+}
+
+message AgentContextCommand {
+  uint32 schema_version = 15;
+  oneof operation {
+    AgentContextUnit policy = 1;
+    AgentContextToolPolicyRequest tool_policy = 2;
+    AgentContextPlanInput read_material = 3;
+    AgentContextCompactionStart begin_compaction = 4;
+    AgentContextCompactionFailure fail_compaction = 5;
+    AgentContextCompactionResolution resolve_compaction = 6;
+    AgentContextPlanCommit commit_plan = 7;
+    AgentContextUnit drain_steering = 8;
+    AgentContextUnit drain_follow_up = 9;
+    AgentContextPlanContentWrite write_plan_content = 10;
+    ContentRef read_input_content = 11;
+    AgentCompactionCommand compaction_model = 12;
+    InvocationId read_files = 13;
+  }
+}
+
+message AgentContextCompactionFailure {
+  bytes canonical_attempt_metadata = 1;
+  ContextCompactionFailed failed = 2;
+}
+
+message AgentContextCompactionResolution {
+  bytes canonical_attempt_metadata = 1;
+  ContextCompactionResolved resolved = 2;
+}
+
+message AgentContextCompactionStart {
+  bytes canonical_attempt_metadata = 1;
+  ContextCompactionStarted started = 2;
+  LedgerRecordId causation_id = 3;
+}
+
+message AgentContextDelegationCompletion {
+  string delivery_id = 1;
+  string delegation_id = 2;
+  ActivityId child_activity_id = 3;
+  RunId child_run_id = 4;
+  AgentContextMaterializedContent report = 5;
+}
+
+message AgentContextDialogueHistory {
+  DialogueContextCut cut = 1;
+  uint64 from_seq = 2;
+  uint64 through_seq = 3;
+  ContentRef source = 4;
+  repeated AgentContextDialogueHistoryItem items = 5;
+  repeated AgentContextHistoryBoundary boundaries = 6;
+}
+
+message AgentContextDialogueHistoryItem {
+  AgentContextAssistantOrigin assistant_origin = 3;
+  oneof item {
+    AgentJournalCanonicalMessage message = 1;
+    AgentContextHistoryReference reference = 2;
+  }
+}
+
+message AgentContextEntry {
+  uint64 source_sequence = 1;
+  uint64 presentation_anchor = 2;
+  uint32 exchange_ordinal = 3;
+  repeated LedgerRecordId source_record_ids = 4;
+  RunId source_run_id = 5;
+  AgentContextAssistantOrigin assistant_origin = 6;
+  
+  AgentJournalCanonicalMessage message = 7;
+  InvocationId continuation_delta_for = 8;
+  repeated AgentContextRuntimeEvent runtime_events = 9;
+  AgentContextDialogueHistory history_page = 10;
+}
+
+message AgentContextExecutionPlan {
+  uint64 revision = 1;
+  AgentContextMaterializedContent content = 2;
+}
+
+message AgentContextFailure {
+  string code = 1;
+  bool retryable = 2;
+}
+
+message AgentContextHistoryBoundary {
+  uint64 seq = 1;
+  Sha256 chain = 2;
+  uint64 item_end = 3;
+  string intent = 4;
+  bool begins = 5;
+  bool closes = 6;
+}
+
+message AgentContextHistoryReference {
+  repeated string parts = 1;
+}
+
+message AgentContextInstinct {
+  string instinct_id = 1;
+  uint64 revision = 2;
+  AgentContextMaterializedContent payload = 3;
+}
+
+message AgentContextMaterial {
+  RunId derived_source_run_id = 37;
+  repeated AgentAssignedInputAttachments assigned_input_attachments = 35;
+  repeated AgentContextResolvedTool resolved_tools = 33;
+  
+  bytes canonical_run_metadata = 1;
+  uint64 admitted_sequence = 2;
+  RuntimeSnapshotContent runtime_snapshot = 3;
+  
+  uint32 tool_policy = 4;
+  repeated string exposed_tool_keys = 5;
+  repeated AgentContextMaterializedContent prompt_sections = 6;
+  repeated AgentContextSkill disclosed_skills = 7;
+  repeated AgentContextMemory memories = 8;
+  repeated AgentContextInstinct instincts = 9;
+  AgentContextExecutionPlan execution_plan = 10;
+  repeated AgentContextDelegationCompletion delegation_completions = 11;
+  AgentContextActionRejection model_action_rejection = 12;
+  repeated AgentContextEntry entries = 13;
+  uint32 next_assistant_response_ordinal = 14;
+  AgentContextUsageAnchor usage_anchor = 15;
+  AgentContextBaseline previous_context = 16;
+  string active_branch_id = 17;
+  uint64 ledger_cutoff = 18;
+  uint64 source_seq_from = 19;
+  uint64 source_seq_to = 20;
+  repeated ContentRef source_content_refs = 21;
+  LedgerRecordId retry_stimulus_record_id = 22;
+  repeated AgentContextStimulusCut consumed_stimulus_cuts = 23;
+  AgentContextPredecessorPlan predecessor_plan = 24;
+  bool context_capacity_exceeded = 25;
+  optional uint64 rejected_request_bytes = 26;
+  AgentContextMeasuredUsage measured_usage = 27;
+  InvocationId model_recovery = 28;
+  ContextPlanSelectionV1 plan_selection = 29;
+  optional AgentContextAgentInstructions agent_instructions = 30;
+  optional DialogueApprovalContext dialogue_approval_context = 31;
+  optional DialogueExecutionContext dialogue_execution_context = 32;
+  LedgerRecordId superseding_control_id = 34;
+  DesktopSourceHost desktop_source_host = 36;
+}
+
+message AgentContextMaterializedContent {
+  ContentRef reference = 1;
+  bytes content = 2;
+}
+
+message AgentContextMeasuredUsage {
+  
+  AgentContextAssistantOrigin recovery_origin = 3;
+  uint64 source_sequence = 1;
+  uint64 input_tokens = 2;
+}
+
+message AgentContextMemory {
+  string memory_version_id = 1;
+  AgentContextMaterializedContent content = 2;
+}
+
+message AgentContextAgentInstructions {
+  repeated AgentSceneMember scene_members = 4;
+  AgentId agent_id = 1;
+  uint64 revision = 2;
+  
+  optional AgentContextMaterializedContent content = 3;
+}
+
+message AgentContextPlanCommit {
+  bytes canonical_attempt_metadata = 1;
+  uint32 generation = 2;
+  ContextSnapshotCreated snapshot = 3;
+  InvocationId invocation_id = 4;
+  MessageId assistant_message_id = 5;
+  OutputId assistant_output_id = 6;
+  OutputId reasoning_output_id = 7;
+  repeated string delegation_delivery_ids = 8;
+  AgentContextCompactionResolution compaction = 9;
+  AgentContextSourceFence source_fence = 10;
+  ContextPlanSelectionV1 plan_selection = 11;
+}
+
+message AgentContextPlanContentWrite {
+
+  uint32 purpose = 1;
+  ContentRef content = 2;
+  bytes bytes = 3;
+  TenantId tenant_id = 4;
+}
+
+message AgentContextPlanInput {
+
+  bytes canonical_attempt_metadata = 1;
+  uint32 next_iteration = 2;
+  uint32 active_model_route_ordinal = 3;
+  int64 invocation_deadline_ms = 4;
+  optional string continuation_ref = 5;
+  InvocationId continuation_source_invocation_id = 6;
+  uint32 consecutive_empty_responses = 7;
+  
+  uint32 mode = 8;
+
+  ActivityExecutionTimingV1 activity_timing_v1 = 9;
+}
+
+message AgentContextPlanResolution {
+  
+  uint32 disposition = 1;
+  RunId run_id = 2;
+  AttemptId attempt_id = 3;
+  uint32 iteration = 4;
+  uint32 generation = 5;
+  ContextSnapshotId snapshot_id = 6;
+  InvocationId invocation_id = 7;
+  MessageId assistant_message_id = 8;
+  OutputId assistant_output_id = 9;
+  OutputId reasoning_output_id = 10;
+}
+
+message AgentContextPolicy {
+  RunExecutionPolicySnapshot policy = 1;
+  int64 admitted_at_ms = 2;
+  uint32 model_route_count = 3;
+}
+
+message AgentContextPredecessorPlan {
+  RunId run_id = 1;
+  AgentContextExecutionPlan plan = 2;
+}
+
+message AgentContextReply {
+  uint32 schema_version = 15;
+  oneof result {
+    AgentContextPolicy policy = 1;
+    AgentContextToolPolicy tool_policy = 2;
+    AgentContextMaterial material = 3;
+    uint32 compaction_disposition = 4;
+    AgentContextPlanResolution plan = 5;
+    uint32 controls_consumed = 6;
+    AgentContextFailure failure = 7;
+    ContentRef plan_content = 8;
+    AgentContextMaterializedContent input_content = 9;
+    AgentCompactionSlotResult compaction_slot = 10;
+    AgentCompactionRecoveryResult compaction_recovery = 11;
+    uint32 model_disposition = 12;
+    AgentCompactionGenerationResult compaction_generation = 13;
+    AgentFileQueryResult files = 14;
+    AgentSupervisedModelStart supervised_model_start = 16;
+  }
+}
+
+message AgentContextResolvedTool {
+  ToolManifestSnapshot tool = 1;
+  string model_name = 2;
+}
+
+message AgentContextRuntimeEvent {
+
+  uint32 kind = 1;
+  string delivery_id = 2;
+  string delegation_id = 3;
+  ActivityId child_activity_id = 4;
+  RunId child_run_id = 5;
+  string report = 6;
+  InvocationId source_invocation_id = 7;
+  DialogueContextModelObservation dialogue_context = 8;
+  PublicDeliveryRepairBindingV1 delivery_repair = 9;
+  AgentContextToolApprovalObservation tool_approval = 10;
+}
+
+message AgentContextSkill {
+  string skill_ref = 1;
+  string skill_version_id = 2;
+  Sha256 instructions_hash = 3;
+  uint32 disclosure_ordinal = 4;
+  AgentContextMaterializedContent instructions = 5;
+}
+
+message AgentContextSourceFence {
+  repeated ContentRef content_refs = 1;
+  string active_branch_id = 2;
+  uint64 ledger_cutoff = 3;
+}
+
+message AgentContextStimulusCut {
+  LedgerRecordId stimulus_record_id = 1;
+  uint64 consumed_sequence = 2;
+  
+  uint32 kind = 3;
+}
+
+message AgentContextToolApprovalObservation {
+  InvocationId invocation_id = 1;
+  string tool_call_id = 2;
+  string tool_ref = 3;
+  InteractionId interaction_id = 4;
+  LedgerRecordId request_record_id = 5;
+  LedgerRecordId resolution_record_id = 6;
+  
+  string resolution = 7;
+}
+
+message AgentContextToolPolicy {
+  
+  uint32 decision = 1;
+}
+
+message AgentContextToolPolicyRequest {
+  string wire_name = 1;
+  
+  uint32 default_mode = 2;
+}
+
+message AgentContextUnit {}
+
+message AgentContextUsageAnchor {
+  uint64 source_sequence = 1;
+  uint64 total_tokens = 2;
+}
+
+message AgentFileQueryResult {
+  bytes json = 1;
+  repeated ContentRef authorized_content = 2;
+}

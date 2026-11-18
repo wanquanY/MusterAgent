@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "retrieval_timeout_ms": 10000,
+  "request_timeout_ms": 30000,
+  "completion_reserve_ms": 250,
+  "timeout_header": "x-musteragent-embedding-timeout-ms"
+}

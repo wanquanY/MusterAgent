@@ -1,0 +1,32 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "device_tool_delivery.proto";
+import "dialogue_execution_activity.proto";
+
+message NativeDialogueActivityAcknowledgement {
+  DeviceDeliveryBinding binding = 1;
+  uint64 run_sequence = 2;
+  bytes observation_sha256 = 3;
+  uint64 checkpoint_version = 4;
+}
+
+message NativeDialogueActivityObservation {
+  DeviceDeliveryBinding binding = 1;
+  uint64 run_sequence = 2;
+  DialogueActivityState state = 3;
+  optional DialogueActivityStep step = 4;
+  optional DialogueActivityOutcome outcome = 5;
+  // Lexicographic (run_sequence, checkpoint_version) from the same fenced
+  // SQLite read. Phase changes need not append a Ledger record. Zero is the
+  // legacy producer/no-current-checkpoint value; never a wall-clock version.
+  uint64 checkpoint_version = 6;
+  // Original scheduler eligibility time; never a promise of execution or success.
+  optional int64 scheduled_retry_at_ms = 7;
+  bool permission_wait = 8;
+}
+
+message ObserveNativeDialogueActivityResponse {
+  NativeDialogueActivityAcknowledgement acknowledgement = 1;
+}

@@ -1,0 +1,87 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+
+enum ErasureDataClass {
+  ERASURE_DATA_CLASS_UNSPECIFIED = 0;
+  ERASURE_DATA_CLASS_CONTENT_CIPHERTEXT = 1;
+  ERASURE_DATA_CLASS_PROJECTION = 2;
+  ERASURE_DATA_CLASS_SNAPSHOT_INLINE_CONTENT = 3;
+  ERASURE_DATA_CLASS_FULL_TEXT_INDEX = 4;
+  ERASURE_DATA_CLASS_EMBEDDING_INDEX = 5;
+  ERASURE_DATA_CLASS_CACHE = 6;
+  ERASURE_DATA_CLASS_OBJECT_HISTORY = 7;
+  ERASURE_DATA_CLASS_BACKUP = 8;
+}
+
+enum ErasureJobStatus {
+  ERASURE_JOB_STATUS_UNSPECIFIED = 0;
+  ERASURE_JOB_STATUS_PENDING_PLAN = 1;
+  ERASURE_JOB_STATUS_PLANNED = 2;
+  ERASURE_JOB_STATUS_FENCED = 3;
+  ERASURE_JOB_STATUS_EXECUTING = 4;
+  ERASURE_JOB_STATUS_AWAITING_BACKUP_EXPIRY = 5;
+  ERASURE_JOB_STATUS_RETRY_SCHEDULED = 6;
+  ERASURE_JOB_STATUS_COMPLETED = 7;
+  ERASURE_JOB_STATUS_COMPLETED_WITH_RETENTION_EXCEPTION = 8;
+}
+
+message ErasurePlanSnapshotRecord {
+  string schema_version = 1;
+  ErasureJobId erasure_job_id = 2;
+  uint64 plan_version = 3;
+  repeated ResourceRef root_resource_refs = 4;
+  repeated ErasureDataClass data_classes = 5;
+  repeated ErasureRetentionExceptionRecord retention_exceptions = 6;
+  Sha256 lineage_fingerprint = 7;
+  Sha256 plan_hash = 8;
+  google.protobuf.Timestamp frozen_at = 9;
+}
+
+enum ErasureReceiptOutcome {
+  ERASURE_RECEIPT_OUTCOME_UNSPECIFIED = 0;
+  ERASURE_RECEIPT_OUTCOME_FULLY_ERASED = 1;
+  ERASURE_RECEIPT_OUTCOME_ERASED_WITH_RETENTION_EXCEPTION = 2;
+}
+
+message ErasureReceiptRecord {
+  string schema_version = 1;
+  ErasureReceiptId erasure_receipt_id = 2;
+  ErasureJobId erasure_job_id = 3;
+  TenantId tenant_id = 4;
+  ErasureReceiptOutcome outcome = 5;
+  Sha256 plan_hash = 6;
+  repeated ErasureDataClass completed_data_classes = 7;
+  repeated ErasureRetentionExceptionRecord retention_exceptions = 8;
+  Sha256 proof_digest = 9;
+  google.protobuf.Timestamp completed_at = 10;
+}
+
+message ErasureRequestRecord {
+  string schema_version = 1;
+  ErasureJobId erasure_job_id = 2;
+  TenantId tenant_id = 3;
+  Actor requested_by = 4;
+  repeated ResourceRef root_resource_refs = 5;
+  string retention_policy_ref = 6;
+  string idempotency_key = 7;
+  google.protobuf.Timestamp requested_at = 8;
+  google.protobuf.Timestamp complete_by = 9;
+}
+
+message ErasureRetentionExceptionRecord {
+  ErasureDataClass data_class = 1;
+  string policy_ref = 2;
+  PrincipalId owner_principal_id = 3;
+  google.protobuf.Timestamp expires_at = 4;
+}
+
+message ErasureTransitionRecord {
+  ErasureJobId erasure_job_id = 1;
+  uint64 sequence = 2;
+  ErasureJobStatus status = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+}

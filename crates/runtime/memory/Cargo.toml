@@ -1,0 +1,41 @@
+[package]
+name = "musteragent-runtime-memory"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-memory-business = { version = "=0.1.0", path = "../../plugins/memory-business" }
+musteragent-runtime-snapshot.workspace = true
+futures-util = "0.3.33"
+musteragent-capability = { version = "0.1.0", path = "../../domains/capability" }
+musteragent-activity.workspace = true
+musteragent-content-ref = { version = "0.1.0", path = "../../foundation/content-ref" }
+musteragent-evolution = { version = "0.1.0", path = "../../domains/evolution" }
+musteragent-identity = { version = "0.1.0", path = "../../foundation/identity" }
+musteragent-memory = { version = "0.1.0", path = "../../domains/memory" }
+musteragent-model.workspace = true
+musteragent-policy = { version = "0.1.0", path = "../../foundation/policy" }
+musteragent-run = { version = "0.1.0", path = "../run" }
+musteragent-runtime-admission.workspace = true
+musteragent-runtime-capability = { version = "0.1.0", path = "../capability" }
+musteragent-runtime-content = { version = "0.1.0", path = "../content" }
+musteragent-runtime-contract = { version = "0.1.0", path = "../../foundation/runtime-contract" }
+musteragent-runtime-model.workspace = true
+musteragent-telemetry.workspace = true
+musteragent-tool = { version = "0.1.0", path = "../../domains/tool" }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { version = "1.53.1", default-features = false, features = ["rt", "time"] }
+tracing = "0.1.44"
+uuid = { workspace = true, features = ["v5"] }
+
+[dev-dependencies]
+musteragent-event-envelope.workspace = true
+tokio = { version = "1.53.1", features = ["macros", "test-util"] }
+
+[lints]
+workspace = true

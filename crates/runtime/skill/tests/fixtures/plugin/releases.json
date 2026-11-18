@@ -1,0 +1,71 @@
+{
+  "schema_version": "musteragent.product-plugin-skills.v3",
+  "plugins": [
+    {
+      "plugin_id": "fixture",
+      "version": "1.0.0",
+      "publisher_ref": "fixture-publisher",
+      "default_connection_id": "account",
+      "skills": [
+        {
+          "name": "fixture-skill",
+          "instructions_sha256": "b9b7e8bd7aafca43f03a6109726d128ee6a1a79b20e2eab1934be019f2fff978",
+          "file_set_sha256": "618307c8f50d4415f4c9305030380e0f037e58a7c24c8e8ffd6ace7455714cda"
+        }
+      ],
+      "connections": [
+        {
+          "kind": "integration",
+          "connection_id": "account",
+          "authorization_kind": "api_key",
+          "authorization_identity": "user",
+          "provider_key": "fixture",
+          "provider_version": "1.0.0",
+          "capabilities": [
+            {
+              "key": "fixture.read",
+              "version": "1.0.0"
+            }
+          ],
+          "tool_refs": [
+            "fixture.read@1"
+          ],
+          "grant_kind": "account_connection"
+        }
+      ]
+    },
+    {
+      "plugin_id": "fixture",
+      "version": "2.0.0",
+      "publisher_ref": "fixture-publisher",
+      "default_connection_id": "account",
+      "skills": [
+        {
+          "name": "fixture-skill",
+          "instructions_sha256": "b9b7e8bd7aafca43f03a6109726d128ee6a1a79b20e2eab1934be019f2fff978",
+          "file_set_sha256": "618307c8f50d4415f4c9305030380e0f037e58a7c24c8e8ffd6ace7455714cda"
+        }
+      ],
+      "connections": [
+        {
+          "kind": "integration",
+          "connection_id": "account",
+          "authorization_kind": "api_key",
+          "authorization_identity": "user",
+          "provider_key": "fixture",
+          "provider_version": "2.0.0",
+          "capabilities": [
+            {
+              "key": "fixture.read",
+              "version": "1.0.0"
+            }
+          ],
+          "tool_refs": [
+            "fixture.read@1"
+          ],
+          "grant_kind": "account_connection"
+        }
+      ]
+    }
+  ]
+}

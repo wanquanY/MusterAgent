@@ -1,0 +1,70 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+
+message AuditRecordId { string value = 1; }
+
+message CommandMetadata {
+  string schema_version = 1;
+  CommandId command_id = 2;
+  Actor actor = 3;
+  string idempotency_key = 4;
+  google.protobuf.Timestamp issued_at = 5;
+  google.protobuf.Timestamp deadline = 6;
+  CorrelationId correlation_id = 7;
+  LedgerRecordId causation_id = 8;
+  ConversationGuard conversation_guard = 9;
+  TraceContext trace_context = 10;
+}
+
+message ConversationGuard {
+  ConversationId conversation_id = 1;
+  uint64 expected_home_epoch = 2;
+  optional uint64 expected_conversation_seq = 3;
+}
+
+message EvolutionEvaluationId { string value = 1; }
+
+message EvolutionPromotionId { string value = 1; }
+
+message EvolutionProposalId { string value = 1; }
+
+message GoalEvaluationId { string value = 1; }
+
+message LedgerCursor {
+  ConversationId conversation_id = 1;
+  uint64 home_epoch = 2;
+  uint64 after_conversation_seq = 3;
+}
+
+message MemoryDraftBatchId { string value = 1; }
+
+message MemoryDraftId { string value = 1; }
+
+message OutboxMessageId { string value = 1; }
+
+message ProjectionSnapshotId { string value = 1; }
+
+message ResourceChangeSetId { string value = 1; }
+
+message ResourceEditOperationId { string value = 1; }
+
+message ResourceEditSessionId { string value = 1; }
+
+message ResourceEditTerminalCommandId { string value = 1; }
+
+message ResourceNodeId { string value = 1; }
+
+message SecureResponseRef {
+  string value = 1;
+}
+
+message StudioRevisionDraftId { string value = 1; }
+
+message TraceContext {
+  string traceparent = 1;
+  string tracestate = 2;
+}

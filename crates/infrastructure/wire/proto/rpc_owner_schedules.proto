@@ -1,0 +1,30 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "owner_schedules.proto";
+
+message ChangeOwnerScheduleRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  CommandId command_id = 3;
+  string schedule_id = 4;
+  uint64 expected_revision = 5;
+  OwnerScheduleAction action = 6;
+  optional OwnerScheduleDefinition definition = 7;
+}
+
+enum OwnerScheduleAction {
+  OWNER_SCHEDULE_ACTION_UNSPECIFIED = 0;
+  OWNER_SCHEDULE_ACTION_CREATE = 1;
+  OWNER_SCHEDULE_ACTION_UPDATE = 2;
+  OWNER_SCHEDULE_ACTION_PAUSE = 3;
+  OWNER_SCHEDULE_ACTION_RESUME = 4;
+  OWNER_SCHEDULE_ACTION_DELETE = 5;
+  OWNER_SCHEDULE_ACTION_RUN_NOW = 6;
+}
+
+message OwnerSchedules { AgentId agent_id = 1; repeated OwnerSchedule items = 2; }
+
+message ReadOwnerSchedulesRequest { Actor actor = 1; AgentId agent_id = 2; }

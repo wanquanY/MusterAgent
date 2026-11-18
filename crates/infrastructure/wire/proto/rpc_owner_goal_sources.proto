@@ -1,0 +1,45 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "owner_event_sources.proto";
+
+message OwnerGoalSourceCatalogRequest {
+  OwnerGoalSourceSubject subject = 1;
+}
+
+message OwnerGoalSourceJsonResult {
+  
+  bytes json = 1;
+  bytes sha256 = 2;
+}
+
+message OwnerGoalSourceQualification {
+
+  OwnerGoalSourceSubject subject = 1;
+  OwnerEventSubscriptionConfiguration configuration = 2;
+}
+
+message OwnerGoalSourceQualificationRequest {
+  OwnerGoalSourceSubject subject = 1;
+  OwnerEventSubscriptionConfiguration configuration = 2;
+}
+
+message OwnerGoalSourceResourcesRequest {
+  OwnerGoalSourceSubject subject = 1;
+  OwnerEventSubscriptionConfiguration configuration = 2;
+  optional string cursor = 3;
+}
+
+service OwnerGoalSourceSelectionService {
+  rpc Catalog(OwnerGoalSourceCatalogRequest) returns (OwnerGoalSourceJsonResult);
+  rpc Resources(OwnerGoalSourceResourcesRequest) returns (OwnerGoalSourceJsonResult);
+  rpc Qualify(OwnerGoalSourceQualificationRequest) returns (OwnerGoalSourceQualification);
+}
+
+message OwnerGoalSourceSubject {
+  reserved 3;
+  Actor actor = 1;
+  AgentId agent_id = 2;
+}

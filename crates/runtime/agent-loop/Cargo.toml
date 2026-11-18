@@ -1,0 +1,44 @@
+[package]
+name = "musteragent-loop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-activity.workspace = true
+musteragent-event-envelope.workspace = true
+musteragent-runtime-memory.workspace = true
+musteragent-execution-context.workspace = true
+musteragent-execution-supervision.workspace = true
+musteragent-execution-liveness.workspace = true
+musteragent-content-ref = { version = "0.1.0", path = "../../foundation/content-ref" }
+musteragent-context = { version = "0.1.0", path = "../context" }
+musteragent-identity = { version = "0.1.0", path = "../../foundation/identity" }
+musteragent-ledger = { version = "0.1.0", path = "../ledger" }
+musteragent-model = { version = "0.1.0", path = "../../domains/model" }
+musteragent-run = { version = "0.1.0", path = "../run" }
+musteragent-runtime-contract = { version = "0.1.0", path = "../../foundation/runtime-contract" }
+musteragent-approval = { version = "0.1.0", path = "../../domains/approval" }
+musteragent-runtime-model = { version = "0.1.0", path = "../model" }
+musteragent-runtime-snapshot = { version = "0.1.0", path = "../snapshot" }
+musteragent-telemetry.workspace = true
+musteragent-tool = { version = "0.1.0", path = "../../domains/tool" }
+futures-util = "0.3.33"
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { version = "1.53.1", features = ["macros", "rt", "sync", "time"] }
+tokio-util = { version = "0.7.19", features = ["rt"] }
+tracing.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+musteragent-execution-liveness-io.workspace = true
+tokio = { version = "1.53.1", features = ["test-util"] }
+musteragent-activity = { version = "0.1.0", path = "../../domains/activity" }
+musteragent-content-ref = { version = "0.1.0", path = "../../foundation/content-ref" }
+musteragent-event-envelope = { version = "0.1.0", path = "../../foundation/event-envelope" }
+musteragent-model = { version = "0.1.0", path = "../../domains/model" }

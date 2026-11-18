@@ -1,0 +1,27 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "runtime.proto";
+
+message DialogueInteractionAnswer {
+  ContentRef content_ref = 1;
+  bytes content = 2;
+}
+
+enum DialogueInteractionControlDelivery {
+  DIALOGUE_INTERACTION_CONTROL_DELIVERY_UNSPECIFIED = 0;
+  DIALOGUE_INTERACTION_CONTROL_DELIVERY_QUEUED = 1;
+  DIALOGUE_INTERACTION_CONTROL_DELIVERY_APPLIED = 2;
+  DIALOGUE_INTERACTION_CONTROL_DELIVERY_REJECTED = 3;
+}
+
+message DialogueInteractionControlReceipt {
+  CommandId command_id = 1;
+  DialogueInteractionControlDelivery delivery = 2;
+  // Present only when the original execution Owner committed this command.
+  CommandAck owner_ack = 3;
+}
+
+message DialogueInteractionDecision {}

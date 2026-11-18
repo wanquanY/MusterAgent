@@ -1,0 +1,39 @@
+[package]
+name = "musteragent-ledger"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-activity.workspace = true
+musteragent-approval.workspace = true
+musteragent-artifact.workspace = true
+musteragent-content-ref.workspace = true
+musteragent-context.workspace = true
+musteragent-conversation.workspace = true
+musteragent-discovery.workspace = true
+musteragent-event-envelope.workspace = true
+musteragent-execution-grant.workspace = true
+musteragent-identity.workspace = true
+musteragent-memory.workspace = true
+musteragent-model.workspace = true
+musteragent-run.workspace = true
+musteragent-runtime-admission.workspace = true
+musteragent-runtime-contract.workspace = true
+musteragent-runtime-memory.workspace = true
+musteragent-runtime-model.workspace = true
+musteragent-runtime-snapshot.workspace = true
+musteragent-telemetry.workspace = true
+musteragent-tool.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+musteragent-sandbox.workspace = true
+musteragent-capability.workspace = true
+musteragent-evolution.workspace = true
+musteragent-policy.workspace = true
+
+[lints]
+workspace = true

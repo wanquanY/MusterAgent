@@ -1,0 +1,131 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "owner_applications.proto";
+import "agent_dialogue.proto";
+
+message OwnerEventSourceDesired {
+  OwnerEventSubscription subscription = 1;
+  uint64 goal_revision = 2;
+  bool capture_requested = 3;
+  uint64 account_sequence = 4;
+  uint64 account_epoch = 5;
+  OwnerSpaceId account_space_id = 6;
+  // Computed by the configuration owner. Producers must not reimplement its
+  // canonical representation when acknowledging an activation boundary.
+  bytes configuration_sha256 = 7;
+}
+
+message OwnerEventSubscription {
+  OwnerEventSubscriptionId subscription_id = 1;
+  GoalId goal_id = 2;
+  TenantId tenant_id = 3;
+  PrincipalId owner_id = 4;
+  AgentId agent_id = 5;
+  OwnerEventSubscriptionConfiguration configuration = 6;
+  bool required = 7;
+  OwnerEventSubscriptionGuard guard = 8;
+  OwnerEventSubscriptionIntent desired = 9;
+  SourceActivationBoundary boundary = 10;
+  SourceReadinessObservation source_status = 11;
+  optional int64 source_acknowledged_at_ms = 12;
+  int64 created_at_ms = 13;
+  int64 updated_at_ms = 14;
+}
+
+message OwnerEventSubscriptionConfiguration {
+  OwnerApplicationBindingId application_binding_id = 1;
+  OwnerApplicationGuard application_guard = 2;
+  string capability_ref = 3;
+  bytes capability_sha256 = 4;
+  // Private, bounded JSON object checked against the pinned published schema.
+  // Not a credential, permission grant or caller-provided provider cursor.
+  bytes selection_json = 5;
+  repeated string event_kinds = 6;
+}
+
+message OwnerEventSubscriptionGuard {
+  uint64 revision = 1;
+  uint64 activation_epoch = 2;
+}
+
+message OwnerEventSubscriptionId { string value = 1; }
+
+enum OwnerEventSubscriptionIntent {
+  OWNER_EVENT_SUBSCRIPTION_INTENT_UNSPECIFIED = 0;
+  OWNER_EVENT_SUBSCRIPTION_INTENT_WATCHING = 1;
+  OWNER_EVENT_SUBSCRIPTION_INTENT_PAUSED = 2;
+  OWNER_EVENT_SUBSCRIPTION_INTENT_ENDED = 3;
+}
+
+message OwnerSourceInputReceipt {
+  GoalId goal_id = 1;
+  SourceEventId event_id = 2;
+  bytes evidence_sha256 = 3;
+  uint64 input_sequence = 4;
+  repeated SourceInputMatch matches = 5;
+  optional SourceObjectIdentity source_object = 6;
+  // Original capture position, retained for causal source reconciliation.
+  // Legacy receipts without it cannot authorize automatic version ordering.
+  optional SourceObservationIdentity source_observation = 7;
+}
+
+message SourceActivationBoundary {
+  SourceBoundaryId boundary_id = 1;
+  OwnerEventSubscriptionId subscription_id = 2;
+  uint64 activation_epoch = 3;
+  bytes configuration_sha256 = 4;
+  SourceCaptureId capture_id = 5;
+  uint64 capture_generation = 6;
+  uint64 after_source_sequence = 7;
+  uint64 source_status_revision = 8;
+  bytes evidence_sha256 = 9;
+}
+
+message SourceBoundaryId { string value = 1; }
+
+message SourceCaptureId { string value = 1; }
+
+message SourceEventId { string value = 1; }
+
+message SourceInputMatch {
+  OwnerEventSubscriptionId subscription_id = 1;
+  OwnerEventSubscriptionGuard guard = 2;
+}
+
+message SourceObjectIdentity {
+  string provider = 1;
+  string connection = 2;
+  string resource = 3;
+  string version = 4;
+  int64 observed_at_unix_ms = 5;
+}
+
+message SourceObservationIdentity {
+  SourceCaptureId capture_id = 1;
+  uint64 capture_generation = 2;
+  SourceEventId event_id = 3;
+  uint64 source_sequence = 4;
+  string event_kind = 5;
+  bytes evidence_sha256 = 6;
+  optional SourceObjectIdentity source_object = 7;
+}
+
+enum SourceReadiness {
+  SOURCE_READINESS_UNSPECIFIED = 0;
+  SOURCE_READINESS_READY = 1;
+  SOURCE_READINESS_RETRYING = 2;
+  SOURCE_READINESS_AUTHORIZATION_REQUIRED = 3;
+  SOURCE_READINESS_COVERAGE_GAP = 4;
+  SOURCE_READINESS_RETIRED = 5;
+}
+
+message SourceReadinessObservation {
+  SourceCaptureId capture_id = 1;
+  uint64 capture_generation = 2;
+  uint64 revision = 3;
+  SourceReadiness readiness = 4;
+  bytes evidence_sha256 = 5;
+}

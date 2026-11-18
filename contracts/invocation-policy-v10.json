@@ -1,0 +1,34 @@
+{
+  "schema": "musteragent.invocation-policy.v10",
+  "policy_ref": "musteragent.invocation-policy.conditional-approval@10",
+  "rules": [
+    {
+      "rule_ref": "runtime-experience-candidate-policy@1",
+      "boundary": "Allow unpublished experience proposals only with canonical current-task provenance. Preserve signed capability decisions, mandatory approval floors and content authority."
+    },
+    {
+      "rule_ref": "device-browser-operation-policy@1",
+      "boundary": "Allow passive browser state, navigation keys, and syntactically public HTTP(S) navigation; require approval for DOM mutation until provider-attested target semantics and redirect enforcement exist."
+    },
+    {
+      "rule_ref": "device-computer-operation-policy@1",
+      "boundary": "Allow passive observation and non-committing navigation such as cursor movement, scrolling, and paging; require approval for clicks, keyboard input, drag, value changes, application lifecycle, and capture lifecycle."
+    },
+    {
+      "rule_ref": "device-resource-mutation-policy@2",
+      "boundary": "Resolve the physical file target through the provisioned local resource authority. Allow current-task non-delete writes to authorized resources, including absolute paths and other registered workspaces; require approval for protected resources, missing authority and deletions. A policy approval never grants new filesystem access."
+    },
+    {
+      "rule_ref": "device-task-confined-terminal-policy@3",
+      "boundary": "Trusted device.terminal.exec@4 commands and descendants run inside the selected project boundary with task scratch, authorized Skill resources. Permit workspace-local cleanup, executable-bit changes, and kill -9 of a live terminal process supervised by this Run in this workspace. Only explicit exact host access can widen the filesystem boundary. Retain sensitive-operation reviews and hard denials."
+    },
+    {
+      "rule_ref": "device-interactive-execution-policy@2",
+      "boundary": "In Trusted mode, require approval for unconfined interactive terminal sessions/input and project diagnostic programs. Ctrl-C may stop an operation. A command-looking string or an Enter key does not prove read-only effects. Full-access and immutable legacy modes retain their existing policy semantics."
+    },
+    {
+      "rule_ref": "device-terminal-host-access-request@1",
+      "boundary": "Only device.terminal.exec@4 accepts request_host_access=true. Require original exact-invocation approve-once before physical execution, including FullAccess. Never reuse a session approval or auto review. Preserve prohibited-command floors, selected task paths, OS permissions and independent file-tool authority. Omitted/false preserves original permission behavior. Historical tool versions retain their frozen schemas and policy identity."
+    }
+  ]
+}

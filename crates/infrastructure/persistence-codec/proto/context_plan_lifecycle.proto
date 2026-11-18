@@ -1,0 +1,32 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "run_records.proto";
+
+message ContextPlanControlCutV1 {
+  uint64 sequence = 1;
+  LedgerRecordId record_id = 2;
+  RunControlKind kind = 3;
+}
+
+message ContextPlanHeadRefV1 {
+  ContextSnapshotId snapshot_id = 1;
+  uint32 generation = 2;
+  Sha256 checksum = 3;
+}
+
+message ContextPlanLineageV1 {
+  uint32 schema_version = 1;
+  uint32 generation = 2;
+  ContextPlanHeadRefV1 predecessor = 3;
+  ContextPlanControlCutV1 control = 4;
+}
+
+message ContextPlanSelectionV1 {
+  uint32 schema_version = 1;
+  ContextPlanHeadRefV1 expected_head = 2;
+  ContextPlanControlCutV1 source_control = 3;
+  ContextPlanLineageV1 lineage = 4;
+}

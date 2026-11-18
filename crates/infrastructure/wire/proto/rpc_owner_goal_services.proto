@@ -1,0 +1,47 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "agent_dialogue.proto";
+import "owner_goal_execution.proto";
+import "standing_goal.proto";
+
+message CreateOwnerGoalDraftRequest {
+  Actor actor = 1;
+  CommandId command_id = 2;
+  GoalId goal_id = 3;
+  OwnerSpaceId space_id = 4;
+  AgentId agent_id = 5;
+  AgentDialogueId dialogue_id = 6;
+  AgentId requesting_agent_id = 7;
+  AgentDialogueId source_dialogue_id = 8;
+  OwnerGoalDefinition definition = 9;
+}
+
+message OwnerGoalCreationNotObservedAtRead {}
+
+message OwnerGoalDefinition {
+  string title = 1;
+  bytes objective_markdown = 2;
+  repeated string constraints = 3;
+  StandingGoalCompletionContract completion = 4;
+}
+
+service OwnerGoalManagementService {
+  rpc CreateDraft(CreateOwnerGoalDraftRequest) returns (OwnerGoalDraftReceipt);
+  rpc ReadCreationReceipt(ReadOwnerGoalCreationReceiptRequest) returns (ReadOwnerGoalCreationReceiptResponse);
+}
+
+message ReadOwnerGoalCreationReceiptRequest {
+  Actor actor = 1;
+  CommandId command_id = 2;
+}
+
+message ReadOwnerGoalCreationReceiptResponse {
+  
+  oneof result {
+    OwnerGoalDraftReceipt receipt = 1;
+    OwnerGoalCreationNotObservedAtRead not_observed_at_read = 2;
+  }
+}

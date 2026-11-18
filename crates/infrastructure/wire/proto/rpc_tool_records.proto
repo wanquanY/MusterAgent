@@ -1,0 +1,15 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "rpc_common.proto";
+import "tool_records.proto";
+
+message InteractionResponseRef {
+  oneof response {
+    ApprovalDecision approval = 1;
+    ContentRef content = 2;
+    SecureResponseRef secure = 3;
+  }
+}

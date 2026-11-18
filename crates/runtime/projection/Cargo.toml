@@ -1,0 +1,39 @@
+[package]
+name = "musteragent-projection"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-activity = { version = "0.1.0", path = "../../domains/activity" }
+musteragent-approval = { version = "0.1.0", path = "../../domains/approval" }
+musteragent-artifact = { version = "0.1.0", path = "../../domains/artifact" }
+musteragent-content-ref = { version = "0.1.0", path = "../../foundation/content-ref" }
+musteragent-conversation = { version = "0.1.0", path = "../../domains/conversation" }
+musteragent-context.workspace = true
+musteragent-event-envelope = { version = "0.1.0", path = "../../foundation/event-envelope" }
+musteragent-goal = { version = "0.1.0", path = "../../domains/goal" }
+musteragent-identity = { version = "0.1.0", path = "../../foundation/identity" }
+musteragent-ledger = { version = "0.1.0", path = "../ledger" }
+musteragent-run = { version = "0.1.0", path = "../run" }
+musteragent-runtime-contract = { version = "0.1.0", path = "../../foundation/runtime-contract" }
+musteragent-runtime-model.workspace = true
+musteragent-tool = { version = "0.1.0", path = "../../domains/tool" }
+futures-util = "0.3.33"
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { version = "1.53.1", features = ["macros", "rt", "sync", "time"] }
+tokio-stream = "0.1.19"
+tokio-util = { version = "0.7.19", features = ["rt"] }
+tracing.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+musteragent-execution-context.workspace = true
+musteragent-conversation = { version = "0.1.0", path = "../../domains/conversation" }
+musteragent-policy = { version = "0.1.0", path = "../../foundation/policy" }

@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "error", "execution_started", "repair"],
+  "properties": {
+    "ok": {"const": false},
+    "execution_started": {"const": false},
+    "error": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "retryable", "message"],
+      "properties": {
+        "code": {"const": "invalid_command"},
+        "retryable": {"const": false},
+        "message": {"type": "string"}
+      }
+    },
+    "repair": {
+      "type": "object", "additionalProperties": false,
+      "required": ["action", "issue_count", "groups"],
+      "properties": {
+        "action": {"const": "correct_arguments"},
+        "issue_count": {"type": "integer", "minimum": 0},
+        "groups": {
+          "type": "array", "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["kind", "constraint", "count", "paths"],
+            "properties": {
+              "kind": {"type": "string"},
+              "constraint": {
+                "type": "object", "additionalProperties": false,
+                "required": ["rule", "expected"],
+                "properties": {"rule": {"type": "string"}, "expected": {}}
+              },
+              "count": {"type": "integer", "minimum": 1},
+              "paths": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    }
+  }
+}

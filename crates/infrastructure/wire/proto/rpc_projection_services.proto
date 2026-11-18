@@ -1,0 +1,24 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "rpc_common.proto";
+import "rpc_run_records.proto";
+
+service MeteringProjectionService {
+  rpc RecordModelUsage(RecordModelUsageRequest)
+      returns (RecordModelUsageResult);
+}
+
+message RecordModelUsageRequest {
+  OutboxMessageId message_id = 1;
+  PrincipalId user_id = 2;
+  MeteringUsageFact usage = 3;
+  TraceContext trace_context = 4;
+}
+
+message RecordModelUsageResult {
+  OutboxMessageId message_id = 1;
+  bool duplicate = 2;
+}

@@ -1,0 +1,226 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "execution_liveness.proto";
+import "google/protobuf/timestamp.proto";
+
+message BrowserApplicationBuildContract {
+  BrowserApplicationRoutingMode routing_mode = 1;
+  optional string routing_fallback = 2;
+  BrowserApplicationPreviewProfile preview_profile = 3;
+  Sha256 source_revision_hash = 4;
+}
+
+enum BrowserApplicationPreviewProfile {
+  BROWSER_APPLICATION_PREVIEW_PROFILE_UNSPECIFIED = 0;
+  BROWSER_APPLICATION_PREVIEW_PROFILE_STATIC_SAFE = 1;
+  BROWSER_APPLICATION_PREVIEW_PROFILE_INTERACTIVE_ISOLATED = 2;
+}
+
+enum BrowserApplicationRoutingMode {
+  BROWSER_APPLICATION_ROUTING_MODE_UNSPECIFIED = 0;
+  BROWSER_APPLICATION_ROUTING_MODE_MULTI_PAGE = 1;
+  BROWSER_APPLICATION_ROUTING_MODE_SPA = 2;
+}
+
+message BrowserDeclaredOutput {
+  string path = 1;
+  string media_type = 2;
+  uint64 maximum_byte_length = 3;
+  bool required = 4;
+}
+
+message BrowserDiagnostic {
+  string code = 1;
+  BrowserDiagnosticSeverity severity = 2;
+  string message = 3;
+  optional string path = 4;
+  optional uint32 line = 5;
+  optional uint32 column = 6;
+}
+
+enum BrowserDiagnosticSeverity {
+  BROWSER_DIAGNOSTIC_SEVERITY_UNSPECIFIED = 0;
+  BROWSER_DIAGNOSTIC_SEVERITY_INFO = 1;
+  BROWSER_DIAGNOSTIC_SEVERITY_WARNING = 2;
+  BROWSER_DIAGNOSTIC_SEVERITY_ERROR = 3;
+}
+
+message BrowserEsbuildProgram {
+  ContentRef source_tree_ref = 1;
+  ContentRef dependency_lock_ref = 2;
+  BrowserApplicationBuildContract application = 3;
+}
+
+message BrowserInputDescriptor {
+  string path = 1;
+  ContentRef content_ref = 2;
+}
+
+enum BrowserJobEngine {
+  BROWSER_JOB_ENGINE_UNSPECIFIED = 0;
+  BROWSER_JOB_ENGINE_PYTHON = 1;
+  BROWSER_JOB_ENGINE_STATIC_VALIDATE = 2;
+  BROWSER_JOB_ENGINE_ESBUILD = 3;
+  BROWSER_JOB_ENGINE_PRESENTATION = 4;
+  BROWSER_JOB_ENGINE_PYTHON_ENVIRONMENT = 5;
+}
+
+message BrowserJobMetrics {
+  uint64 wall_time_millis = 1;
+  uint64 input_bytes = 2;
+  uint64 output_bytes = 3;
+  uint32 output_files = 4;
+}
+
+message BrowserJobProgram {
+  oneof program {
+    BrowserPythonProgram python = 1;
+    BrowserStaticValidateProgram static_validate = 2;
+    BrowserEsbuildProgram esbuild = 3;
+    BrowserPresentationProgram presentation = 4;
+    BrowserPythonEnvironmentProgram python_environment = 5;
+    BrowserPythonWorkspaceProgram python_workspace = 6;
+  }
+}
+
+message BrowserJobRequest {
+  string schema_version = 1;
+  BrowserJobId job_id = 2;
+  InvocationId invocation_id = 3;
+  BrowserJobEngine engine = 4;
+  VersionedRef runtime_release_ref = 5;
+  BrowserJobProgram program = 6;
+  repeated BrowserInputDescriptor inputs = 7;
+  repeated BrowserDeclaredOutput declared_outputs = 8;
+  BrowserResourceLimits limits = 9;
+  BrowserSecurityProfile security_profile = 10;
+  // Exact Product conversation whose current immutable Content graph may be
+  // materialized by the assigned browser page. This is routing/authorization
+  // context, not a Runner payload; the credentialless Runner never receives it.
+  ConversationId conversation_id = 11;
+  // Original Runtime owns activity, cancellation and silence. Absent only for
+  // historical fixed-budget jobs; never infer this from wall_time_millis.
+  ExecutionLivenessPolicyV1 execution_liveness_v1 = 12;
+}
+
+message BrowserJobResult {
+  string schema_version = 1;
+  BrowserJobId job_id = 2;
+  BrowserJobStatus status = 3;
+  repeated StagedBrowserOutput outputs = 4;
+  repeated BrowserDiagnostic diagnostics = 5;
+  string stdout_tail = 6;
+  string stderr_tail = 7;
+  BrowserJobMetrics metrics = 8;
+  Sha256 result_hash = 9;
+}
+
+enum BrowserJobStatus {
+  BROWSER_JOB_STATUS_UNSPECIFIED = 0;
+  BROWSER_JOB_STATUS_COMPLETED = 1;
+  BROWSER_JOB_STATUS_FAILED = 2;
+  BROWSER_JOB_STATUS_CANCELLED = 3;
+  BROWSER_JOB_STATUS_RESOURCE_EXCEEDED = 4;
+  BROWSER_JOB_STATUS_INDETERMINATE = 5;
+}
+
+message BrowserLeaseProof {
+  BrowserLeaseId lease_id = 1;
+  TenantId tenant_id = 2;
+  PrincipalId principal_id = 3;
+  BrowserSessionId browser_session_id = 4;
+  PageInstanceId page_instance_id = 5;
+  CapabilityProviderId provider_id = 6;
+  uint64 epoch = 7;
+  uint64 fence = 8;
+}
+
+message BrowserPresentationProgram {
+  ContentRef bundle_ref = 1;
+  // Empty only for environment discovery. All execution jobs pin a generation.
+  string component_generation = 2;
+}
+
+message BrowserProviderLease {
+  BrowserLeaseId lease_id = 1;
+  TenantId tenant_id = 2;
+  PrincipalId principal_id = 3;
+  BrowserSessionId browser_session_id = 4;
+  PageInstanceId page_instance_id = 5;
+  CapabilityProviderId provider_id = 6;
+  VersionedRef runtime_release_ref = 7;
+  repeated string capability_keys = 8;
+  VersionedRef resource_profile_ref = 9;
+  uint64 epoch = 10;
+  uint64 fence = 11;
+  google.protobuf.Timestamp issued_at = 12;
+  google.protobuf.Timestamp expires_at = 13;
+}
+
+message BrowserPythonEnvironmentBinding {
+  string installation_id = 1;
+  string revision_hash = 2;
+  string scope_key = 3;
+}
+
+message BrowserPythonEnvironmentProgram {
+  repeated string requirements = 1;
+  optional string requires_python = 2;
+  string scope_key = 3;
+}
+
+message BrowserPythonProgram {
+  ContentRef source_ref = 1;
+  string entrypoint = 2;
+  BrowserPythonEnvironmentBinding environment = 3;
+  bool require_prepared_environment = 4;
+}
+
+message BrowserPythonWorkspaceProgram {
+  ExecutionWorkspaceId execution_workspace_id = 6;
+  ContentRef source_ref = 1;
+  ContentRef workspace_ref = 2;
+  string entrypoint = 3;
+  BrowserPythonEnvironmentBinding environment = 4;
+  ContentRef environment_manifest_ref = 5;
+}
+
+message BrowserResourceLimits {
+  uint64 wall_time_millis = 1;
+  uint64 maximum_input_bytes = 2;
+  uint64 maximum_output_bytes = 3;
+  uint32 maximum_files = 4;
+  uint64 maximum_stdout_bytes = 5;
+  uint64 maximum_stderr_bytes = 6;
+}
+
+message BrowserRuntimeFeatureProbe {
+  bool worker = 1;
+  bool web_assembly = 2;
+  bool crypto_subtle = 3;
+  bool transferable_array_buffer = 4;
+  repeated BrowserJobEngine engines = 5;
+  bool service_worker = 6;
+  bool indexed_db = 7;
+  bool secure_context = 8;
+}
+
+enum BrowserSecurityProfile {
+  BROWSER_SECURITY_PROFILE_UNSPECIFIED = 0;
+  BROWSER_SECURITY_PROFILE_SAFE_OFFLINE = 1;
+  BROWSER_SECURITY_PROFILE_PROXY_EGRESS = 2;
+}
+
+message BrowserStaticValidateProgram {
+  ContentRef source_tree_ref = 1;
+  BrowserApplicationBuildContract application = 2;
+}
+
+message StagedBrowserOutput {
+  string path = 1;
+  ContentRef content_ref = 2;
+  string staging_receipt_ref = 3;
+}

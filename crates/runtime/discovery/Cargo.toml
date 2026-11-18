@@ -1,0 +1,17 @@
+[package]
+name = "musteragent-runtime-discovery"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-discovery.workspace = true
+musteragent-identity.workspace = true
+musteragent-run.workspace = true
+musteragent-runtime-capability = { version = "0.1.0", path = "../capability" }
+musteragent-runtime-contract.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,23 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+
+message AgentWorkChanged {
+  AgentWorkReference reference = 1;
+  AgentId agent_id = 2;
+}
+
+enum AgentWorkKind {
+  AGENT_WORK_KIND_UNSPECIFIED = 0;
+  AGENT_WORK_KIND_WORK_ITEM = 1;
+  AGENT_WORK_KIND_SCHEDULE = 2;
+  AGENT_WORK_KIND_GOAL = 3;
+}
+
+message AgentWorkReference {
+  AgentWorkKind kind = 1;
+  string id = 2;
+  AgentId agent_id = 3;
+}

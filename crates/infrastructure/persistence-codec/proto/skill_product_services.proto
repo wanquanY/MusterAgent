@@ -1,0 +1,117 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "local_runtime.proto";
+import "snapshot.proto";
+
+message AccountSkillCatalogEntry {
+  SkillDefinitionSnapshot definition = 1;
+  string skill_key = 2;
+  int64 identity_created_at_ms = 3;
+  LocalSkillOrigin origin = 4;
+  LocalSkillTrust trust = 5;
+  string source_ref = 6;
+  string publisher_ref = 7;
+  optional PrincipalId created_by = 8;
+  string when_to_use = 9;
+  Sha256 spec_hash = 10;
+  repeated SkillCatalogReferenceSnapshot references = 11;
+  // Present only on the dedicated retained admission catalog path.
+  optional string bundle_ref = 12;
+  // Current market admission policy for this exact authorized entry. No grant.
+  // Retained Base material must keep false; old readers keep on-demand loading.
+  bool load_default = 13;
+}
+
+message ImportProductSkillRequest {
+  Actor actor = 1;
+  CommandId command_id = 2;
+  string market_skill_id = 3;
+  string market_version_id = 4;
+  string market_publisher_id = 5;
+  SkillSurface surface = 6;
+  ProductSkillImportDisposition disposition = 7;
+  ContentRef archive = 8;
+  // True only for user-uploaded packages; all market identity fields must be empty.
+  bool uploaded_archive = 9;
+  ProductSkillAccountInstallation account_installation = 10;
+}
+
+message ListProductSkillImportsRequest {
+  Actor actor = 1;
+  string market_skill_id = 2;
+  optional string market_version_id = 3;
+  SkillSurface surface = 4;
+  uint32 limit = 5;
+  optional string cursor = 6;
+  bool uploaded_archives = 7;
+}
+
+message ListProductSkillImportsResponse {
+  repeated ProductSkillImportOperation operations = 1;
+  optional string next_cursor = 2;
+}
+
+message ProductSkillAccountInstallation {
+  string product = 1;
+  uint64 revision = 2;
+}
+
+enum ProductSkillImportDisposition {
+  PRODUCT_SKILL_IMPORT_DISPOSITION_UNSPECIFIED = 0;
+  PRODUCT_SKILL_IMPORT_DISPOSITION_SAVE_ONLY = 1;
+  PRODUCT_SKILL_IMPORT_DISPOSITION_INSTALL = 2;
+  // Save an immutable package for an independent Agent binding. Existing Work
+  // availability/pointers remain unchanged, including on a version upgrade.
+  PRODUCT_SKILL_IMPORT_DISPOSITION_MATERIALIZE = 3;
+}
+
+message ProductSkillImportOperation {
+  CommandId command_id = 1;
+  string market_skill_id = 2;
+  string market_version_id = 3;
+  string market_publisher_id = 4;
+  SkillSurface surface = 5;
+  ProductSkillImportDisposition disposition = 6;
+  Sha256 request_digest = 7;
+  ProductSkillImportStatus status = 8;
+  int64 accepted_at_unix_ms = 9;
+  optional int64 completed_at_unix_ms = 10;
+  ProductSkillImportReceipt receipt = 11;
+  bool uploaded_archive = 12;
+  // Present for uploaded commands so a retry cannot silently replace its bytes.
+  Sha256 uploaded_archive_sha256 = 13;
+  ProductSkillAccountInstallation account_installation = 14;
+}
+
+message ProductSkillImportReceipt {
+  SkillId skill_id = 1;
+  SkillVersionId skill_version_id = 2;
+  uint64 pointer_version = 3;
+  bool created_version = 4;
+}
+
+message ProductSkillImportResponse {
+  ProductSkillImportOperation operation = 1;
+}
+
+enum ProductSkillImportStatus {
+  PRODUCT_SKILL_IMPORT_STATUS_UNSPECIFIED = 0;
+  PRODUCT_SKILL_IMPORT_STATUS_ACCEPTED = 1;
+  PRODUCT_SKILL_IMPORT_STATUS_COMPLETED = 2;
+  PRODUCT_SKILL_IMPORT_STATUS_CONFLICT = 3;
+}
+
+message SelectAccountSkillsResponse {
+  repeated AccountSkillCatalogEntry entries = 1;
+  // Digest of the immutable encoded entries (this field omitted). Retained path only.
+  Sha256 retained_catalog_sha256 = 2;
+}
+
+message WithdrawProductSkillRequest {
+  Actor actor = 1;
+  string market_skill_id = 2;
+  ProductSkillAccountInstallation installation = 3;
+}

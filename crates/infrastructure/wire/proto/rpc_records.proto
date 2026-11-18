@@ -1,0 +1,42 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+import "records.proto";
+
+message LedgerRecord {
+  string schema_version = 1;
+  LedgerRecordId record_id = 2;
+  LedgerRecordKind record_kind = 3;
+  TenantId tenant_id = 4;
+  ConversationId conversation_id = 5;
+  uint64 conversation_seq = 6;
+  ActivityId activity_id = 7;
+  RunId run_id = 8;
+  optional uint64 run_seq = 9;
+  AttemptId attempt_id = 10;
+  ParticipantId participant_id = 11;
+  uint64 home_epoch = 12;
+  ProducerKind producer = 13;
+  google.protobuf.Timestamp occurred_at = 14;
+  google.protobuf.Timestamp committed_at = 15;
+  LedgerRecordId causation_id = 16;
+  CorrelationId correlation_id = 17;
+  string idempotency_key = 18;
+  Sha256 payload_hash = 19;
+  oneof payload {
+    DomainEvent domain_event = 20;
+    OutputFrame output_frame = 21;
+  }
+}
+
+enum ProducerKind {
+  PRODUCER_KIND_UNSPECIFIED = 0;
+  PRODUCER_KIND_RUNTIME_API = 1;
+  PRODUCER_KIND_WORKER = 2;
+  PRODUCER_KIND_SCHEDULER = 3;
+  PRODUCER_KIND_PROJECTOR = 4;
+  PRODUCER_KIND_IMPORTER = 5;
+}

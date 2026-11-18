@@ -1,0 +1,178 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "execution_liveness.proto";
+import "execution_policy.proto";
+import "dialogue_context.proto";
+import "rpc_agent_model_usage.proto";
+
+message AgentCompactionCommand {
+  oneof operation {
+    AgentCompactionSeal begin_supervised = 8;
+    AgentCompactionSupervisedCompletion complete_supervised = 9;
+    AgentCompactionRequest load = 1;
+    AgentCompactionSeal seal = 2;
+    AgentCompactionRequest dispatch = 3;
+    InvocationId recover = 4;
+    AgentCompactionCompletion complete = 5;
+    AgentCompactionReadContent read_content = 6;
+    AgentCompactionRequest latest_generation = 7;
+
+    AgentCompactionRequest latest_generation_with_sealed_estimate = 10;
+    
+    AgentCompactionRequest latest_role_candidate = 11;
+  }
+}
+
+message AgentCompactionCompletion {
+  AgentCompactionModelInvocation invocation = 1;
+
+  optional string metering_message_id = 2;
+  bytes metering_payload = 3;
+  Sha256 metering_payload_hash = 4;
+  optional int64 retry_not_before_ms = 5;
+  optional string early_provider_cause = 6;
+}
+
+message AgentCompactionContinuation {
+  InvocationId parent_invocation_id = 1;
+  string prefix = 2;
+}
+
+message AgentCompactionGeneration {
+  uint32 generation = 1;
+  InvocationId invocation_id = 2;
+  string correlation_id = 3;
+  Sha256 plan_fingerprint = 4;
+  Sha256 logical_plan_fingerprint = 5;
+  optional uint64 sealed_ledger_cutoff = 6;
+  AttemptId owner_attempt_id = 7;
+  uint64 owner_fencing_token = 8;
+  
+  int64 deadline_ms = 9;
+  
+  ActivityExecutionTimingV1 activity_v1 = 15;
+  
+  uint32 state = 10;
+  optional string error_code = 11;
+  bool failure_retryable = 12;
+  optional uint64 retry_after_ms = 13;
+  uint32 generation_high_watermark = 14;
+  
+  optional uint64 sealed_input_tokens_before = 16;
+  optional string early_provider_cause = 17;
+}
+
+message AgentCompactionGenerationResult { AgentCompactionGeneration generation = 1; }
+
+message AgentCompactionModelInvocation {
+  InvocationId invocation_id = 1;
+  TenantId tenant_id = 2;
+  ConversationId conversation_id = 3;
+  RunId run_id = 4;
+  AttemptId attempt_id = 5;
+  
+  uint32 status = 6;
+  string model_route_ref = 7;
+  Sha256 route_identity_hash = 8;
+  string credential_grant_ref = 9;
+  string requested_model_key = 10;
+  optional string response_model_key = 11;
+  string pricing_version_ref = 12;
+  string idempotency_key = 13;
+  ContentRef request_ref = 14;
+  Sha256 request_hash = 15;
+  ContentRef response_ref = 16;
+  optional string provider_request_ref = 17;
+  optional string continuation_input_ref = 18;
+  optional string continuation_output_ref = 19;
+  AgentJournalModelUsage usage = 20;
+  int64 started_at_ms = 21;
+  optional int64 finished_at_ms = 22;
+  ErrorInfo error = 23;
+}
+
+message AgentCompactionPersistedSlot {
+  bytes canonical_invocation_metadata = 1;
+  ContentRef request_ref = 2;
+  Sha256 request_hash = 3;
+  string model_route_ref = 4;
+  int64 started_at_ms = 5;
+  
+  uint32 dispatch_state = 6;
+}
+
+message AgentCompactionDialogueSource {
+  DialogueContextCut coverage = 1;
+  DialogueContextCheckpointId parent_checkpoint_id = 2;
+}
+
+message AgentCompactionReadContent {
+  InvocationId invocation_id = 1;
+  ContentRef content = 2;
+}
+
+message AgentCompactionRecovery {
+  Sha256 request_hash = 1;
+  string model_route_ref = 2;
+  
+  uint32 state = 3;
+  ContentRef response = 4;
+  optional string error_code = 5;
+  bool failure_retryable = 6;
+  optional int64 retry_not_before_ms = 7;
+  optional string early_provider_cause = 8;
+}
+
+message AgentCompactionRecoveryResult { AgentCompactionRecovery recovery = 1; }
+
+message AgentCompactionRequest {
+  AgentCompactionSlot slot = 1;
+  bytes canonical_invocation_metadata = 2;
+  bytes canonical_model_route = 3;
+  string credential_grant_ref = 4;
+  ModelStreamBudgetSnapshot stream_budget = 5;
+  bytes serialized_history = 6;
+  optional string previous_summary = 7;
+  repeated LedgerRecordId summarized_record_ids = 8;
+  uint64 max_output_tokens = 9;
+  uint32 max_attempts = 10;
+  PersistentRecoveryPolicyV1 persistent_recovery_v1 = 11;
+  AgentCompactionContinuation continuation = 12;
+  BoundedBackoffPolicyV1 bounded_backoff_v1 = 13;
+}
+
+message AgentCompactionSeal {
+  AgentCompactionRequest request = 1;
+  AgentCompactionModelInvocation invocation = 2;
+}
+
+message AgentCompactionSlot {
+  uint32 loop_iteration = 1;
+  uint32 generation = 2;
+  optional string active_branch_id = 3;
+  uint64 ledger_cutoff = 4;
+  uint64 source_seq_from = 5;
+  uint64 source_seq_to = 6;
+  repeated LedgerRecordId retained_record_ids = 7;
+  ContentRef previous_summary_ref = 8;
+  uint64 input_budget = 9;
+  uint64 input_tokens_before = 10;
+  uint64 summary_budget = 11;
+  string compaction_policy_ref = 12;
+  Sha256 plan_fingerprint = 13;
+  
+  AgentCompactionDialogueSource dialogue_source = 14;
+  
+  LedgerRecordId superseding_control_id = 15;
+}
+
+message AgentCompactionSlotResult { AgentCompactionPersistedSlot slot = 1; }
+
+message AgentCompactionSupervisedCompletion {
+  bytes canonical_invocation_metadata = 1;
+  AgentCompactionCompletion completion = 2;
+  bool native_terminal = 3;
+}

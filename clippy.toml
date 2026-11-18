@@ -1,0 +1,3 @@
+# Tests use panic locations to identify failed fixture setup and assertions.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true

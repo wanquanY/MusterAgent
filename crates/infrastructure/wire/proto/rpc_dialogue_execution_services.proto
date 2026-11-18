@@ -1,0 +1,16 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "snapshot.proto";
+
+message DeviceInstinctMaterial {
+  InstinctSelectionSnapshot selection = 1;
+  bytes content = 2;
+}
+
+message DeviceProfilePrompt {
+  bytes content = 1;
+  repeated MemoryVersionRef source_versions = 2;
+}

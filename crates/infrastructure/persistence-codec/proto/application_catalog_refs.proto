@@ -1,0 +1,36 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+
+
+message ApplicationCatalogReference {
+  string family = 1; // v1 reader supports workspace only.
+  string source_id = 2; // Canonical nonzero UUID of the original source.
+  bytes release_sha256 = 3;
+  bytes index_sha256 = 4;
+}
+
+message ApplicationCatalogScopeGroup {
+  // Exact original admitted bundle, never a union of broader scopes.
+  repeated string scopes = 1;
+  // Strictly increasing uint16 little-endian original operation ordinals.
+  // Groups are disjoint. At most 10000 ordinals overall, 20000 bytes per source.
+  bytes operation_ordinals_le = 2;
+}
+
+message FrozenAccountApplicationCatalog {
+  ApplicationCatalogReference reference = 1;
+  // Canonical original WorkspaceInvocationWitness JSON, with only
+  // operation_key/operation_sha256/scopes/agent_witness removed. No credentials.
+  bytes authority_template_json = 2;
+  // Canonical original OwnerApplicationConsumerWitness with tool_ref empty.
+  // Required for account-scoped catalogs. Never a mutable Dialogue binding read.
+  bytes dialogue_witness_template = 3;
+  // Canonical lexicographic order of exact scope tuples. Unknown/duplicate
+  // ordinals or duplicate scope groups are rejected, never dropped.
+  repeated ApplicationCatalogScopeGroup scope_groups = 4;
+  // SHA256(domain || deterministic protobuf with this field empty). Domain:
+  // "musteragent.frozen-application-catalog.v1\0".
+  bytes selection_sha256 = 5;
+}

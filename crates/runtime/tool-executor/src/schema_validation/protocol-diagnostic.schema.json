@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["ok", "schema_version", "error", "execution", "diagnostic"],
+  "properties": {
+    "ok": {"const": false},
+    "schema_version": {"const": "tool.argument-protocol-diagnostics@1"},
+    "execution": {"const": "not_executed"},
+    "error": {
+      "type": "object", "additionalProperties": false,
+      "required": ["code", "kind", "message", "retryable"],
+      "properties": {
+        "code": {"const": "invalid_command"},
+        "kind": {"enum": ["truncated", "malformed_json", "object_required", "invalid_value"]},
+        "message": {"type": "string"}, "retryable": {"const": false}
+      }
+    },
+    "diagnostic": {
+      "type": ["object", "null"], "additionalProperties": false,
+      "required": ["version", "source", "received_bytes", "sha256", "parse", "generation_limit", "configured_output_tokens", "reported_output_tokens", "configured_argument_bytes"],
+      "properties": {
+        "version": {"const": 1},
+        "source": {"enum": ["stream", "initial_snapshot", "arguments_done", "output_item_done", "terminal_snapshot", "canonical_value"]},
+        "received_bytes": {"type": "integer", "minimum": 0, "maximum": 16777216},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "parse": {
+          "type": ["object", "null"], "additionalProperties": false,
+          "required": ["category", "line", "column"],
+          "properties": {
+            "category": {"enum": ["eof", "syntax", "data", "io"]},
+            "line": {"type": "integer", "minimum": 1},
+            "column": {"type": "integer", "minimum": 0}
+          }
+        },
+        "generation_limit": {"enum": ["output_tokens", "output_or_context_window", null]},
+        "configured_output_tokens": {"type": ["integer", "null"], "minimum": 1},
+        "reported_output_tokens": {"type": ["integer", "null"], "minimum": 0},
+        "configured_argument_bytes": {"type": ["integer", "null"], "minimum": 1, "maximum": 16777216}
+      }
+    }
+  }
+}

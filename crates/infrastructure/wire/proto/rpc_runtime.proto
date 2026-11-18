@@ -1,0 +1,1434 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "conversation_records.proto";
+import "execution_grant.proto";
+import "google/protobuf/timestamp.proto";
+import "records.proto";
+import "resource_records.proto";
+import "rpc_common.proto";
+import "rpc_conversation_records.proto";
+import "rpc_file_query.proto";
+import "rpc_records.proto";
+import "rpc_resource_mutations.proto";
+import "rpc_tool_records.proto";
+import "rpc_workspace_control.proto";
+import "run_records.proto";
+import "runtime.proto";
+import "snapshot.proto";
+import "tool_records.proto";
+
+message AbortFileEditCommand {
+  CommandMetadata metadata = 1;
+  ResourceEditSessionId session_id = 2;
+  uint64 expected_session_revision = 3;
+  WorkspaceFileEditCommandContext workspace_context = 4;
+  
+  bool execution_workspace = 5;
+}
+
+message AcknowledgeConversationSeenThroughRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  uint64 expected_home_epoch = 3;
+  uint64 seen_through = 4;
+  google.protobuf.Timestamp rendered_at = 5;
+}
+
+message ActivateConversationContextBranchCommand {
+  CommandMetadata metadata = 1;
+  ContextBranchId branch_id = 2;
+}
+
+enum ActiveRunArchivePolicy {
+  ACTIVE_RUN_ARCHIVE_POLICY_UNSPECIFIED = 0;
+  ACTIVE_RUN_ARCHIVE_POLICY_REJECT = 1;
+  ACTIVE_RUN_ARCHIVE_POLICY_CANCEL_THEN_ARCHIVE = 2;
+}
+
+message AdmissionSelection {
+  AdmissionSurface surface = 1;
+  repeated string requested_skill_refs = 2;
+}
+
+enum AdmissionSurface {
+  ADMISSION_SURFACE_UNSPECIFIED = 0;
+  ADMISSION_SURFACE_WEB = 1;
+  ADMISSION_SURFACE_STUDIO = 2;
+  ADMISSION_SURFACE_API = 3;
+  ADMISSION_SURFACE_DESKTOP = 4;
+  ADMISSION_SURFACE_CHANNEL = 5;
+  
+  ADMISSION_SURFACE_MOBILE = 6;
+}
+
+message ApplyFileEditsCommand {
+  CommandMetadata metadata = 1;
+  ResourceEditSessionId session_id = 2;
+  ResourceEditOperationId operation_id = 3;
+  uint64 expected_session_revision = 4;
+  uint64 expected_sequence = 5;
+  repeated TextEditOperation operations = 6;
+  WorkspaceFileEditCommandContext workspace_context = 7;
+  
+  bool execution_workspace = 8;
+}
+
+message ArchiveConversationCommand {
+  CommandMetadata metadata = 1;
+  ActiveRunArchivePolicy active_run_policy = 2;
+}
+
+message ArtifactImportProvenance {
+  string legacy_artifact_id = 1;
+  string legacy_created_by_run_id = 2;
+  string legacy_status = 3;
+  string legacy_source_kind = 4;
+  string legacy_source_id = 5;
+  Sha256 source_payload_hash = 6;
+}
+
+enum ArtifactLifecycle {
+  ARTIFACT_LIFECYCLE_UNSPECIFIED = 0;
+  ARTIFACT_LIFECYCLE_DRAFT = 1;
+  ARTIFACT_LIFECYCLE_PUBLISHED = 2;
+  ARTIFACT_LIFECYCLE_ARCHIVED = 3;
+  ARTIFACT_LIFECYCLE_FAILED = 4;
+}
+
+enum ArtifactOrigin {
+  ARTIFACT_ORIGIN_UNSPECIFIED = 0;
+  ARTIFACT_ORIGIN_RUNTIME = 1;
+  ARTIFACT_ORIGIN_GOVERNED_IMPORT = 2;
+  ARTIFACT_ORIGIN_PRODUCT = 3;
+}
+
+message ArtifactSummary {
+  ArtifactId artifact_id = 1;
+  ConversationId conversation_id = 2;
+  ActivityId activity_id = 3;
+  RunId created_by_run_id = 4;
+  ArtifactKind kind = 5;
+  ArtifactLifecycle lifecycle = 6;
+  uint64 current_version = 7;
+  string title = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+  ArtifactVersionView current_version_view = 11;
+  ArtifactOrigin origin = 12;
+  ArtifactImportProvenance import_provenance = 13;
+  
+  WorkspaceId workspace_id = 14;
+}
+
+message ArtifactVersionView {
+  ArtifactVersionId artifact_version_id = 1;
+  ArtifactId artifact_id = 2;
+  uint64 version = 3;
+  ContentRef content_ref = 4;
+  Sha256 content_hash = 5;
+  InvocationId source_invocation_id = 6;
+  ParticipantId committed_by = 7;
+  google.protobuf.Timestamp committed_at = 8;
+  repeated ContentRef dependency_refs = 9;
+  
+  PrincipalId committed_by_principal_id = 10;
+}
+
+message AttemptView {
+  AttemptId attempt_id = 1;
+  uint32 attempt_number = 2;
+  string worker_id = 3;
+  LeaseId lease_id = 4;
+  uint64 fencing_token = 5;
+  google.protobuf.Timestamp lease_expires_at = 6;
+}
+
+message BeginFileEditCommand {
+  CommandMetadata metadata = 1;
+  ResourceEditSessionId session_id = 2;
+  ResourceNodeId file_node_id = 3;
+  uint64 base_version = 4;
+  string format_adapter = 5;
+  google.protobuf.Timestamp expires_at = 6;
+  WorkspaceFileEditCommandContext workspace_context = 7;
+  
+  bool execution_workspace = 8;
+}
+
+message CancelInteractionCommand {
+  CommandMetadata metadata = 1;
+  InteractionId interaction_id = 2;
+  CancelReason reason = 3;
+}
+
+message CancelRunCommand {
+  CommandMetadata metadata = 1;
+  RunId run_id = 2;
+  CancelReason reason = 3;
+}
+
+enum CatalogActionKind {
+  CATALOG_ACTION_KIND_UNSPECIFIED = 0;
+  CATALOG_ACTION_KIND_APPROVAL = 1;
+  CATALOG_ACTION_KIND_CONFIRMATION = 2;
+  CATALOG_ACTION_KIND_USER_INPUT = 3;
+  CATALOG_ACTION_KIND_SELECTION = 4;
+  CATALOG_ACTION_KIND_CREDENTIAL = 5;
+  CATALOG_ACTION_KIND_OAUTH = 6;
+  CATALOG_ACTION_KIND_BUDGET = 7;
+  CATALOG_ACTION_KIND_RESOURCE = 8;
+  CATALOG_ACTION_KIND_DEPENDENCY = 9;
+}
+
+enum CatalogAttentionKind {
+  CATALOG_ATTENTION_KIND_UNSPECIFIED = 0;
+  CATALOG_ATTENTION_KIND_CONVERSATION_CREATED = 1;
+  CATALOG_ATTENTION_KIND_USER_MESSAGE = 2;
+  CATALOG_ATTENTION_KIND_PROGRESS = 3;
+  CATALOG_ATTENTION_KIND_OUTPUT = 4;
+  CATALOG_ATTENTION_KIND_EXECUTION_OUTCOME = 5;
+  CATALOG_ATTENTION_KIND_CHILD_REPORT = 6;
+  CATALOG_ATTENTION_KIND_GOAL_EVALUATION = 7;
+  CATALOG_ATTENTION_KIND_GOAL_DECISION = 8;
+  CATALOG_ATTENTION_KIND_ACTION_REQUIRED = 9;
+  CATALOG_ATTENTION_KIND_INBOUND_MESSAGE = 10;
+  CATALOG_ATTENTION_KIND_ARTIFACT_OUTCOME = 11;
+  CATALOG_ATTENTION_KIND_SYSTEM_NOTICE = 12;
+}
+
+message CatalogExecutionCounts {
+  uint32 queued = 1;
+  uint32 running = 2;
+  uint32 waiting = 3;
+  uint32 cancelling = 4;
+}
+
+enum CatalogExecutionOutcomeKind {
+  CATALOG_EXECUTION_OUTCOME_KIND_UNSPECIFIED = 0;
+  CATALOG_EXECUTION_OUTCOME_KIND_SUCCEEDED = 1;
+  CATALOG_EXECUTION_OUTCOME_KIND_FAILED = 2;
+  CATALOG_EXECUTION_OUTCOME_KIND_CANCELLED = 3;
+  CATALOG_EXECUTION_OUTCOME_KIND_INTERRUPTED = 4;
+}
+
+enum CatalogGoalPursuitStatus {
+  CATALOG_GOAL_PURSUIT_STATUS_UNSPECIFIED = 0;
+  CATALOG_GOAL_PURSUIT_STATUS_PENDING = 1;
+  CATALOG_GOAL_PURSUIT_STATUS_RUNNING = 2;
+  CATALOG_GOAL_PURSUIT_STATUS_WAITING = 3;
+  CATALOG_GOAL_PURSUIT_STATUS_PAUSED = 4;
+  CATALOG_GOAL_PURSUIT_STATUS_ACHIEVED = 5;
+  CATALOG_GOAL_PURSUIT_STATUS_FAILED = 6;
+  CATALOG_GOAL_PURSUIT_STATUS_CANCELLED = 7;
+}
+
+enum CatalogRecoverability {
+  CATALOG_RECOVERABILITY_UNSPECIFIED = 0;
+  CATALOG_RECOVERABILITY_RETRYABLE = 1;
+  CATALOG_RECOVERABILITY_USER_ACTION = 2;
+  CATALOG_RECOVERABILITY_NON_RECOVERABLE = 3;
+  CATALOG_RECOVERABILITY_UNKNOWN = 4;
+}
+
+enum CatalogStandingGoalStatus {
+  CATALOG_STANDING_GOAL_STATUS_UNSPECIFIED = 0;
+  CATALOG_STANDING_GOAL_STATUS_DRAFT = 1;
+  CATALOG_STANDING_GOAL_STATUS_ACTIVE = 2;
+  CATALOG_STANDING_GOAL_STATUS_PAUSED = 3;
+  CATALOG_STANDING_GOAL_STATUS_ACHIEVED = 4;
+  CATALOG_STANDING_GOAL_STATUS_FAILED = 5;
+  CATALOG_STANDING_GOAL_STATUS_CANCELLED = 6;
+}
+
+enum CatalogWaitReason {
+  CATALOG_WAIT_REASON_UNSPECIFIED = 0;
+  CATALOG_WAIT_REASON_APPROVAL = 1;
+  CATALOG_WAIT_REASON_USER_INPUT = 2;
+  CATALOG_WAIT_REASON_CONFIRMATION = 3;
+  CATALOG_WAIT_REASON_SELECTION = 4;
+  CATALOG_WAIT_REASON_CREDENTIAL = 5;
+  CATALOG_WAIT_REASON_OAUTH = 6;
+  CATALOG_WAIT_REASON_BUDGET = 7;
+  CATALOG_WAIT_REASON_DEVICE = 8;
+  CATALOG_WAIT_REASON_RESOURCE = 9;
+  CATALOG_WAIT_REASON_DEPENDENCY = 10;
+  CATALOG_WAIT_REASON_EXTERNAL_OPERATION = 11;
+  CATALOG_WAIT_REASON_RETRY_BACKOFF = 12;
+  CATALOG_WAIT_REASON_DELEGATION = 13;
+  CATALOG_WAIT_REASON_DELEGATION_GROUP = 14;
+  CATALOG_WAIT_REASON_COMPLETIONS = 15;
+}
+
+message CommitResourceChangeSetCommand {
+  CommandMetadata metadata = 1;
+  ResourceChangeSetId change_set_id = 2;
+  uint64 expected_revision = 3;
+  repeated ResourceChangeSetMutation mutations = 4;
+  
+  bool execution_workspace = 5;
+}
+
+message CompleteContentUploadRequest {
+  Actor actor = 1;
+  string upload_id = 2;
+  string media_type = 3;
+  repeated ContentRef parts = 4;
+  uint64 byte_length = 5;
+  Sha256 sha256 = 6;
+}
+
+message ContentChunk {
+  ContentRef content_ref = 1;
+  uint64 byte_offset_start = 2;
+  uint64 byte_offset_end = 3;
+  bytes data = 4;
+  bool final_chunk = 5;
+}
+
+message ContextBranchView {
+  ContextBranchId branch_id = 1;
+  optional ContextBranchId parent_branch_id = 2;
+  LedgerRecordId fork_from_record_id = 3;
+  uint64 fork_from_sequence = 4;
+  optional ContentRef branch_summary_ref = 5;
+  ContextBranchOrigin origin = 6;
+  optional CorrelationId edit_group_id = 7;
+  optional MessageId edit_target_message_id = 8;
+  PrincipalId created_by = 9;
+  uint64 created_sequence = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+message ConversationActionSummaryV2 {
+  uint32 count = 1;
+  optional CatalogActionKind highest_priority = 2;
+  repeated CatalogActionKind kinds = 3;
+}
+
+message ConversationCatalogChange {
+  optional ConversationId conversation_id = 1;
+  bool resync_required = 2;
+  ConversationSummary conversation = 3;
+  bool removed = 4;
+}
+
+message ConversationCatalogChangeV2 {
+  uint64 latest_position = 1;
+  oneof change {
+    ConversationCatalogSummaryV2 upsert = 2;
+    ConversationId remove = 3;
+    bool resync_required = 4;
+  }
+}
+
+message ConversationCatalogCursorV2 {
+  uint64 snapshot_position = 1;
+  google.protobuf.Timestamp after_activity_at = 2;
+  ConversationId after_conversation_id = 3;
+}
+
+message ConversationCatalogSummaryV2 {
+  TenantId tenant_id = 1;
+  ConversationId conversation_id = 2;
+  optional WorkspaceId workspace_id = 3;
+  ConversationKind kind = 4;
+  optional string title = 5;
+  ConversationLifecycle lifecycle = 6;
+  RuntimeHome control_home = 7;
+  uint64 home_epoch = 8;
+  uint64 catalog_revision = 9;
+  uint64 last_activity_position = 10;
+  google.protobuf.Timestamp last_user_visible_activity_at = 11;
+  google.protobuf.Timestamp metadata_updated_at = 12;
+  ConversationExecutionSummaryV2 execution = 13;
+  ConversationActionSummaryV2 action_required = 14;
+  optional CatalogStandingGoalStatus standing_goal_status = 15;
+  optional CatalogGoalPursuitStatus pursuit_status = 16;
+  optional ConversationOutcomeSummaryV2 latest_outcome = 17;
+  ConversationUnreadSummaryV2 unread = 18;
+}
+
+message ConversationExecutionSummaryV2 {
+  CatalogExecutionCounts root = 1;
+  CatalogExecutionCounts child = 2;
+  CatalogExecutionCounts pursuit = 3;
+  repeated CatalogWaitReason wait_reasons = 4;
+}
+
+message ConversationListCursor {
+  google.protobuf.Timestamp updated_at = 1;
+  ConversationId conversation_id = 2;
+}
+
+message ConversationOperationalSummary {
+  uint32 active_run_count = 1;
+  uint32 queued_run_count = 2;
+  uint32 running_run_count = 3;
+  uint32 waiting_run_count = 4;
+  uint32 cancelling_run_count = 5;
+  repeated RunWaitReason wait_reasons = 6;
+  uint32 pending_interaction_count = 7;
+  repeated InteractionKind pending_interaction_kinds = 8;
+}
+
+message ConversationOutcomeSummaryV2 {
+  CatalogExecutionOutcomeKind kind = 1;
+  optional string error_class = 2;
+  optional CatalogRecoverability recoverability = 3;
+}
+
+message ConversationProjectionSnapshot {
+  string schema_version = 1;
+  ProjectionSnapshotId snapshot_id = 2;
+  TenantId tenant_id = 3;
+  ConversationId conversation_id = 4;
+  uint64 home_epoch = 5;
+  uint64 through_conversation_seq = 6;
+  repeated ProjectedMessage messages = 7;
+  repeated ProjectedToolItem tool_timeline = 8;
+  repeated ProjectedInteraction pending_interactions = 9;
+  repeated ProjectedRun active_runs = 10;
+  repeated ProjectedArtifact artifacts = 11;
+  repeated ContentRef content_manifest = 12;
+  Sha256 checksum = 13;
+  google.protobuf.Timestamp created_at = 14;
+  repeated ProjectedStreamOutput stream_outputs = 15;
+  repeated ProjectedActivity activities = 16;
+  repeated ProjectedRun runs = 17;
+  repeated ProjectedContextCompaction context_compactions = 18;
+}
+
+message ConversationProjectionWindowCursor {
+  ProjectionSnapshotId snapshot_id = 1;
+  Sha256 snapshot_checksum = 2;
+  uint64 before_message_index = 3;
+}
+
+message ConversationReadReceiptAck {
+  PrincipalId principal_id = 1;
+  ConversationId conversation_id = 2;
+  uint64 seen_through = 3;
+  bool changed = 4;
+}
+
+message ConversationSummary {
+  ConversationId conversation_id = 1;
+  TenantId tenant_id = 2;
+  optional WorkspaceId workspace_id = 3;
+  ConversationKind kind = 4;
+  string title = 5;
+  ConversationLifecycle lifecycle = 6;
+  LedgerCursor latest_cursor = 7;
+  bool has_active_run = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+  ConversationOperationalSummary operational = 11;
+}
+
+message ConversationUnreadSummaryV2 {
+  uint32 count = 1;
+  uint64 seen_through = 2;
+  uint64 latest_visible_revision = 3;
+  optional CatalogAttentionKind latest_unread_kind = 4;
+  optional ConversationOutcomeSummaryV2 latest_unread_outcome = 5;
+}
+
+message ConversationView {
+  ConversationId conversation_id = 1;
+  TenantId tenant_id = 2;
+  ConversationKind kind = 3;
+  string title = 4;
+  RuntimeHome control_home = 5;
+  uint64 home_epoch = 6;
+  uint64 next_conversation_seq = 7;
+  ConversationLifecycle lifecycle = 8;
+  PrincipalId created_by = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  google.protobuf.Timestamp archived_at = 12;
+  repeated ParticipantView participants = 13;
+  optional WorkspaceId workspace_id = 14;
+  ParticipantId execution_owner_participant_id = 15;
+}
+
+message CreateConversationCommand {
+  CommandMetadata metadata = 1;
+  ConversationId conversation_id = 2;
+  ConversationKind kind = 3;
+  string title = 4;
+  RuntimeHome control_home = 5;
+  optional WorkspaceId workspace_id = 6;
+}
+
+message CreateResourceFileCommand {
+  CommandMetadata metadata = 1;
+  ResourceChangeSetId change_set_id = 2;
+  uint64 expected_revision = 3;
+  ResourceNodeId node_id = 4;
+  ResourceNodeId parent_node_id = 5;
+  string name = 6;
+  string sort_key = 7;
+  ArtifactId artifact_id = 8;
+  ArtifactVersionId artifact_version_id = 9;
+  ContentRef content_ref = 10;
+  ParticipantId participant_id = 11;
+  WorkspaceResourceCommandContext workspace_context = 12;
+  
+  bool execution_workspace = 13;
+}
+
+message EditAndResubmitMessageCommand {
+  reserved 15;
+  CommandMetadata metadata = 1;
+  MessageId target_message_id = 2;
+  ContextBranchId preserved_branch_id = 3;
+  ContextBranchId replacement_branch_id = 4;
+  MessageId message_id = 5;
+  ParticipantId participant_id = 6;
+  oneof content {
+    string text = 7;
+    ContentRef content_ref = 8;
+  }
+  repeated AttachmentRef attachment_refs = 9;
+  string requested_model_class = 10;
+  RequestedFeatures requested_features = 11;
+  ExecutionScope execution_scope = 12;
+  SignedExecutionGrant signed_execution_grant = 13;
+  AdmissionSelection admission_selection = 14;
+  optional ProjectTaskTarget project_task_target = 16;
+}
+
+message EditCheckpointResponse {
+  ResourceEditSessionId session_id = 1;
+  ResourceEditOperationId operation_id = 2;
+  uint64 sequence = 3;
+  uint64 session_revision = 4;
+  uint64 next_sequence = 5;
+  ContentRef checkpoint_ref = 6;
+  bool duplicate = 7;
+}
+
+message EditTerminalResponse {
+  ResourceEditSessionId session_id = 1;
+  FileEditSessionState state = 2;
+  uint64 session_revision = 3;
+  ArtifactVersionId artifact_version_id = 4;
+  optional uint64 file_version = 5;
+  bool duplicate = 6;
+}
+
+message EnqueueRunControlCommand {
+  CommandMetadata metadata = 1;
+  RunId run_id = 2;
+  MessageId message_id = 3;
+  ParticipantId participant_id = 4;
+  RunControlKind kind = 5;
+  oneof content {
+    string text = 6;
+    ContentRef content_ref = 7;
+  }
+  repeated AttachmentRef attachment_refs = 8;
+}
+
+enum FileEditSessionState {
+  FILE_EDIT_SESSION_STATE_UNSPECIFIED = 0;
+  FILE_EDIT_SESSION_STATE_OPEN = 1;
+  FILE_EDIT_SESSION_STATE_FINALIZING = 2;
+  FILE_EDIT_SESSION_STATE_COMMITTED = 3;
+  FILE_EDIT_SESSION_STATE_ABORTED = 4;
+  FILE_EDIT_SESSION_STATE_CONFLICTED = 5;
+  FILE_EDIT_SESSION_STATE_EXPIRED = 6;
+}
+
+message FileEditSessionView {
+  ResourceEditSessionId session_id = 1;
+  ResourceNodeId file_node_id = 2;
+  ArtifactId file_artifact_id = 3;
+  uint64 base_version = 4;
+  FileEditSessionState state = 5;
+  uint64 session_revision = 6;
+  uint64 next_sequence = 7;
+  ContentRef checkpoint_ref = 8;
+  string format_adapter = 9;
+  google.protobuf.Timestamp expires_at = 10;
+  WorkspaceId project_id = 11;
+  ConversationId conversation_scope_id = 12;
+  ExecutionWorkspaceId execution_workspace_id = 13;
+  AgentId owned_agent_id = 14;
+}
+
+message FinalizeFileEditCommand {
+  CommandMetadata metadata = 1;
+  ResourceEditSessionId session_id = 2;
+  ArtifactVersionId artifact_version_id = 3;
+  ParticipantId committed_by = 4;
+  uint64 expected_session_revision = 5;
+  WorkspaceFileEditCommandContext workspace_context = 6;
+  
+  bool execution_workspace = 7;
+}
+
+message ForkConversationContextCommand {
+  CommandMetadata metadata = 1;
+  ContextBranchId branch_id = 2;
+  ContextBranchId parent_branch_id = 3;
+  LedgerRecordId fork_from_record_id = 4;
+  ContentRef branch_summary_ref = 5;
+}
+
+message GetArtifactRequest {
+  Actor actor = 1;
+  ArtifactId artifact_id = 2;
+  
+  WorkspaceId workspace_id = 3;
+}
+
+message GetArtifactResponse {
+  ArtifactSummary artifact = 1;
+  repeated ArtifactVersionView versions = 2;
+}
+
+message GetConversationProjectionRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  ProjectionSnapshotId preferred_snapshot_id = 3;
+}
+
+message GetConversationProjectionResponse {
+  ConversationProjectionSnapshot snapshot = 1;
+  LedgerCursor snapshot_cursor = 2;
+}
+
+message GetConversationProjectionWindowRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  uint32 limit = 3;
+  ConversationProjectionWindowCursor before = 4;
+}
+
+message GetConversationProjectionWindowResponse {
+  ConversationProjectionSnapshot projection = 1;
+  ProjectionSnapshotId authority_snapshot_id = 2;
+  LedgerCursor head_cursor = 3;
+  ConversationProjectionWindowCursor older_cursor = 4;
+  bool has_older = 5;
+}
+
+message GetConversationReadBootstrapRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  uint32 limit = 3;
+  ProjectionSnapshotId preferred_snapshot_id = 4;
+}
+
+message GetConversationReadBootstrapResponse {
+  GetConversationResponse conversation = 1;
+  GetConversationProjectionWindowResponse window = 2;
+}
+
+message GetConversationRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+}
+
+message GetConversationResponse {
+  ConversationView conversation = 1;
+  LedgerCursor latest_cursor = 2;
+  repeated ActivityId active_activity_ids = 3;
+  repeated RunId active_run_ids = 4;
+  optional ContextBranchId active_context_branch_id = 5;
+  repeated ContextBranchView context_branches = 6;
+}
+
+message GetInteractionRequest {
+  Actor actor = 1;
+  InteractionId interaction_id = 2;
+}
+
+message GetInteractionResponse {
+  InteractionView interaction = 1;
+
+  InteractionControlContext local_control = 2;
+}
+
+message GetRunRequest {
+  Actor actor = 1;
+  RunId run_id = 2;
+}
+
+message GetRunResponse {
+  RunView run = 1;
+  LedgerCursor latest_cursor = 2;
+  repeated InteractionId pending_interaction_ids = 3;
+  AttemptView active_attempt = 4;
+  RunRetryConfiguration retry_configuration = 5;
+}
+
+message InteractionControlContext {
+  TenantId tenant_id = 1;
+  ConversationId conversation_id = 2;
+  uint64 home_epoch = 3;
+  RuntimeHome control_home = 4;
+  RuntimeHome execution_home = 5;
+  bool control_open = 6;
+}
+
+enum InteractionResponseAuthority {
+  INTERACTION_RESPONSE_AUTHORITY_UNSPECIFIED = 0;
+  INTERACTION_RESPONSE_AUTHORITY_WEB_USER_INPUT = 1;
+  INTERACTION_RESPONSE_AUTHORITY_DEVICE_USER_PRESENCE = 2;
+
+  INTERACTION_RESPONSE_AUTHORITY_ACCOUNT_USER_INPUT = 3;
+  // Authenticated host input: one-shot cloud approvals, never device presence.
+  INTERACTION_RESPONSE_AUTHORITY_HOST_USER_INPUT = 5;
+}
+
+message ListConversationArtifactsRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  uint32 limit = 3;
+  ArtifactId before_artifact_id = 4;
+  string search_query = 5;
+  repeated ArtifactKind kinds = 6;
+}
+
+message ListConversationArtifactsResponse {
+  repeated ArtifactSummary artifacts = 1;
+  ArtifactId next_before_artifact_id = 2;
+  bool has_more = 3;
+}
+
+message ListConversationCatalogV2Request {
+  Actor actor = 1;
+  optional ConversationId conversation_id = 2;
+  optional WorkspaceId workspace_id = 3;
+  ConversationLifecycle lifecycle = 4;
+  uint32 page_size = 5;
+  optional ConversationCatalogCursorV2 after = 6;
+}
+
+message ListConversationCatalogV2Response {
+  uint64 snapshot_position = 1;
+  repeated ConversationCatalogSummaryV2 conversations = 2;
+  optional ConversationCatalogCursorV2 next_cursor = 3;
+}
+
+message ListConversationRecordsRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  LedgerCursor cursor = 3;
+  uint32 limit = 4;
+}
+
+message ListConversationRecordsResponse {
+  repeated LedgerRecord records = 1;
+  LedgerCursor next_cursor = 2;
+  bool has_more = 3;
+  LedgerCursor projection_checkpoint = 4;
+}
+
+message ListConversationsRequest {
+  Actor actor = 1;
+  optional WorkspaceId workspace_id = 2;
+  optional ConversationLifecycle lifecycle = 3;
+  uint32 page_size = 4;
+  optional ConversationListCursor after = 5;
+  optional ConversationId conversation_id = 6;
+}
+
+message ListConversationsResponse {
+  repeated ConversationSummary conversations = 1;
+  optional ConversationListCursor next_cursor = 2;
+}
+
+message ListResourceChildrenRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  ResourceNodeId parent_node_id = 3;
+  bool include_trashed = 4;
+  uint32 offset = 5;
+  uint32 limit = 6;
+  
+  bool execution_workspace = 7;
+}
+
+message ListResourceChildrenResponse {
+  WorkspaceId project_id = 1;
+  ConversationId conversation_scope_id = 2;
+  uint64 revision = 3;
+  repeated ResourceNodeView nodes = 4;
+  optional uint32 next_offset = 5;
+  ExecutionWorkspaceId execution_workspace_id = 6;
+  AgentId owned_agent_id = 7;
+}
+
+message ListWorkspaceCatalogActivityRequest {
+  Actor actor = 1;
+  repeated WorkspaceId workspace_ids = 2;
+
+  repeated ConversationId excluded_conversation_ids = 3;
+}
+
+message ListWorkspaceCatalogActivityResponse {
+  
+  uint64 snapshot_position = 1;
+  repeated WorkspaceCatalogActivity workspaces = 2;
+}
+
+message MutateResourceNodeCommand {
+  CommandMetadata metadata = 1;
+  ResourceChangeSetId change_set_id = 2;
+  ResourceMutationKind operation = 3;
+  uint64 expected_revision = 4;
+  ResourceNodeId node_id = 5;
+  ResourceNodeId parent_node_id = 6;
+  string name = 7;
+  string sort_key = 8;
+  ArtifactId file_artifact_id = 9;
+  
+  bool execution_workspace = 10;
+}
+
+message MutateWorkspaceResourceNodeCommand {
+  Actor owner = 1;
+  WorkspaceId workspace_id = 2;
+  string idempotency_key = 3;
+  google.protobuf.Timestamp issued_at = 4;
+  ResourceChangeSetId change_set_id = 5;
+  ResourceMutationKind operation = 6;
+  uint64 expected_revision = 7;
+  ResourceNodeId node_id = 8;
+  ResourceNodeId parent_node_id = 9;
+  string name = 10;
+  string sort_key = 11;
+  ArtifactId file_artifact_id = 12;
+}
+
+message ParticipantView {
+  ParticipantId participant_id = 1;
+  ParticipantKind kind = 2;
+  PrincipalId principal_ref = 3;
+  AgentId agent_ref = 4;
+  string service_ref = 5;
+  string display_name = 6;
+  ContentRef avatar_ref = 7;
+  google.protobuf.Timestamp joined_at = 8;
+  google.protobuf.Timestamp left_at = 9;
+}
+
+message ProjectedActivity {
+  ActivityId activity_id = 1;
+  ActivityKind kind = 2;
+  ProjectedActivityStatus status = 3;
+  ParticipantId requested_by_participant_id = 4;
+  ActivityId parent_activity_id = 5;
+  ActivityId root_activity_id = 6;
+  string policy_snapshot_ref = 7;
+  google.protobuf.Timestamp started_at = 8;
+  google.protobuf.Timestamp finished_at = 9;
+  ProjectedCoordinationOrigin coordination_origin = 10;
+  ProjectedDelegationOrigin delegation_origin = 11;
+}
+
+enum ProjectedActivityStatus {
+  PROJECTED_ACTIVITY_STATUS_UNSPECIFIED = 0;
+  PROJECTED_ACTIVITY_STATUS_PLANNED = 1;
+  PROJECTED_ACTIVITY_STATUS_ACTIVE = 2;
+  PROJECTED_ACTIVITY_STATUS_WAITING = 3;
+  PROJECTED_ACTIVITY_STATUS_COMPLETED = 4;
+  PROJECTED_ACTIVITY_STATUS_FAILED = 5;
+  PROJECTED_ACTIVITY_STATUS_CANCELLED = 6;
+}
+
+message ProjectedArtifact {
+  reserved 12;
+  ArtifactId artifact_id = 1;
+  ActivityId activity_id = 2;
+  RunId created_by_run_id = 3;
+  ArtifactKind kind = 4;
+  ArtifactLifecycle lifecycle = 5;
+  uint64 current_version = 6;
+  string title = 7;
+  ContentRef current_content_ref = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  repeated ContentRef current_dependency_refs = 10;
+
+  RunId updated_by_run_id = 11;
+
+}
+
+message ProjectedContextCompaction {
+  InvocationId invocation_id = 1;
+  RunId run_id = 2;
+  uint32 loop_iteration = 3;
+  ProjectedContextCompactionStatus status = 4;
+  ModelRouteRef model_route_ref = 5;
+  uint64 input_tokens_before = 6;
+  optional uint64 input_tokens_after = 7;
+  uint64 summarized_record_count = 8;
+  uint64 retained_record_count = 9;
+  uint64 source_seq_from = 10;
+  uint64 source_seq_to = 11;
+  uint64 started_conversation_seq = 12;
+  google.protobuf.Timestamp started_at = 13;
+  optional google.protobuf.Timestamp finished_at = 14;
+  optional string error_code = 15;
+}
+
+enum ProjectedContextCompactionStatus {
+  PROJECTED_CONTEXT_COMPACTION_STATUS_UNSPECIFIED = 0;
+  PROJECTED_CONTEXT_COMPACTION_STATUS_RUNNING = 1;
+  PROJECTED_CONTEXT_COMPACTION_STATUS_SUCCEEDED = 2;
+  PROJECTED_CONTEXT_COMPACTION_STATUS_FAILED_CONTINUED = 3;
+  PROJECTED_CONTEXT_COMPACTION_STATUS_FAILED_STOPPED = 4;
+  PROJECTED_CONTEXT_COMPACTION_STATUS_INDETERMINATE = 5;
+  PROJECTED_CONTEXT_COMPACTION_STATUS_INTERRUPTED = 6;
+  PROJECTED_CONTEXT_COMPACTION_STATUS_RETRY_SCHEDULED = 7;
+}
+
+message ProjectedCoordinationOrigin {
+  InterSessionMessageId mailbox_message_id = 1;
+  ConversationId source_conversation_id = 2;
+  ContentRef payload_ref = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+}
+
+message ProjectedDelegationOrigin {
+  DelegationId delegation_id = 1;
+  InvocationId parent_invocation_id = 2;
+  ContentRef objective_ref = 3;
+}
+
+message ProjectedInteraction {
+  InteractionId interaction_id = 1;
+  RunId run_id = 2;
+  InteractionKind kind = 3;
+  ContentRef prompt_ref = 4;
+  SchemaRef response_schema = 5;
+  google.protobuf.Timestamp requested_at = 6;
+  google.protobuf.Timestamp expires_at = 7;
+}
+
+message ProjectedMessage {
+  reserved 17;
+  MessageId message_id = 1;
+  ParticipantId participant_id = 2;
+  MessageRole role = 3;
+  ContentRef content_ref = 4;
+  repeated ProjectedReasoningSummary reasoning_summaries = 5;
+  ProjectedMessageStatus status = 6;
+  RunId source_run_id = 7;
+  google.protobuf.Timestamp committed_at = 8;
+  repeated AttachmentRef attachment_refs = 9;
+  ContentRef imported_projection_ref = 10;
+  OutputId assistant_output_id = 11;
+  PartialMessageReason partial_reason = 12;
+  uint64 assistant_next_frame_index = 13;
+  uint64 assistant_next_byte_offset = 14;
+  bool assistant_output_completed = 15;
+  repeated string requested_skill_refs = 16;
+  ProjectTaskTarget project_task_target = 18;
+}
+
+enum ProjectedMessageStatus {
+  PROJECTED_MESSAGE_STATUS_UNSPECIFIED = 0;
+  PROJECTED_MESSAGE_STATUS_STREAMING = 1;
+  PROJECTED_MESSAGE_STATUS_COMMITTED = 2;
+  PROJECTED_MESSAGE_STATUS_PARTIAL = 3;
+}
+
+message ProjectedReasoningSummary {
+  OutputId output_id = 1;
+  ContentRef content_ref = 2;
+  bool completed = 3;
+  uint64 next_frame_index = 4;
+  uint64 next_byte_offset = 5;
+}
+
+message ProjectedRun {
+  RunId run_id = 1;
+  ActivityId activity_id = 2;
+  RunStatus status = 3;
+  RunWaitReason wait_reason = 4;
+  InteractionId wait_interaction_id = 5;
+  google.protobuf.Timestamp admitted_at = 6;
+  google.protobuf.Timestamp started_at = 7;
+  InvocationId wait_invocation_id = 8;
+  ParticipantId executor_participant_id = 9;
+  RunId parent_run_id = 10;
+  DelegationId delegation_id = 11;
+  google.protobuf.Timestamp finished_at = 12;
+  ActivityId wait_child_activity_id = 13;
+  DelegationGroupId wait_delegation_group_id = 14;
+  uint32 attempt_number = 15;
+  uint32 next_attempt_number = 16;
+  google.protobuf.Timestamp retry_not_before = 17;
+
+  MessageId retry_source_message_id = 18;
+  uint32 retry_source_attempt_number = 19;
+  ProjectedRunFailure terminal_failure = 20;
+  
+  ProjectedRunFailure retry_failure = 21;
+  ErrorCode recovery_error_code = 22;
+}
+
+message ProjectedRunFailure {
+  ErrorInfo error = 1;
+  LedgerRecordId ledger_record_id = 2;
+  CorrelationId correlation_id = 3;
+  uint64 conversation_sequence = 4;
+}
+
+message ProjectedStreamOutput {
+  OutputId output_id = 1;
+  MessageId message_id = 2;
+  OutputChannel channel = 3;
+  ContentRef content_ref = 4;
+  bool completed = 5;
+  uint64 next_frame_index = 6;
+  uint64 next_byte_offset = 7;
+  RunId run_id = 8;
+  uint64 first_conversation_seq = 9;
+  google.protobuf.Timestamp occurred_at = 10;
+}
+
+message ProjectedToolItem {
+  InvocationId invocation_id = 1;
+  MessageId message_id = 2;
+  RunId run_id = 3;
+  string tool_call_id = 4;
+  string tool_ref = 5;
+  ProjectedToolStatus status = 6;
+  ContentRef request_ref = 7;
+  ContentRef result_ref = 8;
+  google.protobuf.Timestamp started_at = 9;
+  google.protobuf.Timestamp finished_at = 10;
+  google.protobuf.Timestamp requested_at = 11;
+  uint64 requested_conversation_seq = 12;
+
+  repeated ArtifactId output_artifact_ids = 13;
+}
+
+enum ProjectedToolStatus {
+  PROJECTED_TOOL_STATUS_UNSPECIFIED = 0;
+  PROJECTED_TOOL_STATUS_REQUESTED = 1;
+  PROJECTED_TOOL_STATUS_RUNNING = 2;
+  PROJECTED_TOOL_STATUS_WAITING = 3;
+  PROJECTED_TOOL_STATUS_COMPLETED = 4;
+  PROJECTED_TOOL_STATUS_FAILED = 5;
+  PROJECTED_TOOL_STATUS_CANCELLED = 6;
+  PROJECTED_TOOL_STATUS_RESULT_UNKNOWN = 7;
+}
+
+message PutContentChunk {
+  Actor actor = 1;
+  string media_type = 2;
+  uint64 byte_offset_start = 3;
+  bytes data = 4;
+  bool final_chunk = 5;
+
+  bool reclaimable_if_unreferenced = 6;
+}
+
+message PutContentPartRequest {
+  Actor actor = 1;
+  string upload_id = 2;
+  uint32 part_index = 3;
+  bytes data = 4;
+}
+
+message ReadContentRequest {
+  Actor actor = 1;
+  ContentRef content_ref = 2;
+}
+
+message ReadUploadedContentRequest {
+  Actor actor = 1;
+  string upload_id = 2;
+  ContentRef content_ref = 3;
+}
+
+message RequestedFeatures {
+  bool reasoning_summary = 1;
+  string reasoning_effort = 2;
+  PermissionMode permission_mode = 3;
+}
+
+message ResourceChangeSetCreateFile {
+  ResourceNodeId node_id = 1;
+  ResourceNodeId parent_node_id = 2;
+  string name = 3;
+  string sort_key = 4;
+  ArtifactId artifact_id = 5;
+  ArtifactVersionId artifact_version_id = 6;
+  ContentRef content_ref = 7;
+  ParticipantId committed_by = 8;
+}
+
+message ResourceChangeSetCreateFolder {
+  ResourceNodeId node_id = 1;
+  ResourceNodeId parent_node_id = 2;
+  string name = 3;
+  string sort_key = 4;
+}
+
+message ResourceChangeSetMove {
+  ResourceNodeId node_id = 1;
+  ResourceNodeId target_parent_node_id = 2;
+  optional string name = 3;
+}
+
+message ResourceChangeSetMutation {
+  string mutation_key = 1;
+  oneof mutation {
+    ResourceChangeSetCreateFolder create_folder = 2;
+    ResourceChangeSetCreateFile create_file = 3;
+    ResourceChangeSetPublishEdit publish_edit = 4;
+    ResourceChangeSetRename rename = 5;
+    ResourceChangeSetMove move = 6;
+    ResourceChangeSetTrash trash = 7;
+    ResourceChangeSetRestore restore = 8;
+    ResourceChangeSetSetResult set_result = 9;
+    ResourceChangeSetCopyWorkTree copy_work_tree = 10;
+  }
+}
+
+message ResourceChangeSetMutationResult {
+  string mutation_key = 1;
+  ResourceNodeView node = 2;
+  ArtifactVersionId artifact_version_id = 3;
+  optional uint64 file_version = 4;
+}
+
+message ResourceChangeSetPublishEdit {
+  ResourceEditTerminalCommandId command_id = 1;
+  ResourceEditSessionId session_id = 2;
+  uint64 expected_session_revision = 3;
+  uint64 expected_file_version = 4;
+  ArtifactVersionId artifact_version_id = 5;
+  ParticipantId committed_by = 6;
+}
+
+message ResourceChangeSetRename {
+  ResourceNodeId node_id = 1;
+  string name = 2;
+}
+
+message ResourceChangeSetResponse {
+  WorkspaceId project_id = 1;
+  ConversationId conversation_scope_id = 2;
+  uint64 previous_revision = 3;
+  uint64 revision = 4;
+  repeated ResourceChangeSetMutationResult mutations = 5;
+  bool duplicate = 6;
+  ExecutionWorkspaceId execution_workspace_id = 7;
+  AgentId owned_agent_id = 8;
+}
+
+message ResourceChangeSetRestore {
+  ResourceNodeId node_id = 1;
+  ResourceNodeId target_parent_node_id = 2;
+  optional string name = 3;
+}
+
+message ResourceChangeSetTrash {
+  ResourceNodeId node_id = 1;
+}
+
+enum ResourceMutationKind {
+  RESOURCE_MUTATION_KIND_UNSPECIFIED = 0;
+  RESOURCE_MUTATION_KIND_CREATE_FOLDER = 1;
+  RESOURCE_MUTATION_KIND_LINK_FILE = 2;
+  RESOURCE_MUTATION_KIND_RENAME = 3;
+  RESOURCE_MUTATION_KIND_MOVE = 4;
+  RESOURCE_MUTATION_KIND_TRASH = 5;
+  RESOURCE_MUTATION_KIND_RESTORE = 6;
+}
+
+message ResourceMutationResponse {
+  ResourceNodeView node = 1;
+  WorkspaceId project_id = 2;
+  ConversationId conversation_scope_id = 3;
+  uint64 previous_revision = 4;
+  uint64 revision = 5;
+  bool duplicate = 6;
+  ExecutionWorkspaceId execution_workspace_id = 7;
+  AgentId owned_agent_id = 8;
+}
+
+enum ResourceNodeKind {
+  RESOURCE_NODE_KIND_UNSPECIFIED = 0;
+  RESOURCE_NODE_KIND_FOLDER = 1;
+  RESOURCE_NODE_KIND_FILE = 2;
+}
+
+enum ResourceNodeLifecycle {
+  RESOURCE_NODE_LIFECYCLE_UNSPECIFIED = 0;
+  RESOURCE_NODE_LIFECYCLE_ACTIVE = 1;
+  RESOURCE_NODE_LIFECYCLE_TRASHED = 2;
+}
+
+message ResourceNodeView {
+  bool is_result = 16;
+  ResourceNodeId node_id = 1;
+  ResourceNodeId parent_node_id = 2;
+  ResourceNodeId original_parent_node_id = 3;
+  string name = 4;
+  ResourceNodeKind kind = 5;
+  ResourceNodeLifecycle lifecycle = 6;
+  ArtifactId file_artifact_id = 7;
+  string sort_key = 8;
+  PrincipalId actor_principal_id = 9;
+  ConversationId source_conversation_id = 10;
+  InvocationId source_invocation_id = 11;
+  string source_tool_key = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+  uint64 revision = 15;
+}
+
+message RespondInteractionCommand {
+  CommandMetadata metadata = 1;
+  InteractionId interaction_id = 2;
+  InteractionResponseRef response = 3;
+  InteractionResponseAuthority response_authority = 4;
+}
+
+message ResumeFileEditRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  ResourceEditSessionId session_id = 3;
+  WorkspaceId workspace_id = 4;
+  
+  bool execution_workspace = 5;
+}
+
+message ResumeRunCommand {
+  CommandMetadata metadata = 1;
+  RunId run_id = 2;
+  ParticipantId participant_id = 3;
+  uint32 expected_attempt_number = 4;
+  RunRecoveryAction action = 5;
+}
+
+message RetractMessageCommand {
+  CommandMetadata metadata = 1;
+  MessageId message_id = 2;
+  string reason = 3;
+}
+
+message RetryRunCommand {
+  CommandMetadata metadata = 1;
+  RunId source_run_id = 2;
+  MessageId source_message_id = 3;
+  uint32 expected_attempt_number = 4;
+  ParticipantId participant_id = 5;
+  string requested_model_class = 6;
+  ExecutionScope execution_scope = 7;
+  SignedExecutionGrant signed_execution_grant = 8;
+  AdmissionSelection admission_selection = 9;
+}
+
+message RunRetryConfiguration {
+  string requested_model_class = 1;
+  optional string reasoning_effort = 2;
+  bool reasoning_summary = 3;
+  string permission_mode = 4;
+  ProductReleaseRef source_product_release = 5;
+  repeated string source_capability_keys = 6;
+}
+
+enum RunStatus {
+  RUN_STATUS_UNSPECIFIED = 0;
+  RUN_STATUS_QUEUED = 1;
+  RUN_STATUS_RUNNING = 2;
+  RUN_STATUS_WAITING = 3;
+  RUN_STATUS_CANCELLING = 4;
+  RUN_STATUS_COMPLETED = 5;
+  RUN_STATUS_FAILED = 6;
+  RUN_STATUS_CANCELLED = 7;
+  RUN_STATUS_INTERRUPTED = 8;
+}
+
+message RunView {
+  RunId run_id = 1;
+  TenantId tenant_id = 2;
+  ConversationId conversation_id = 3;
+  ActivityId activity_id = 4;
+  ActivityKind activity_kind = 5;
+  ParticipantId executor_participant_id = 6;
+  ParticipantId requested_by_participant_id = 7;
+  RunId parent_run_id = 8;
+  DelegationId delegation_id = 9;
+  ExecutionScope execution_scope = 10;
+  RuntimeHome control_home = 11;
+  RuntimeHome execution_home = 12;
+  uint64 home_epoch = 13;
+  RuntimeSnapshotId runtime_snapshot_id = 14;
+  RunStatus status = 15;
+  RunWaitReason wait_reason = 16;
+  InteractionId wait_interaction_id = 17;
+  InvocationId wait_invocation_id = 18;
+  uint32 next_attempt_number = 19;
+  google.protobuf.Timestamp not_before = 20;
+  google.protobuf.Timestamp cancel_requested_at = 21;
+  google.protobuf.Timestamp admitted_at = 22;
+  google.protobuf.Timestamp started_at = 23;
+  google.protobuf.Timestamp finished_at = 24;
+  ErrorInfo terminal_error = 25;
+  ActivityId wait_child_activity_id = 26;
+  DelegationGroupId wait_delegation_group_id = 27;
+  ErrorCode recovery_error_code = 28;
+}
+
+service RuntimeContentService {
+  rpc ReadContent(ReadContentRequest) returns (stream ContentChunk);
+  rpc ReadUploadedContent(ReadUploadedContentRequest) returns (stream ContentChunk);
+  rpc PutContent(stream PutContentChunk) returns (ContentRef);
+  rpc PutContentPart(PutContentPartRequest) returns (ContentRef);
+  rpc CompleteContentUpload(CompleteContentUploadRequest) returns (ContentRef);
+}
+
+service RuntimeService {
+  rpc CreateConversation(CreateConversationCommand) returns (CommandAck);
+
+  rpc RecoverConversationCreation(CreateConversationCommand) returns (CommandAck);
+  rpc SubmitMessage(SubmitMessageCommand) returns (CommandAck);
+  rpc RetractMessage(RetractMessageCommand) returns (CommandAck);
+  rpc ForkConversationContext(ForkConversationContextCommand) returns (CommandAck);
+  rpc ActivateConversationContextBranch(ActivateConversationContextBranchCommand) returns (CommandAck);
+  rpc EditAndResubmitMessage(EditAndResubmitMessageCommand) returns (CommandAck);
+  rpc RetryRun(RetryRunCommand) returns (CommandAck);
+  rpc CancelRun(CancelRunCommand) returns (CommandAck);
+  rpc ResumeRun(ResumeRunCommand) returns (CommandAck);
+  rpc EnqueueRunControl(EnqueueRunControlCommand) returns (CommandAck);
+  rpc RespondInteraction(RespondInteractionCommand) returns (CommandAck);
+  rpc CancelInteraction(CancelInteractionCommand) returns (CommandAck);
+  rpc SetConversationTitle(SetConversationTitleCommand) returns (CommandAck);
+  rpc ArchiveConversation(ArchiveConversationCommand) returns (CommandAck);
+  rpc GetConversation(GetConversationRequest) returns (GetConversationResponse);
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+  rpc ListWorkspaceCatalogActivity(ListWorkspaceCatalogActivityRequest) returns (ListWorkspaceCatalogActivityResponse);
+  rpc ListConversationCatalogV2(ListConversationCatalogV2Request) returns (ListConversationCatalogV2Response);
+  rpc AcknowledgeConversationSeenThrough(AcknowledgeConversationSeenThroughRequest) returns (ConversationReadReceiptAck);
+  rpc GetRun(GetRunRequest) returns (GetRunResponse);
+  rpc GetInteraction(GetInteractionRequest) returns (GetInteractionResponse);
+  rpc GetArtifact(GetArtifactRequest) returns (GetArtifactResponse);
+  rpc ListConversationArtifacts(ListConversationArtifactsRequest) returns (ListConversationArtifactsResponse);
+  rpc QueryFiles(QueryFilesRequest) returns (QueryFilesResponse);
+  rpc InspectFile(InspectFileRequest) returns (InspectFileResponse);
+  rpc ReadFileQuery(ReadFileQueryRequest) returns (ReadFileQueryResponse);
+  rpc OpenFileQuery(InspectFileRequest) returns (OpenFileQueryResponse);
+  rpc ReadFileContent(ReadFileContentRequest) returns (stream ContentChunk);
+  rpc ListWorkspaceResourceChildren(ListWorkspaceResourceChildrenRequest) returns (ListResourceChildrenResponse);
+  rpc EnsureWorkspaceResourceRoot(EnsureWorkspaceResourceRootRequest) returns (WorkspaceResourceRootReceipt);
+  rpc ListResourceChildren(ListResourceChildrenRequest) returns (ListResourceChildrenResponse);
+  rpc MutateWorkspaceResourceNode(MutateWorkspaceResourceNodeCommand) returns (ResourceMutationResponse);
+  rpc MutateResourceNode(MutateResourceNodeCommand) returns (ResourceMutationResponse);
+  rpc CreateResourceFile(CreateResourceFileCommand) returns (ResourceMutationResponse);
+  rpc CommitResourceChangeSet(CommitResourceChangeSetCommand) returns (ResourceChangeSetResponse);
+  rpc BeginFileEdit(BeginFileEditCommand) returns (FileEditSessionView);
+  rpc ResumeFileEdit(ResumeFileEditRequest) returns (FileEditSessionView);
+  rpc ApplyFileEdits(ApplyFileEditsCommand) returns (EditCheckpointResponse);
+  rpc FinalizeFileEdit(FinalizeFileEditCommand) returns (EditTerminalResponse);
+  rpc AbortFileEdit(AbortFileEditCommand) returns (EditTerminalResponse);
+  rpc GetConversationProjection(GetConversationProjectionRequest) returns (GetConversationProjectionResponse);
+  rpc GetConversationProjectionWindow(GetConversationProjectionWindowRequest) returns (GetConversationProjectionWindowResponse);
+  rpc GetConversationReadBootstrap(GetConversationReadBootstrapRequest) returns (GetConversationReadBootstrapResponse);
+  rpc ListConversationRecords(ListConversationRecordsRequest) returns (ListConversationRecordsResponse);
+  rpc SubscribeConversationRecords(SubscribeConversationRecordsRequest) returns (stream LedgerRecord);
+  rpc SubscribeConversationCatalog(SubscribeConversationCatalogRequest) returns (stream ConversationCatalogChange);
+  rpc SubscribeConversationCatalogV2(SubscribeConversationCatalogV2Request) returns (stream ConversationCatalogChangeV2);
+}
+
+message SetConversationTitleCommand {
+  CommandMetadata metadata = 1;
+  string title = 2;
+  ConversationTitleOrigin origin = 3;
+  optional LedgerRecordId proposal_record_id = 4;
+}
+
+message SubmitMessageCommand {
+  reserved 12;
+  CommandMetadata metadata = 1;
+  MessageId message_id = 2;
+  ParticipantId participant_id = 3;
+  oneof content {
+    string text = 4;
+    ContentRef content_ref = 5;
+  }
+  repeated AttachmentRef attachment_refs = 6;
+  string requested_model_class = 7;
+  RequestedFeatures requested_features = 8;
+  ExecutionScope execution_scope = 9;
+  SignedExecutionGrant signed_execution_grant = 10;
+  AdmissionSelection admission_selection = 11;
+  optional ProjectTaskTarget project_task_target = 13;
+}
+
+message SubscribeConversationCatalogRequest {
+  Actor actor = 1;
+}
+
+message SubscribeConversationCatalogV2Request {
+  Actor actor = 1;
+  ConversationLifecycle lifecycle = 2;
+}
+
+message SubscribeConversationRecordsRequest {
+  Actor actor = 1;
+  ConversationId conversation_id = 2;
+  LedgerCursor cursor = 3;
+}
+
+message TextEditDelete {
+  uint64 start_byte = 1;
+  uint64 end_byte = 2;
+  Sha256 expected_sha256 = 3;
+}
+
+message TextEditInsert {
+  uint64 byte_offset = 1;
+  Sha256 expected_before = 2;
+  Sha256 expected_after = 3;
+  string text = 4;
+}
+
+message TextEditOperation {
+  oneof operation {
+    TextEditInsert insert = 1;
+    TextEditReplace replace = 2;
+    TextEditDelete delete = 3;
+  }
+}
+
+message TextEditReplace {
+  uint64 start_byte = 1;
+  uint64 end_byte = 2;
+  Sha256 expected_sha256 = 3;
+  string text = 4;
+}
+
+message WorkspaceCatalogActivity {
+  WorkspaceId workspace_id = 1;
+  uint64 active_executions = 2;
+  uint64 action_required = 3;
+  uint64 unread = 4;
+  uint64 pending_projections = 5;
+  optional CatalogExecutionOutcomeKind latest_unread_outcome = 6;
+}
+
+message WorkspaceFileEditCommandContext {
+  CommandId command_id = 1;
+  WorkspaceResourceCommandContext resource = 2;
+}
+
+message WorkspaceResourceCommandContext {
+  Actor owner = 1;
+  WorkspaceId workspace_id = 2;
+  string idempotency_key = 3;
+  google.protobuf.Timestamp issued_at = 4;
+}

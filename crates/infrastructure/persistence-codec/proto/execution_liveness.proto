@@ -1,0 +1,167 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+message ActivityExecutionTimingV1 {
+  string policy_key = 1;
+  Sha256 policy_digest = 2;
+  google.protobuf.Timestamp business_deadline = 3;
+  optional string business_deadline_source_policy_key = 4;
+}
+
+message ExecutionActivityCursorV1 {
+  ExecutionActivitySourceV1 source = 1;
+  uint64 sequence = 2;
+  uint64 work_cursor = 3;
+}
+
+enum ExecutionActivitySourceV1 {
+  EXECUTION_ACTIVITY_SOURCE_V1_UNSPECIFIED = 0;
+  EXECUTION_ACTIVITY_SOURCE_V1_STDOUT = 1;
+  EXECUTION_ACTIVITY_SOURCE_V1_STDERR = 2;
+  EXECUTION_ACTIVITY_SOURCE_V1_CANONICAL_MODEL_EVENT = 3;
+  EXECUTION_ACTIVITY_SOURCE_V1_STRUCTURED_PROGRESS = 4;
+  EXECUTION_ACTIVITY_SOURCE_V1_COMMITTED_CHECKPOINT = 5;
+  EXECUTION_ACTIVITY_SOURCE_V1_EXECUTOR_WORK = 6;
+}
+
+message ExecutionBindingV1 {
+  TenantId tenant_id = 1;
+  RunId run_id = 2;
+  oneof scope {
+    InvocationId invocation_id = 3;
+    InvocationId handoff_after_invocation_id = 4;
+  }
+  Sha256 operation_identity = 5;
+  AttemptId owner_attempt_id = 6;
+  uint64 owner_fence = 7;
+  uint64 producer_generation = 8;
+}
+
+message ExecutionBusinessDeadlineV1 {
+  google.protobuf.Timestamp at = 1;
+  string source_policy_key = 2;
+  ExecutionClockPointV1 anchored_due = 3;
+}
+
+message ExecutionCheckpointV1 {
+  ExecutionBindingV1 binding = 1;
+  ExecutionLivenessPolicyV1 policy = 2;
+  ExecutionBusinessDeadlineV1 business = 3;
+  uint64 revision = 4;
+  oneof phase {
+    ExecutionClockPointV1 starting_due = 5;
+    ExecutionClockPointV1 running_due = 6;
+    ExecutionWaitV1 waiting = 7;
+    ExecutionStoppingV1 stopping = 8;
+    ExecutionClosureV1 closed = 9;
+    ExecutionDrainingV1 draining = 18;
+  }
+  ExecutionClockPointV1 dispatched_at = 10;
+  ExecutionClockPointV1 accepted_at = 11;
+  ExecutionClockPointV1 active_since = 12;
+  optional uint64 last_wait_sequence = 13;
+  ExecutionClockPointV1 last_reduced_at = 14;
+  ExecutionClockPointV1 last_activity_at = 15;
+  // Nonzero cursor pairs in strictly increasing source order; absent = zero.
+  repeated ExecutionActivityCursorV1 cursors = 16;
+  ExecutionClockSampleV1 saved_at = 17;
+}
+
+message ExecutionClockPointV1 {
+  string home_clock_epoch = 1;
+  uint64 elapsed_seconds = 2;
+  uint32 elapsed_nanos = 3;
+}
+
+message ExecutionClockSampleV1 {
+  ExecutionClockPointV1 monotonic = 1;
+  google.protobuf.Timestamp utc = 2;
+}
+
+message ExecutionClosureV1 {
+  oneof outcome {
+    google.protobuf.Empty terminal_observed = 1;
+    ExecutionStopReasonV1 stop_confirmed = 2;
+    ExecutionStopReasonV1 stop_unconfirmed = 3;
+  }
+}
+
+message ExecutionDrainingV1 {
+  ExecutionClockPointV1 ended_at = 1;
+  ExecutionClockPointV1 due = 2;
+}
+
+message ExecutionLivenessPolicyV1 {
+  string policy_key = 1;
+  Sha256 policy_digest = 2;
+  uint64 startup_window_ms = 3;
+  uint64 idle_window_ms = 4;
+  uint64 max_delivery_lag_ms = 5;
+  uint64 checkpoint_interval_ms = 6;
+  uint64 observation_request_window_ms = 7;
+  uint64 cleanup_window_ms = 8;
+  uint64 post_exit_drain_window_ms = 9;
+  // Strictly increasing, no duplicates, unknown or unspecified values.
+  repeated ExecutionActivitySourceV1 accepted_sources = 10;
+}
+
+message ExecutionLivenessRecordV1 {
+  oneof state {
+    ExecutionCheckpointV1 checkpoint = 1;
+    ExecutionRecoveryTicketV1 recovering = 2;
+  }
+}
+
+message ExecutionRecoveryTicketV1 {
+  ExecutionCheckpointV1 original = 1;
+  ExecutionBindingV1 rebound = 2;
+  Sha256 nonce = 3;
+  ExecutionClockSampleV1 started_at = 4;
+  // Due and revision are deterministically derived from these sealed facts.
+}
+
+enum ExecutionStopReasonV1 {
+  EXECUTION_STOP_REASON_V1_UNSPECIFIED = 0;
+  EXECUTION_STOP_REASON_V1_STARTUP_EXPIRED = 1;
+  EXECUTION_STOP_REASON_V1_IDLE_EXPIRED = 2;
+  EXECUTION_STOP_REASON_V1_BUSINESS_DEADLINE_EXPIRED = 3;
+  EXECUTION_STOP_REASON_V1_USER_CANCELLED = 4;
+  EXECUTION_STOP_REASON_V1_PARENT_CANCELLED = 5;
+  EXECUTION_STOP_REASON_V1_OWNERSHIP_LOST = 6;
+  EXECUTION_STOP_REASON_V1_AUTHORIZATION_LOST = 7;
+  EXECUTION_STOP_REASON_V1_SYSTEM_SHUTDOWN = 8;
+  EXECUTION_STOP_REASON_V1_RECOVERY_UNVERIFIED = 9;
+  EXECUTION_STOP_REASON_V1_EXECUTION_FAILED = 10;
+  EXECUTION_STOP_REASON_V1_COORDINATION_REQUESTED = 11;
+  EXECUTION_STOP_REASON_V1_POST_EXIT_DRAIN_EXPIRED = 12;
+  EXECUTION_STOP_REASON_V1_REQUEST_TIMED_OUT = 13;
+}
+
+message ExecutionStoppingV1 {
+  ExecutionStopReasonV1 reason = 1;
+  ExecutionClockPointV1 cleanup_due = 2;
+}
+
+message ExecutionWaitV1 {
+  uint64 checkpoint_run_sequence = 1;
+  Sha256 wait_identity = 2;
+  uint64 idle_remaining_seconds = 3;
+  uint32 idle_remaining_nanos = 4;
+}
+
+message InvocationExecutionTimingV1 {
+  oneof timing {
+    google.protobuf.Timestamp legacy_deadline = 1;
+    ActivityExecutionTimingV1 activity = 2;
+  }
+}
+
+message RunExecutionLivenessV1 {
+  ExecutionLivenessPolicyV1 model = 1;
+  ExecutionLivenessPolicyV1 handoff = 2;
+}

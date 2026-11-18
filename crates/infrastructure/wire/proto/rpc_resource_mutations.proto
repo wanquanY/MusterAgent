@@ -1,0 +1,21 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "rpc_common.proto";
+
+message ResourceChangeSetCopyWorkTree {
+  ResourceNodeId node_id = 1;
+  ResourceNodeId parent_node_id = 2;
+  string name = 3;
+  ExecutionWorkspaceId source_workspace_id = 4;
+  ResourceNodeId source_node_id = 5;
+  uint64 source_revision = 6;
+  ParticipantId committed_by = 7;
+}
+
+message ResourceChangeSetSetResult {
+  ResourceNodeId node_id = 1;
+  bool is_result = 2;
+}

@@ -1,0 +1,28 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+import "rpc_common.proto";
+
+message EnsureWorkspaceResourceRootRequest {
+  Actor owner = 1;
+  WorkspaceId workspace_id = 2;
+}
+
+message ListWorkspaceResourceChildrenRequest {
+  Actor owner = 1;
+  WorkspaceId workspace_id = 2;
+  ResourceNodeId parent_node_id = 3;
+  bool include_trashed = 4;
+  uint32 offset = 5;
+  uint32 limit = 6;
+}
+
+message WorkspaceResourceRootReceipt {
+  TenantId tenant_id = 1;
+  WorkspaceId workspace_id = 2;
+  PrincipalId owner_principal_id = 3;
+  google.protobuf.Timestamp created_at = 4;
+}

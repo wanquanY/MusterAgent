@@ -1,0 +1,33 @@
+[package]
+name = "musteragent-testkit"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+async-stream = "0.3.6"
+axum = "0.8.9"
+musteragent-identity.workspace = true
+musteragent-ledger.workspace = true
+opentelemetry-proto = { version = "0.32.0", default-features = false, features = ["gen-tonic", "metrics", "trace"] }
+serde.workspace = true
+serde_json.workspace = true
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "postgres"] }
+testcontainers = "0.27.3"
+testcontainers-modules = { version = "0.15.0", features = ["postgres"] }
+thiserror.workspace = true
+tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread", "sync", "net", "time", "signal"] }
+tokio-stream = { version = "0.1.19", features = ["net"] }
+tonic = { workspace = true, features = ["router"] }
+uuid.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "controlled-openai-chat-provider"
+path = "src/bin/controlled-openai-chat-provider.rs"
+test = false
+bench = false

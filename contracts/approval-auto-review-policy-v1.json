@@ -1,0 +1,21 @@
+{
+  "schema": "musteragent.approval-auto-review-policy.v1",
+  "policy_ref": "musteragent.approval-auto-review.deterministic@1",
+  "eligible_boundary": {
+    "approval_requirement": "by_policy",
+    "capability_decision": "allow",
+    "permission_reviewer": "auto_review"
+  },
+  "approve": {
+    "effects": ["read", "write_reversible"],
+    "invocation_dispositions": ["inherit", "allow"]
+  },
+  "escalate": {
+    "effects": ["write_external", "destructive"],
+    "invocation_dispositions": ["require_policy_approval", "require_approval"],
+    "mandatory_approval": true
+  },
+  "deny": {
+    "invocation_dispositions": ["deny"]
+  }
+}

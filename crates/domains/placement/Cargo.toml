@@ -1,0 +1,20 @@
+[package]
+name = "musteragent-placement"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Execution placement contract: Cloud, the current device, or a selected paired device."
+
+[dependencies]
+musteragent-identity.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

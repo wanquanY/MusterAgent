@@ -1,0 +1,27 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "agent_dialogue.proto";
+
+message PublicEntryReactionReceipt {
+  AgentDialogueId dialogue_id = 1;
+  DialogueEntryId entry_id = 2;
+  uint64 applied_revision = 3;
+}
+
+message PublicEntryReactions {
+  AgentId agent_id = 1;
+  AgentDialogueId dialogue_id = 2;
+  DialogueEntryId entry_id = 3;
+  uint64 revision = 4;
+  repeated string emoji_keys = 5;
+}
+
+message PublicEntryReactionsChanged {
+  AgentId agent_id = 1;
+  AgentDialogueId dialogue_id = 2;
+  DialogueEntryId entry_id = 3;
+  uint64 revision = 4;
+}

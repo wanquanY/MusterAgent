@@ -1,0 +1,152 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "execution_grant.proto";
+import "rpc_runtime.proto";
+import "work_item_execution_services.proto";
+
+message GetWorkItemExecutionGrantFactsRequest {
+  Actor actor = 1;
+  WorkItemId work_item_id = 2;
+  uint64 expected_goal_revision = 3;
+  uint64 expected_control_revision = 4;
+  uint64 assignment_epoch = 5;
+
+  optional RunId report_from_run_id = 6;
+}
+
+message InspectNativeEnvironmentRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  string membership_id = 3;
+  uint64 expected_membership_epoch = 4;
+}
+
+message InspectNativeEnvironmentResponse {
+  NativeEnvironment environment = 1;
+  int64 observed_at_ms = 2;
+  uint64 permission_revision = 3;
+}
+
+message IssueWorkItemExecutionGrantRequest {
+  Actor actor = 1;
+  WorkItemId work_item_id = 2;
+  uint64 expected_goal_revision = 3;
+  uint64 expected_control_revision = 4;
+  uint64 assignment_epoch = 5;
+  bytes expected_facts_sha256 = 6;
+  optional RunId report_from_run_id = 7;
+  
+  optional SignedExecutionGrant previous_signed_grant = 8;
+}
+
+message IssueWorkItemExecutionGrantResponse {
+  
+  SignedExecutionGrant signed_execution_grant = 1;
+  AdmissionSelection admission_selection = 2;
+  bytes facts_sha256 = 3;
+  SignedWorkItemAdmissionRejection signed_rejection = 4;
+  
+  optional WorkItemDelegationCeiling approved_device_delegation = 5;
+}
+
+message ListNativeEnvironmentsRequest {
+  Actor actor = 1;
+  AgentId agent_id = 2;
+  optional string after_membership_id = 3;
+  uint32 limit = 4;
+}
+
+message ListNativeEnvironmentsResponse {
+  repeated NativeEnvironment environments = 1;
+  optional string next_membership_id = 2;
+  int64 observed_at_ms = 3;
+  uint64 permission_revision = 4;
+}
+
+message ExecutorEnvironmentCapability {
+  string capability_key = 1;
+  
+  string policy_decision = 2;
+  repeated string allowed_scopes = 3;
+}
+
+message NativeEnvironment {
+  string membership_id = 1;
+  uint64 membership_epoch = 2;
+  DeviceId device_id = 3;
+  DeviceInstallationId installation_id = 4;
+  
+  optional string surface = 5;
+  optional int64 last_authenticated_request_at_ms = 6;
+
+  string consent_state = 7;
+  repeated ExecutorEnvironmentCapability capabilities = 8;
+  bool capabilities_complete = 9;
+  optional string display_name = 10;
+  optional string platform = 11;
+  
+  optional int64 connection_observed_at_ms = 12;
+  optional int64 connection_expires_at_ms = 13;
+
+}
+
+message ResolveRetainedApplicationHostRequest {
+  Actor actor = 1;
+  bytes current_native_membership_authority = 2;
+  string membership_id = 3;
+  uint64 expected_membership_epoch = 4;
+}
+
+message ResolveRetainedWorkItemDeviceTargetRequest {
+  Actor actor = 1;
+  AgentId requesting_agent_id = 2;
+  AgentId executing_agent_id = 3;
+  WorkItemDeviceTarget target = 4;
+  bytes current_native_membership_authority = 5;
+}
+
+message ResolveRetainedWorkItemDeviceTargetResponse {
+  
+  WorkItemDeviceTarget target = 1;
+  RetainedApplicationHostQualification host = 2;
+}
+
+message ResolveWorkItemDeviceTargetRequest {
+  Actor actor = 1;
+  AgentId requesting_agent_id = 2;
+  AgentId executing_agent_id = 3;
+  string membership_id = 4;
+  uint64 expected_membership_epoch = 5;
+}
+
+message ResolveWorkItemDeviceTargetResponse { WorkItemDeviceTarget target = 1; }
+
+message RetainedApplicationHostQualification {
+  bytes current_native_membership_authority = 1;
+  string membership_id = 2;
+  uint64 membership_epoch = 3;
+  bytes retained_subject = 4;
+}
+
+service WorkItemExecutionControlService {
+  rpc GetGrantFacts(GetWorkItemExecutionGrantFactsRequest)
+      returns (GetWorkItemExecutionGrantFactsResponse);
+}
+
+service WorkItemExecutionGrantService {
+  rpc ListNativeEnvironments(ListNativeEnvironmentsRequest)
+      returns (ListNativeEnvironmentsResponse);
+  rpc InspectNativeEnvironment(InspectNativeEnvironmentRequest)
+      returns (InspectNativeEnvironmentResponse);
+  rpc ResolveDeviceTarget(ResolveWorkItemDeviceTargetRequest)
+      returns (ResolveWorkItemDeviceTargetResponse);
+  rpc ResolveRetainedApplicationHost(ResolveRetainedApplicationHostRequest)
+      returns (RetainedApplicationHostQualification);
+  rpc ResolveRetainedDeviceTarget(ResolveRetainedWorkItemDeviceTargetRequest)
+      returns (ResolveRetainedWorkItemDeviceTargetResponse);
+  rpc IssueGrant(IssueWorkItemExecutionGrantRequest)
+      returns (IssueWorkItemExecutionGrantResponse);
+}

@@ -1,0 +1,27 @@
+[package]
+name = "musteragent-runtime-worker"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-activity.workspace = true
+musteragent-identity = { version = "0.1.0", path = "../../foundation/identity" }
+musteragent-ledger = { version = "0.1.0", path = "../ledger" }
+musteragent-loop = { version = "0.1.0", path = "../agent-loop" }
+musteragent-run = { version = "0.1.0", path = "../run" }
+musteragent-runtime-contract = { version = "0.1.0", path = "../../foundation/runtime-contract" }
+musteragent-scheduler = { version = "0.1.0", path = "../scheduler" }
+musteragent-telemetry = { version = "0.1.0", path = "../../foundation/telemetry" }
+thiserror.workspace = true
+tokio = { version = "1.53.1", features = ["macros", "rt", "sync", "time"] }
+tokio-util = { version = "0.7.19", features = ["rt"] }
+tracing = "0.1.44"
+
+[dev-dependencies]
+tokio = { version = "1.53.1", features = ["test-util"] }
+
+[lints]
+workspace = true

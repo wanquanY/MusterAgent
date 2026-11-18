@@ -1,0 +1,19 @@
+target/
+**/target/
+.DS_Store
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.cer
+
+# Coordinator instructions for the coding agent; internal
+AGENTS.md
+.codex-work/
+*.log
+__pycache__/
+
+# Host-specific integration notes
+/docs/*-capability-map.md
+/docs/local/

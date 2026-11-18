@@ -1,0 +1,157 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "conversation_records.proto";
+import "execution_liveness.proto";
+import "google/protobuf/timestamp.proto";
+import "run_records.proto";
+
+enum ApprovalDecision {
+  APPROVAL_DECISION_UNSPECIFIED = 0;
+  APPROVAL_DECISION_APPROVE = 1;
+  APPROVAL_DECISION_DENY = 2;
+  APPROVAL_DECISION_APPROVE_SESSION = 3;
+}
+
+message InteractionCancelled {
+  InteractionId interaction_id = 1;
+  CancelReason reason = 2;
+}
+
+message InteractionEventResponse {
+  oneof response {
+    ApprovalDecision approval = 1;
+    ContentRef content = 2;
+    SecureResponseAccepted secure_accepted = 3;
+  }
+}
+
+message InteractionExpired {
+  InteractionId interaction_id = 1;
+  google.protobuf.Timestamp expired_at = 2;
+}
+
+enum InteractionKind {
+  INTERACTION_KIND_UNSPECIFIED = 0;
+  INTERACTION_KIND_APPROVAL = 1;
+  INTERACTION_KIND_CLARIFICATION = 2;
+  INTERACTION_KIND_CONFIRMATION = 3;
+  INTERACTION_KIND_SELECTION = 4;
+  INTERACTION_KIND_CREDENTIAL = 5;
+  INTERACTION_KIND_OAUTH = 6;
+}
+
+message InteractionRequested {
+  InteractionId interaction_id = 1;
+  InvocationId invocation_id = 2;
+  InteractionKind kind = 3;
+  ContentRef prompt_ref = 4;
+  SchemaRef response_schema = 5;
+  google.protobuf.Timestamp expires_at = 6;
+}
+
+message InteractionResponded {
+  InteractionId interaction_id = 1;
+  PrincipalId responded_by = 2;
+  InteractionEventResponse response = 3;
+  google.protobuf.Timestamp responded_at = 4;
+}
+
+message SecureResponseAccepted {}
+
+message SkillDisclosed {
+  VersionedRef skill_ref = 1;
+  ContentRef instructions_ref = 2;
+  Sha256 instructions_hash = 3;
+  uint32 disclosure_ordinal = 4;
+  InvocationId source_invocation_id = 5;
+  google.protobuf.Timestamp disclosed_at = 6;
+}
+
+enum ToolEffect {
+  TOOL_EFFECT_UNSPECIFIED = 0;
+  TOOL_EFFECT_READ = 1;
+  TOOL_EFFECT_WRITE_REVERSIBLE = 2;
+  TOOL_EFFECT_WRITE_EXTERNAL = 3;
+  TOOL_EFFECT_DESTRUCTIVE = 4;
+}
+
+message ToolExposureAdded {
+  repeated ToolExposureItem exposures = 1;
+  ContentRef reason_ref = 2;
+  InvocationId source_invocation_id = 3;
+  google.protobuf.Timestamp exposed_at = 4;
+}
+
+message ToolExposureItem {
+  ToolVersionRef tool_ref = 1;
+  Sha256 schema_hash = 2;
+  uint32 ordinal = 3;
+}
+
+message ToolInvocationCancelled {
+  InvocationId invocation_id = 1;
+  CancelReason reason = 2;
+}
+
+message ToolInvocationFailed {
+  InvocationId invocation_id = 1;
+  ErrorInfo error = 2;
+  RetryDisposition retry_disposition = 3;
+  optional ContentRef diagnostic_result_ref = 4;
+  optional Sha256 diagnostic_result_hash = 5;
+}
+
+message ToolInvocationIndeterminate {
+  InvocationId invocation_id = 1;
+  string reason = 2;
+  string reconciliation_ref = 3;
+  optional ErrorInfo observed_error = 4;
+  optional ContentRef diagnostic_result_ref = 5;
+  optional Sha256 diagnostic_result_hash = 6;
+}
+
+message ToolInvocationRequested {
+  InvocationId invocation_id = 1;
+  ToolCallId tool_call_id = 2;
+  ToolVersionRef tool_ref = 3;
+  ToolEffect effect = 4;
+  ContentRef request_ref = 5;
+  google.protobuf.Timestamp deadline = 6;
+  ActivityExecutionTimingV1 activity_timing = 7;
+}
+
+message ToolInvocationStarted {
+  InvocationId invocation_id = 1;
+  AttemptId execution_attempt_id = 2;
+  CapabilityProviderId capability_provider_id = 3;
+  google.protobuf.Timestamp execution_deadline = 4;
+  ActivityExecutionTimingV1 activity_timing = 5;
+}
+
+message ToolInvocationSucceeded {
+  InvocationId invocation_id = 1;
+  ContentRef result_ref = 2;
+  Sha256 result_hash = 3;
+  optional string provider_request_ref = 4;
+  repeated ContentRef authorized_content = 5;
+}
+
+message ToolInvocationWaitingInteraction {
+  InvocationId invocation_id = 1;
+  InteractionId interaction_id = 2;
+}
+
+// Executor choice is a durable fact, recorded before dispatch.
+message SandboxRouteRecord {
+  string executor = 1;
+  string reason = 2;
+  string compatibility = 3;
+  google.protobuf.Timestamp decided_at = 4;
+}
+message ToolSandboxRouted {
+  InvocationId invocation_id = 1;
+  SandboxRouteRecord route = 2;
+}

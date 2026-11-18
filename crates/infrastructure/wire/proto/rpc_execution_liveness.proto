@@ -1,0 +1,10 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "execution_liveness.proto";
+
+message AgentSupervisedModelStart {
+  uint32 disposition = 1;
+  ExecutionLivenessRecordV1 record = 2;
+}

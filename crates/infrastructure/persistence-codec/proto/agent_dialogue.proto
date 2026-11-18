@@ -1,0 +1,200 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+
+message AcceptedDialogueUserIntent {
+  DialogueUserIntent intent = 1;
+  bool replayed = 2;
+}
+
+message DialogueEntryId { string value = 1; }
+
+message DialogueAcceptedInputSource {
+  AgentDialogueId dialogue_id = 1;
+  DialogueEntryId entry_id = 2;
+  AgentDialogueCursor cursor = 3;
+  uint32 ordinal = 4;
+}
+
+message AgentDialogue {
+  AgentDialogueId dialogue_id = 1;
+  AgentId agent_id = 2;
+  TenantId tenant_id = 3;
+  PrincipalId owner_id = 4;
+  AgentDialogueCursor head = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message AgentDialogueArtifact {
+  ArtifactId artifact_id = 1;
+  ArtifactVersionId version_id = 2;
+}
+
+message AgentDialogueCursor { uint64 epoch = 1; uint64 seq = 2; }
+
+message AgentDialogueEntry {
+  DialogueEntryId entry_id = 1;
+  TenantId tenant_id = 2;
+  PrincipalId owner_id = 3;
+  AgentDialogueId dialogue_id = 4;
+  AgentDialogueCursor cursor = 5;
+  optional UserIntentId source_intent_id = 6;
+  uint64 visible_revision = 7;
+  google.protobuf.Timestamp created_at = 8;
+  // Authorship belongs to the entry, including interaction and artifact cards.
+  // Text's nested field is retained for existing readers; when both are present
+  // they must agree. Never infer a card's author from the surrounding dialogue.
+  optional AgentId author_agent_id = 9;
+  oneof content {
+    AgentDialogueText user_message = 10;
+    AgentDialogueText agent_message = 11;
+    AgentDialogueInteraction interaction = 12;
+    AgentDialogueArtifact artifact = 13;
+    AgentDialoguePartnerCreated partner_created = 14;
+    AgentDialogueErased erased = 15;
+  }
+  // Missing (UNSPECIFIED) from older producers means STANDARD.
+  AgentDialogueEntryPresentation presentation = 16;
+}
+
+enum AgentDialogueEntryPresentation {
+  AGENT_DIALOGUE_ENTRY_PRESENTATION_UNSPECIFIED = 0;
+  AGENT_DIALOGUE_ENTRY_PRESENTATION_STANDARD = 1;
+  AGENT_DIALOGUE_ENTRY_PRESENTATION_PROGRESS = 2;
+}
+
+message AgentDialogueErased { bytes original_source_payload_sha256 = 1; }
+
+message AgentDialogueId { string value = 1; }
+
+message AgentDialogueInteraction { InteractionId interaction_id = 1; }
+
+message AgentDialoguePartnerCreated {
+  CommandId creation_command_id = 1;
+  AgentId agent_id = 2;
+  AgentDialogueId dialogue_id = 3;
+  string display_name = 4;
+  string description = 5;
+  optional ContentRef avatar_ref = 6;
+  uint64 profile_revision = 7;
+}
+
+message AgentDialogueText {
+  ContentRef content_ref = 1;
+  // A partner can receive a useful input from the default Agent. Internal
+  // coordination, reasoning and tool traces never enter this public stream.
+  optional AgentId author_agent_id = 2;
+  repeated AttachmentRef input_attachments = 3;
+}
+
+message DialogueInputAttachment {
+  AttachmentRef attachment = 1;
+  oneof source {
+    string upload_id = 2;
+    DialogueAcceptedInputSource accepted_input = 3;
+  }
+}
+
+message DialogueInputAttachments { repeated DialogueInputAttachment values = 1; }
+
+message DialogueInputOrigin {
+  DialogueInputSurface surface = 1;
+  optional DeviceInstallationId installation_id = 2;
+}
+
+enum DialogueInputSurface {
+  DIALOGUE_INPUT_SURFACE_UNSPECIFIED = 0;
+  DIALOGUE_INPUT_SURFACE_DESKTOP = 1;
+  DIALOGUE_INPUT_SURFACE_WEB = 2;
+  DIALOGUE_INPUT_SURFACE_MOBILE = 3;
+  DIALOGUE_INPUT_SURFACE_CHANNEL = 4;
+  DIALOGUE_INPUT_SURFACE_SCHEDULE = 5;
+  DIALOGUE_INPUT_SURFACE_CAPABILITY = 6;
+}
+
+message DialogueMessageAttachments { repeated AttachmentRef values = 1; }
+
+message DialogueReplyAcceptedInput { UserIntentId intent_id = 1; }
+
+message DialogueReplyBinding {
+  DialogueReplyTarget target = 1;
+  AgentId agent_id = 2;
+  AgentDialogueId dialogue_id = 3;
+  AgentDialogueCursor cursor = 4;
+  ContentRef content_ref = 5;
+  optional DialogueReplyPublication publication = 6;
+  oneof subject {
+    DialogueReplyAcceptedInput accepted_input = 7;
+    DialogueReplyIntentOutput intent_output = 8;
+    DialogueReplyWorkItemResult work_item_result = 9;
+    DialogueReplyGoalResult goal_result = 10;
+  }
+}
+
+message DialogueReplyGoalResult {
+  GoalId goal_id = 1;
+  uint64 binding_revision = 2;
+  bytes rules_version = 3;
+}
+
+message DialogueReplyIntentOutput { UserIntentId intent_id = 1; }
+
+message DialogueReplyPublication {
+  CommandId delivery_id = 1;
+  ConversationId conversation_id = 2;
+  RunId run_id = 3;
+  bytes payload_sha256 = 4;
+}
+
+message DialogueReplyTarget {
+  DialogueEntryId entry_id = 1;
+  uint64 visible_revision = 2;
+}
+
+message DialogueReplyWorkItemResult {
+  AgentTaskTarget target = 1;
+  uint64 assignment_epoch = 2;
+  RunId producing_run_id = 3;
+  optional RunId report_run_id = 4;
+  optional ContentRef report_content_ref = 5;
+  AgentTaskActionTarget action_target = 6;
+}
+
+message OwnerSpaceId { string value = 1; }
+
+message AgentTaskActionTarget {
+  AgentTaskTarget target = 1;
+  uint64 assignment_epoch = 2;
+  string chain_root_id = 3; // UUID; same scalar contract as AgentTaskTarget.
+  uint64 chain_sequence = 4;
+}
+
+message AgentTaskTarget {
+  string work_item_id = 1;
+  uint64 goal_revision = 2;
+  uint64 control_revision = 3;
+}
+
+message DialogueUserIntent {
+  UserIntentId intent_id = 1;
+  CommandId command_id = 2;
+  AgentDialogueId dialogue_id = 3;
+  TenantId tenant_id = 4;
+  PrincipalId owner_id = 5;
+  DialogueEntryId source_entry_id = 6;
+  ContentRef content_ref = 7;
+  DialogueInputOrigin origin = 8;
+  AgentDialogueCursor observed_cursor = 9;
+  optional UserIntentId reply_to_intent_id = 10;
+  AgentDialogueCursor accepted_cursor = 11;
+  google.protobuf.Timestamp accepted_at = 12;
+  repeated DialogueInputAttachment input_attachments = 13;
+  optional AgentTaskTarget task_target = 14;
+  optional DialogueReplyTarget reply_target = 15;
+  optional DialogueReplyBinding reply_binding = 16;
+}
+
+message UserIntentId { string value = 1; }

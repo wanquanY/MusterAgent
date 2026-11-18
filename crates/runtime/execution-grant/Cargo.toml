@@ -1,0 +1,25 @@
+[package]
+name = "musteragent-execution-grant"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-content-ref.workspace = true
+musteragent-capability.workspace = true
+musteragent-identity.workspace = true
+musteragent-event-envelope.workspace = true
+musteragent-model.workspace = true
+musteragent-policy.workspace = true
+musteragent-runtime-contract.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+url = "2.5.8"
+
+[dev-dependencies]
+sha2.workspace = true
+
+[lints]
+workspace = true

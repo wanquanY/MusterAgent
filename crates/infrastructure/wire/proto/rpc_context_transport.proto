@@ -1,0 +1,246 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+
+message ContextTransportAdmission {
+  repeated SignedContextTransportCapability capabilities = 1;
+
+  bool required = 2;
+}
+
+message ContextTransportBlockRef {
+  Sha256 sha256 = 1;
+  uint32 uncompressed_length = 2;
+}
+
+message ContextTransportCapabilityPayload {
+  uint32 version = 1;
+  string issuer = 2;
+  string audience = 3;
+  string purpose = 4;
+  string key_id = 5;
+  string token_id = 6;
+  int64 issued_at_ms = 7;
+  int64 expires_at_ms = 8;
+  ContextTransportScope scope = 9;
+  RunId run_id = 10;
+  string retention_policy_ref = 11;
+  bool may_read_cache = 12;
+  bool may_write_cache = 13;
+  int64 generation_created_at_ms = 14;
+  int64 generation_hard_expires_at_ms = 15;
+  Sha256 route_identity_hash = 16;
+
+  uint64 max_native_body_bytes = 17;
+  ContextTransportNativeRoute native_route = 18;
+}
+
+enum ContextTransportCodec {
+  CONTEXT_TRANSPORT_CODEC_UNSPECIFIED = 0;
+  CONTEXT_TRANSPORT_CODEC_IDENTITY = 1;
+  CONTEXT_TRANSPORT_CODEC_GZIP = 2;
+}
+
+message ContextTransportDataBlock {
+  
+  uint32 ordinal = 1;
+  Sha256 sha256 = 2;
+  uint32 uncompressed_length = 3;
+  ContextTransportCodec codec = 4;
+  bytes payload = 5;
+}
+
+message ContextTransportEnd {
+  uint32 data_frame_count = 1;
+  uint64 encoded_payload_length = 2;
+  Sha256 body_sha256 = 3;
+}
+
+message ContextTransportFrame {
+  oneof frame {
+    ContextTransportHeader header = 1;
+    ContextTransportDataBlock data = 2;
+    ContextTransportEnd end = 3;
+  }
+}
+
+message ContextTransportGenerationId { string value = 1; }
+
+message ContextTransportHeader {
+  uint32 version = 1;
+  ContextTransportMode mode = 2;
+  TenantId tenant_id = 3;
+  RunId run_id = 4;
+  AttemptId origin_attempt_id = 5;
+  InvocationId invocation_id = 6;
+  string model_entry_id = 7;
+  string model_provider_id = 8;
+  string route_ref = 9;
+  Sha256 route_identity_hash = 10;
+  string api_format = 11;
+  string operation = 12;
+  uint32 wire_mapping_version = 13;
+  uint32 block_layout_version = 14;
+  uint64 uncompressed_body_length = 15;
+  Sha256 body_sha256 = 16;
+  Sha256 invocation_fingerprint = 17;
+  SignedContextTransportCapability capability = 18;
+
+  repeated ContextTransportBlockRef manifest = 19;
+  bytes publication_receipt = 20;
+  bytes repair_receipt = 21;
+  uint32 repair_number = 22;
+  AttemptId recovery_attempt_id = 23;
+  string traceparent = 24;
+  string tracestate = 25;
+  repeated ContextTransportSemanticHeader semantic_headers = 26;
+}
+
+message ContextTransportInvalidation {
+  string event_id = 1;
+  uint64 revision = 2;
+  ContextTransportInvalidationKind kind = 3;
+  ConversationId conversation_id = 4;
+  RunId run_id = 5;
+}
+
+enum ContextTransportInvalidationKind {
+  CONTEXT_TRANSPORT_INVALIDATION_KIND_UNSPECIFIED = 0;
+  CONTEXT_TRANSPORT_INVALIDATION_KIND_ERASE_CACHE = 1;
+  CONTEXT_TRANSPORT_INVALIDATION_KIND_CANCEL_RUN = 2;
+}
+
+message ContextTransportInvalidationResult {
+  string event_id = 1;
+  uint64 revision = 2;
+
+  bool erasure_completed = 3;
+}
+
+message ContextTransportInvocationIdentity {
+  string model_entry_id = 1;
+  string model_provider_id = 2;
+  string route_ref = 3;
+  Sha256 route_identity_hash = 4;
+  string api_format = 5;
+  string operation = 6;
+  uint32 wire_mapping_version = 7;
+  Sha256 body_sha256 = 8;
+  repeated ContextTransportSemanticHeader semantic_headers = 9;
+}
+
+enum ContextTransportInvocationState {
+  CONTEXT_TRANSPORT_INVOCATION_STATE_UNSPECIFIED = 0;
+  CONTEXT_TRANSPORT_INVOCATION_STATE_RECEIVING = 1;
+  CONTEXT_TRANSPORT_INVOCATION_STATE_NEEDS_BLOCKS = 2;
+  CONTEXT_TRANSPORT_INVOCATION_STATE_READY = 3;
+  CONTEXT_TRANSPORT_INVOCATION_STATE_SEND_RESERVED = 4;
+  CONTEXT_TRANSPORT_INVOCATION_STATE_STREAMING = 5;
+  CONTEXT_TRANSPORT_INVOCATION_STATE_TERMINAL = 6;
+  CONTEXT_TRANSPORT_INVOCATION_STATE_OUTCOME_UNKNOWN = 7;
+  CONTEXT_TRANSPORT_INVOCATION_STATE_REJECTED = 8;
+}
+
+enum ContextTransportMode {
+  CONTEXT_TRANSPORT_MODE_UNSPECIFIED = 0;
+  CONTEXT_TRANSPORT_MODE_FULL_BODY = 1;
+  CONTEXT_TRANSPORT_MODE_BLOCK_MANIFEST = 2;
+}
+
+message ContextTransportNamespaceHint {
+  ConversationId conversation_id = 1;
+  uint64 ownership_epoch = 2;
+  ContextBranchId active_context_branch_id = 3;
+}
+
+message ContextTransportNativeRoute {
+  string model_entry_id = 1;
+  string model_provider_id = 2;
+  string route_ref = 3;
+  string api_format = 4;
+}
+
+enum ContextTransportReceiptKind {
+  CONTEXT_TRANSPORT_RECEIPT_KIND_UNSPECIFIED = 0;
+  CONTEXT_TRANSPORT_RECEIPT_KIND_PUBLICATION = 1;
+  CONTEXT_TRANSPORT_RECEIPT_KIND_REPAIR = 2;
+}
+
+message ContextTransportReceiptPayload {
+  uint32 version = 1;
+  ContextTransportReceiptKind kind = 2;
+  string issuer = 3;
+  string key_id = 4;
+  int64 issued_at_ms = 5;
+  int64 expires_at_ms = 6;
+  TenantId tenant_id = 7;
+  PrincipalId principal_id = 8;
+  ContextTransportScopeId scope_id = 9;
+  uint64 scope_epoch = 10;
+  ContextTransportGenerationId generation_id = 11;
+
+  string cache_revision = 12;
+  string publication_id = 13;
+  Sha256 manifest_hash = 14;
+  
+  RunId run_id = 15;
+  InvocationId invocation_id = 16;
+  AttemptId origin_attempt_id = 17;
+  Sha256 invocation_fingerprint = 18;
+  string repair_nonce = 19;
+}
+
+message ContextTransportRenewalRequest {
+  repeated SignedContextTransportCapability capabilities = 1;
+  repeated ContextTransportInvalidation invalidations = 2;
+}
+
+message ContextTransportRenewalResponse {
+  repeated ContextTransportRenewalResult results = 1;
+  repeated ContextTransportInvalidationResult invalidations = 2;
+}
+
+message ContextTransportRenewalResult {
+  string previous_token_id = 1;
+
+  SignedContextTransportCapability renewed_capability = 2;
+}
+
+message ContextTransportScope {
+  TenantId tenant_id = 1;
+  PrincipalId principal_id = 2;
+  string execution_scope_key = 3;
+  string source_runtime_identity = 4;
+  uint64 ownership_epoch = 5;
+  ConversationId conversation_id = 6;
+  Sha256 lineage_hash = 7;
+  ContextTransportScopeId scope_id = 8;
+  uint64 scope_epoch = 9;
+  ContextTransportGenerationId generation_id = 10;
+}
+
+message ContextTransportScopeId { string value = 1; }
+
+message ContextTransportSemanticHeader {
+  string name = 1;
+  string value = 2;
+}
+
+message ContextTransportStatus {
+  uint32 version = 1;
+  ContextTransportInvocationState state = 2;
+  string error_code = 3;
+  SignedContextTransportReceipt repair_receipt = 4;
+}
+
+message SignedContextTransportCapability {
+  bytes canonical_payload = 1;
+  bytes signature = 2;
+}
+
+message SignedContextTransportReceipt {
+  bytes canonical_payload = 1;
+  bytes signature = 2;
+}

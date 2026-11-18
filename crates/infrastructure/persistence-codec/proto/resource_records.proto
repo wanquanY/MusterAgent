@@ -1,0 +1,209 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "context_plan_lifecycle.proto";
+import "dialogue_context.proto";
+import "public_delivery_repair.proto";
+
+message ArtifactCreated {
+  ArtifactId artifact_id = 1;
+  ArtifactKind kind = 2;
+  string title = 3;
+  InvocationId source_invocation_id = 4;
+}
+
+message ArtifactEditApplied {
+  ArtifactProposalId proposal_id = 1;
+  ArtifactId artifact_id = 2;
+  uint64 version = 3;
+  ParticipantId applied_by = 4;
+}
+
+message ArtifactEditExpired {
+  ArtifactProposalId proposal_id = 1;
+  ArtifactId artifact_id = 2;
+}
+
+message ArtifactEditProposed {
+  ArtifactId artifact_id = 1;
+  uint64 base_version = 2;
+  ContentRef proposal_ref = 3;
+  Sha256 proposal_hash = 4;
+  ArtifactProposalId proposal_id = 5;
+}
+
+message ArtifactEditRejected {
+  ArtifactProposalId proposal_id = 1;
+  ArtifactId artifact_id = 2;
+  ParticipantId rejected_by = 3;
+}
+
+message ArtifactFailed {
+  ArtifactId artifact_id = 1;
+  ErrorInfo error = 2;
+}
+
+enum ArtifactKind {
+  ARTIFACT_KIND_UNSPECIFIED = 0;
+  ARTIFACT_KIND_NOTE = 1;
+  // Read-only compatibility identity for Diagram artifacts committed before
+  // the Diagram surface was retired. Current commands never create it.
+  ARTIFACT_KIND_LEGACY_DIAGRAM = 2;
+  ARTIFACT_KIND_PRESENTATION = 3;
+  ARTIFACT_KIND_IMAGE = 4;
+  ARTIFACT_KIND_VIDEO = 5;
+  // Conversation-scoped uploaded/imported file. Immutable bytes stay in the
+  // shared Content store; the Artifact owns only identity and provenance.
+  ARTIFACT_KIND_FILE = 6;
+  // Multi-file static Web application. Canonical source and preview bundles
+  // remain immutable ContentRef dependency closures.
+  ARTIFACT_KIND_APPLICATION = 7;
+}
+
+message ArtifactVersionCommitted {
+  ArtifactId artifact_id = 1;
+  uint64 version = 2;
+  ContentRef content_ref = 3;
+  Sha256 content_hash = 4;
+  repeated ContentRef dependency_refs = 5;
+  // Invocation that produced this exact version. Absent for Product-authored
+  // edits and historical records written before this additive field.
+  InvocationId source_invocation_id = 6;
+}
+
+message ContextBranchActivated {
+  ContextBranchId branch_id = 1;
+  PrincipalId activated_by = 2;
+}
+
+message ContextBranchCreated {
+  ContextBranchId branch_id = 1;
+  optional ContextBranchId parent_branch_id = 2;
+  LedgerRecordId fork_from_record_id = 3;
+  optional ContentRef branch_summary_ref = 4;
+  PrincipalId created_by = 5;
+  ContextBranchOrigin origin = 6;
+  optional CorrelationId edit_group_id = 7;
+  optional MessageId edit_target_message_id = 8;
+}
+
+enum ContextBranchOrigin {
+  CONTEXT_BRANCH_ORIGIN_UNSPECIFIED = 0;
+  CONTEXT_BRANCH_ORIGIN_FORK = 1;
+  CONTEXT_BRANCH_ORIGIN_EDIT_PRESERVED = 2;
+  CONTEXT_BRANCH_ORIGIN_EDIT_REPLACEMENT = 3;
+}
+
+message ContextCompactionFailed {
+  ErrorInfo error = 1;
+  InvocationId invocation_id = 2;
+}
+
+enum ContextCompactionOutcome {
+  CONTEXT_COMPACTION_OUTCOME_UNSPECIFIED = 0;
+  CONTEXT_COMPACTION_OUTCOME_SUCCEEDED = 1;
+  CONTEXT_COMPACTION_OUTCOME_FAILED_CONTINUED_UNCOMPRESSED = 2;
+  CONTEXT_COMPACTION_OUTCOME_FAILED_STOPPED = 3;
+  CONTEXT_COMPACTION_OUTCOME_INDETERMINATE_STOPPED = 4;
+  CONTEXT_COMPACTION_OUTCOME_RETRY_SCHEDULED = 5;
+}
+
+message ContextCompactionResolved {
+  InvocationId invocation_id = 1;
+  ContextCompactionOutcome outcome = 2;
+  uint32 loop_iteration = 3;
+  optional ContextSnapshotId context_snapshot_id = 4;
+  uint64 input_tokens_before = 5;
+  optional uint64 input_tokens_after = 6;
+  uint64 summarized_record_count = 7;
+  uint64 retained_record_count = 8;
+  optional ErrorInfo error = 9;
+  // Successful catch-up compaction commits an exact public source checkpoint
+  // before a primary ContextPlan exists. Exactly one committed target is
+  // required for success; checkpoint targets are forbidden for other outcomes.
+  optional DialogueContextCheckpointId dialogue_checkpoint_id = 10;
+}
+
+message ContextCompactionStarted {
+  uint64 source_seq_from = 1;
+  uint64 source_seq_to = 2;
+  ModelRouteRef model_route_ref = 3;
+  InvocationId invocation_id = 4;
+  uint64 input_tokens_before = 5;
+  uint32 loop_iteration = 6;
+}
+
+message ContextDerived {
+  ContextBranchId branch_id = 1;
+  ConversationId source_conversation_id = 2;
+  ContextBranchId source_branch_id = 3;
+  uint64 source_seq_to = 4;
+  ContextSnapshotId source_context_snapshot_id = 5;
+  ContextSnapshotId target_context_snapshot_id = 6;
+}
+
+message ContextSnapshotCreated {
+  ContextSnapshotId snapshot_id = 1;
+  ContextSnapshotId parent_snapshot_id = 2;
+  uint64 source_seq_from = 3;
+  uint64 source_seq_to = 4;
+  repeated LedgerRecordId retained_record_ids = 5;
+  ContentRef structured_summary_ref = 6;
+  uint64 input_tokens_before = 7;
+  uint64 input_tokens_after = 8;
+  ModelRouteRef model_route_ref = 9;
+  Sha256 checksum = 10;
+  RunId run_id = 11;
+  uint32 iteration = 12;
+  ContentRef model_request_ref = 13;
+  PublicDeliveryRepairBindingV1 delivery_repair = 14;
+  ContextPlanLineageV1 plan_lineage = 15;
+}
+
+message NoteAuthoringStarted {
+  ArtifactId artifact_id = 1;
+  NoteAuthoringSessionId session_id = 2;
+  uint64 base_revision = 3;
+}
+
+message NoteSegmentCommitted {
+  ArtifactId artifact_id = 1;
+  NoteAuthoringSessionId session_id = 2;
+  NoteSegmentId segment_id = 3;
+  uint64 ordinal = 4;
+  Sha256 content_hash = 5;
+  uint64 character_count = 6;
+  uint64 utf8_byte_count = 7;
+  ContentRef content_ref = 8;
+}
+
+message NoteVersionFinalized {
+  ArtifactId artifact_id = 1;
+  NoteAuthoringSessionId session_id = 2;
+  uint64 version = 3;
+  uint64 block_count = 4;
+  uint64 character_count = 5;
+  uint64 utf8_byte_count = 6;
+}
+
+enum PresentationAuthoringChange {
+  PRESENTATION_AUTHORING_CHANGE_UNSPECIFIED = 0;
+  PRESENTATION_AUTHORING_CHANGE_OPENED = 1;
+  PRESENTATION_AUTHORING_CHANGE_REVISED = 2;
+  PRESENTATION_AUTHORING_CHANGE_CANDIDATE_PREPARED = 3;
+  PRESENTATION_AUTHORING_CHANGE_REVIEWED = 4;
+  PRESENTATION_AUTHORING_CHANGE_PUBLISHED = 5;
+  PRESENTATION_AUTHORING_CHANGE_ABANDONED = 6;
+  PRESENTATION_AUTHORING_CHANGE_EXPORTED = 7;
+}
+
+message PresentationAuthoringChanged {
+  PresentationDraftId draft_id = 1;
+  ArtifactId artifact_id = 2;
+  uint64 revision = 3;
+  Sha256 document_hash = 4;
+  PresentationAuthoringChange change = 5;
+  ContentRef checkpoint_ref = 6;
+}

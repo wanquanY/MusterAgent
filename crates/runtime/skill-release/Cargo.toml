@@ -1,0 +1,24 @@
+[package]
+name = "musteragent-skill-release"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-tool.workspace = true
+musteragent-identity.workspace = true
+musteragent-sandbox.workspace = true
+musteragent-skill.workspace = true
+thiserror.workspace = true
+zip.workspace = true
+
+[build-dependencies]
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sha2.workspace = true
+
+
+[lints]
+workspace = true

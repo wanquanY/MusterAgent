@@ -1,0 +1,60 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "owner_applications.proto";
+import "device_tool_delivery.proto";
+import "agent_dialogue.proto";
+import "snapshot.proto";
+
+message AcknowledgeDeviceAdmissionResponse {
+  // Exact observation read back from the original committed custody.
+  DeviceDeliveryBinding admission = 1;
+}
+
+message GetDialogueExecutionGrantFactsResponse {
+  DialogueExecutionGrantFacts facts = 1;
+  // SHA256 of the canonical deterministic protobuf encoding of facts.
+  bytes facts_sha256 = 2;
+  // Cloud issuance consumes the enabled bindings read with these same original
+  // source facts. source_sha256 commits their complete original authority.
+  // Absence is not an empty installation set; new issuers reject an old reader.
+  DialogueExecutionGrantApplications applications = 3;
+  // Physical tool placement of the directly accepted input, already committed in source_sha256.
+  bool desktop_origin = 4;
+  DeviceId origin_device_id = 5;
+  DeviceInstallationId origin_installation_id = 6;
+}
+
+message DialogueExecutionGrantApplications {
+  uint64 applications_revision = 1;
+  // Full current bindings, including resolved tool preferences. This is not a
+  // management release catalog or a reusable authorization decision.
+  repeated OwnerApplicationBinding bindings = 2;
+}
+
+message DialogueExecutionGrantFacts {
+  Actor actor = 1;
+  UserIntentId intent_id = 2;
+  AgentId agent_id = 3;
+  AgentVersionId agent_version_id = 4;
+  AgentDialogueId dialogue_id = 5;
+  ConversationId context_conversation_id = 6;
+  CommandId command_id = 7;
+  RunId run_id = 8;
+  AgentDialogueCursor context_watermark = 9;
+  uint64 manifest_revision = 10;
+  uint64 instructions_revision = 11;
+  uint64 permission_revision = 12;
+  PermissionMode permission_mode = 13;
+  // Includes the input and frozen source references, not user content bytes.
+  bytes source_sha256 = 14;
+  // Derived from the canonical account default and direct accepted UserIntent.
+  // This is product eligibility, never an entitlement or semantic intent verdict.
+  bool default_agent_direct_intent = 15;
+  // Physical Native execution placement; never a Cloud Project or data scope.
+  optional WorkspaceId device_workspace_id = 16;
+  // Immutable publication chosen by the source schedule owner.
+  optional ProductReleaseRef product_release = 17;
+}

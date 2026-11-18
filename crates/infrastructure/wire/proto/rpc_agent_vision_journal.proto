@@ -1,0 +1,83 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "rpc_agent_model_usage.proto";
+
+message AgentVisionBegin {
+  InvocationId parent_invocation_id = 1;
+  AgentVisionModelInvocation invocation = 2;
+  bytes canonical_model_route = 3;
+}
+
+message AgentVisionComplete {
+  InvocationId parent_invocation_id = 1;
+  AgentVisionCompletion completion = 2;
+}
+
+message AgentVisionCompletion {
+  AgentVisionModelInvocation invocation = 1;
+
+  optional string metering_message_id = 2;
+  bytes metering_payload = 3;
+  Sha256 metering_payload_hash = 4;
+  optional int64 retry_not_before_ms = 5;
+  optional string early_provider_cause = 6;
+}
+
+message AgentVisionCooldown {
+  string error_code = 1;
+  int64 not_before_ms = 2;
+  optional string early_provider_cause = 3;
+}
+
+message AgentVisionCooldownResult { AgentVisionCooldown cooldown = 1; }
+
+message AgentVisionJournalCommand {
+  oneof operation {
+    AgentVisionSupervisedBegin begin_supervised = 4;
+    AgentVisionSupervisedComplete complete_supervised = 5;
+    AgentVisionBegin begin = 1;
+    AgentVisionComplete complete = 2;
+    AgentVisionBegin cooldown = 3;
+  }
+}
+
+message AgentVisionModelInvocation {
+  InvocationId invocation_id = 1;
+  TenantId tenant_id = 2;
+  ConversationId conversation_id = 3;
+  RunId run_id = 4;
+  AttemptId attempt_id = 5;
+  
+  uint32 status = 6;
+  string model_route_ref = 7;
+  Sha256 route_identity_hash = 8;
+  string credential_grant_ref = 9;
+  string requested_model_key = 10;
+  optional string response_model_key = 11;
+  string pricing_version_ref = 12;
+  string idempotency_key = 13;
+  ContentRef request_ref = 14;
+  Sha256 request_hash = 15;
+  ContentRef response_ref = 16;
+  optional string provider_request_ref = 17;
+  optional string continuation_input_ref = 18;
+  optional string continuation_output_ref = 19;
+  AgentJournalModelUsage usage = 20;
+  int64 started_at_ms = 21;
+  optional int64 finished_at_ms = 22;
+  ErrorInfo error = 23;
+}
+
+message AgentVisionSupervisedBegin {
+  bytes canonical_invocation_metadata = 1;
+  AgentVisionBegin admission = 2;
+}
+
+message AgentVisionSupervisedComplete {
+  bytes canonical_invocation_metadata = 1;
+  AgentVisionComplete completion = 2;
+  bool native_terminal = 3;
+}

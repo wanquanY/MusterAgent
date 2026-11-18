@@ -1,0 +1,128 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "conversation_records.proto";
+import "execution_liveness.proto";
+import "dialogue_context.proto";
+import "resource_records.proto";
+import "run_records.proto";
+import "tool_records.proto";
+
+message DomainEvent {
+  reserved 77;
+  oneof event {
+    ToolSandboxRouted tool_sandbox_routed = 81;
+    ConversationCreated conversation_created = 1;
+    ConversationArchived conversation_archived = 2;
+    ParticipantJoined participant_joined = 3;
+    ParticipantLeft participant_left = 4;
+    MessageAccepted message_accepted = 5;
+    MessageCommitted message_committed = 6;
+    MessagePartiallyCommitted message_partially_committed = 7;
+    ActivityStarted activity_started = 8;
+    ActivityCompleted activity_completed = 9;
+    ActivityFailed activity_failed = 10;
+    ActivityCancelled activity_cancelled = 11;
+    RunAdmitted run_admitted = 12;
+    RunStarted run_started = 13;
+    RunWaiting run_waiting = 14;
+    RunResumed run_resumed = 15;
+    RunCancelRequested run_cancel_requested = 16;
+    RunRetryScheduled run_retry_scheduled = 17;
+    RunCompleted run_completed = 18;
+    RunFailed run_failed = 19;
+    RunCancelled run_cancelled = 20;
+    RunInterrupted run_interrupted = 21;
+    AttemptClaimed attempt_claimed = 22;
+    AttemptSucceeded attempt_succeeded = 23;
+    AttemptFailed attempt_failed = 24;
+    AttemptAbandoned attempt_abandoned = 25;
+    ModelInvocationStarted model_invocation_started = 26;
+    ModelInvocationCompleted model_invocation_completed = 27;
+    ModelInvocationFailed model_invocation_failed = 28;
+    ToolInvocationRequested tool_invocation_requested = 29;
+    ToolInvocationWaitingInteraction tool_invocation_waiting_interaction = 30;
+    ToolInvocationStarted tool_invocation_started = 31;
+    ToolInvocationSucceeded tool_invocation_succeeded = 32;
+    ToolInvocationFailed tool_invocation_failed = 33;
+    ToolInvocationIndeterminate tool_invocation_indeterminate = 34;
+    InteractionRequested interaction_requested = 35;
+    InteractionResponded interaction_responded = 36;
+    InteractionExpired interaction_expired = 37;
+    InteractionCancelled interaction_cancelled = 38;
+    ContextCompactionStarted context_compaction_started = 39;
+    ContextSnapshotCreated context_snapshot_created = 40;
+    ContextCompactionFailed context_compaction_failed = 41;
+    ArtifactCreated artifact_created = 42;
+    ArtifactVersionCommitted artifact_version_committed = 43;
+    ArtifactFailed artifact_failed = 44;
+    ArtifactEditProposed artifact_edit_proposed = 45;
+    UsageRecorded usage_recorded = 46;
+    MessageRetracted message_retracted = 47;
+    AttemptSuspended attempt_suspended = 48;
+    ModelInvocationCancelled model_invocation_cancelled = 49;
+    ToolInvocationCancelled tool_invocation_cancelled = 50;
+    ArtifactEditApplied artifact_edit_applied = 51;
+    ArtifactEditRejected artifact_edit_rejected = 52;
+    ArtifactEditExpired artifact_edit_expired = 53;
+    MessageImported message_imported = 54;
+    RunBudgetExceeded run_budget_exceeded = 55;
+    RunBudgetAmended run_budget_amended = 56;
+    RunControlQueued run_control_queued = 57;
+    RunControlConsumed run_control_consumed = 58;
+    ContextBranchCreated context_branch_created = 59;
+    ContextBranchActivated context_branch_activated = 60;
+    ContextDerived context_derived = 61;
+    ToolExposureAdded tool_exposure_added = 62;
+    SkillDisclosed skill_disclosed = 63;
+    ConversationTitleChanged conversation_title_changed = 64;
+    DelegationContextProjected delegation_context_projected = 65;
+    CoordinationContextProjected coordination_context_projected = 66;
+    MaintenanceContextProjected maintenance_context_projected = 67;
+    StandingGoalContextProjected standing_goal_context_projected = 68;
+    StandingGoalJudgeContextProjected standing_goal_judge_context_projected = 69;
+    RunExecutionPlanUpdated run_execution_plan_updated = 70;
+    ContextCompactionResolved context_compaction_resolved = 71;
+    NoteAuthoringStarted note_authoring_started = 72;
+    NoteSegmentCommitted note_segment_committed = 73;
+    NoteVersionFinalized note_version_finalized = 74;
+    PresentationAuthoringChanged presentation_authoring_changed = 75;
+    RunRecoveryRequested run_recovery_requested = 76;
+    ConversationWorkspaceAssigned conversation_workspace_assigned = 78;
+    ExecutionLivenessRecordV1 execution_liveness_recorded = 79;
+    DialogueContextBound dialogue_context_bound = 80;
+  }
+}
+
+enum LedgerRecordKind {
+  LEDGER_RECORD_KIND_UNSPECIFIED = 0;
+  LEDGER_RECORD_KIND_DOMAIN_EVENT = 1;
+  LEDGER_RECORD_KIND_OUTPUT_FRAME = 2;
+}
+
+enum OutputChannel {
+  OUTPUT_CHANNEL_UNSPECIFIED = 0;
+  OUTPUT_CHANNEL_ASSISTANT_TEXT = 1;
+  OUTPUT_CHANNEL_REASONING_SUMMARY = 2;
+  OUTPUT_CHANNEL_TOOL_ARGUMENTS = 3;
+  OUTPUT_CHANNEL_TOOL_PROGRESS = 4;
+  OUTPUT_CHANNEL_ARTIFACT_CONTENT = 5;
+}
+
+message OutputFrame {
+  FrameId frame_id = 1;
+  OutputId output_id = 2;
+  MessageId message_id = 3;
+  OutputChannel channel = 4;
+  uint64 frame_index = 5;
+  uint64 byte_offset_start = 6;
+  uint64 byte_offset_end = 7;
+  oneof content {
+    string inline_utf8 = 8;
+    ContentRef content_ref = 9;
+  }
+  Sha256 content_hash = 10;
+  bool final_for_output = 11;
+}

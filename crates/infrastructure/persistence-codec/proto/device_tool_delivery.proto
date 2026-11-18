@@ -1,0 +1,49 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "agent_dialogue.proto";
+import "work_item_execution_services.proto";
+
+message DeviceDeliveryBinding {
+  UserIntentId intent_id = 1;
+  RunId run_id = 2;
+  DeviceId device_id = 3;
+  DeviceInstallationId installation_id = 4;
+  bytes source_digest = 5;
+  bytes snapshot_hash = 6;
+  bytes grant_proof_hash = 7;
+  optional WorkItemDevicePublicationSubject work_item = 8;
+}
+
+message DeviceToolDelivery {
+  DeviceDeliveryBinding admission = 1;
+  InvocationId invocation_id = 2;
+  // Closed registered tool identities; original Tool decoder validates bytes.
+  string tool_key = 3;
+  ContentRef request_ref = 4;
+  // Original immutable typed Tool arguments, maximum 256 KiB, exact ref/hash.
+  bytes request_content = 5;
+}
+
+message DeviceToolDeliveryReceipt {
+  InvocationId invocation_id = 1;
+  bytes delivery_fingerprint = 2;
+  repeated DialogueEntryId entry_ids = 3;
+  ContentRef result_ref = 4;
+  // Bounded canonical result from the original publication Owner, not an ACK
+  // fabricated by Native. Public entries are already committed on return.
+  bytes result_content = 5;
+}
+
+message PublishDeviceToolDeliveryResponse {
+  DeviceToolDeliveryReceipt receipt = 1;
+}
+
+message WorkItemDevicePublicationSubject {
+  WorkItemId work_item_id = 1;
+  uint64 goal_revision = 2;
+  uint64 control_revision = 3;
+  uint64 assignment_epoch = 4;
+}

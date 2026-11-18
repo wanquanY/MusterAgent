@@ -1,0 +1,42 @@
+[package]
+name = "musteragent-runtime-application"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+musteragent-runtime-automation.workspace = true
+musteragent-activity.workspace = true
+musteragent-approval.workspace = true
+musteragent-content-ref.workspace = true
+musteragent-conversation.workspace = true
+musteragent-context.workspace = true
+musteragent-definition.workspace = true
+musteragent-discovery.workspace = true
+musteragent-event-envelope.workspace = true
+musteragent-execution-grant.workspace = true
+musteragent-identity.workspace = true
+musteragent-ledger.workspace = true
+musteragent-memory.workspace = true
+musteragent-model.workspace = true
+musteragent-policy.workspace = true
+musteragent-run.workspace = true
+musteragent-runtime-admission.workspace = true
+musteragent-runtime-content.workspace = true
+musteragent-runtime-contract.workspace = true
+musteragent-runtime-interaction.workspace = true
+musteragent-runtime-session.workspace = true
+musteragent-runtime-snapshot.workspace = true
+musteragent-runtime-skill.workspace = true
+musteragent-scheduler.workspace = true
+musteragent-skill.workspace = true
+musteragent-tool.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

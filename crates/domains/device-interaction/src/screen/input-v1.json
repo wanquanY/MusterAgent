@@ -1,0 +1,852 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Shared screen input v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "list_apps"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "list_windows"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "on_screen_only": {
+              "$ref": "#/$defs/on_screen_only"
+            },
+            "pid": {
+              "$ref": "#/$defs/pid"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "get_accessibility_tree"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "get_window_state"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "include_screenshot": {
+              "$ref": "#/$defs/on_screen_only"
+            },
+            "max_depth": {
+              "$ref": "#/$defs/max_depth"
+            },
+            "max_elements": {
+              "$ref": "#/$defs/max_elements"
+            },
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "query": {
+              "$ref": "#/$defs/query"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pid",
+            "window_id"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "get_desktop_state"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "get_screen_size"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "get_cursor_position"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "click"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "$ref": "#/$defs/ax_action"
+            },
+            "button": {
+              "$ref": "#/$defs/button"
+            },
+            "count": {
+              "$ref": "#/$defs/count"
+            },
+            "delivery_mode": {
+              "$ref": "#/$defs/delivery_mode"
+            },
+            "element_index": {
+              "$ref": "#/$defs/element_index"
+            },
+            "element_token": {
+              "$ref": "#/$defs/bounded_identifier_text"
+            },
+            "from_zoom": {
+              "$ref": "#/$defs/on_screen_only"
+            },
+            "modifier": {
+              "$ref": "#/$defs/modifier"
+            },
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "scope": {
+              "$ref": "#/$defs/scope"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            },
+            "x": {
+              "$ref": "#/$defs/x"
+            },
+            "y": {
+              "$ref": "#/$defs/x"
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "double_click"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "delivery_mode": {
+              "$ref": "#/$defs/delivery_mode"
+            },
+            "element_index": {
+              "$ref": "#/$defs/element_index"
+            },
+            "element_token": {
+              "$ref": "#/$defs/bounded_identifier_text"
+            },
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            },
+            "x": {
+              "$ref": "#/$defs/x"
+            },
+            "y": {
+              "$ref": "#/$defs/x"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pid"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "right_click"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "delivery_mode": {
+              "$ref": "#/$defs/delivery_mode"
+            },
+            "element_index": {
+              "$ref": "#/$defs/element_index"
+            },
+            "element_token": {
+              "$ref": "#/$defs/bounded_identifier_text"
+            },
+            "modifier": {
+              "$ref": "#/$defs/modifier"
+            },
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            },
+            "x": {
+              "$ref": "#/$defs/x"
+            },
+            "y": {
+              "$ref": "#/$defs/x"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pid"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "drag"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "button": {
+              "$ref": "#/$defs/button"
+            },
+            "delivery_mode": {
+              "$ref": "#/$defs/delivery_mode"
+            },
+            "duration_ms": {
+              "$ref": "#/$defs/duration_ms"
+            },
+            "from_x": {
+              "$ref": "#/$defs/x"
+            },
+            "from_y": {
+              "$ref": "#/$defs/x"
+            },
+            "from_zoom": {
+              "$ref": "#/$defs/on_screen_only"
+            },
+            "modifier": {
+              "$ref": "#/$defs/modifier"
+            },
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "steps": {
+              "$ref": "#/$defs/steps"
+            },
+            "to_x": {
+              "$ref": "#/$defs/x"
+            },
+            "to_y": {
+              "$ref": "#/$defs/x"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pid",
+            "from_x",
+            "from_y",
+            "to_x",
+            "to_y"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "scroll"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "amount": {
+              "$ref": "#/$defs/amount"
+            },
+            "by": {
+              "$ref": "#/$defs/by"
+            },
+            "delivery_mode": {
+              "$ref": "#/$defs/delivery_mode"
+            },
+            "direction": {
+              "$ref": "#/$defs/direction"
+            },
+            "element_index": {
+              "$ref": "#/$defs/element_index"
+            },
+            "element_token": {
+              "$ref": "#/$defs/bounded_identifier_text"
+            },
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            },
+            "x": {
+              "$ref": "#/$defs/x"
+            },
+            "y": {
+              "$ref": "#/$defs/x"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "direction"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "type_text"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "delay_ms": {
+              "$ref": "#/$defs/delay_ms"
+            },
+            "delivery_mode": {
+              "$ref": "#/$defs/delivery_mode"
+            },
+            "element_index": {
+              "$ref": "#/$defs/element_index"
+            },
+            "element_token": {
+              "$ref": "#/$defs/bounded_identifier_text"
+            },
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "text": {
+              "$ref": "#/$defs/text"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            },
+            "x": {
+              "$ref": "#/$defs/x"
+            },
+            "y": {
+              "$ref": "#/$defs/x"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pid",
+            "text"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "press_key"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "delivery_mode": {
+              "$ref": "#/$defs/delivery_mode"
+            },
+            "element_index": {
+              "$ref": "#/$defs/element_index"
+            },
+            "element_token": {
+              "$ref": "#/$defs/bounded_identifier_text"
+            },
+            "key": {
+              "$ref": "#/$defs/bounded_identifier_text"
+            },
+            "modifiers": {
+              "$ref": "#/$defs/modifier"
+            },
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            },
+            "x": {
+              "$ref": "#/$defs/x"
+            },
+            "y": {
+              "$ref": "#/$defs/x"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pid",
+            "key"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "hotkey"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "delivery_mode": {
+              "$ref": "#/$defs/delivery_mode"
+            },
+            "keys": {
+              "$ref": "#/$defs/modifier"
+            },
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            },
+            "x": {
+              "$ref": "#/$defs/x"
+            },
+            "y": {
+              "$ref": "#/$defs/x"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pid",
+            "keys"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "move_cursor"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "x": {
+              "$ref": "#/$defs/x"
+            },
+            "y": {
+              "$ref": "#/$defs/x"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "set_value"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "element_index": {
+              "$ref": "#/$defs/element_index"
+            },
+            "element_token": {
+              "$ref": "#/$defs/bounded_identifier_text"
+            },
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "value": {
+              "$ref": "#/$defs/text"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pid",
+            "value"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "bring_to_front"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "pid"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "const": "zoom"
+        },
+        "arguments": {
+          "type": "object",
+          "properties": {
+            "pid": {
+              "$ref": "#/$defs/pid"
+            },
+            "window_id": {
+              "$ref": "#/$defs/pid"
+            },
+            "x1": {
+              "$ref": "#/$defs/x"
+            },
+            "x2": {
+              "$ref": "#/$defs/x"
+            },
+            "y1": {
+              "$ref": "#/$defs/x"
+            },
+            "y2": {
+              "$ref": "#/$defs/x"
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "window_id",
+            "x1",
+            "y1",
+            "x2",
+            "y2"
+          ]
+        }
+      },
+      "required": [
+        "tool",
+        "arguments"
+      ],
+      "additionalProperties": false
+    }
+  ],
+  "$defs": {
+    "on_screen_only": {
+      "type": "boolean"
+    },
+    "pid": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "max_depth": {
+      "minimum": 1,
+      "type": "integer",
+      "maximum": 64
+    },
+    "max_elements": {
+      "minimum": 1,
+      "type": "integer",
+      "maximum": 10000
+    },
+    "query": {
+      "type": "string",
+      "maxLength": 4096,
+      "pattern": "^[^\\u0000]*$"
+    },
+    "button": {
+      "enum": [
+        "left",
+        "right",
+        "middle"
+      ],
+      "type": "string",
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000]*$",
+      "minLength": 1
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3
+    },
+    "delivery_mode": {
+      "enum": [
+        "background",
+        "foreground"
+      ],
+      "type": "string",
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000]*$",
+      "minLength": 1
+    },
+    "element_index": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100000
+    },
+    "modifier": {
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 96,
+        "pattern": "^[^\\u0000]*$"
+      },
+      "minItems": 1,
+      "type": "array",
+      "maxItems": 8
+    },
+    "scope": {
+      "enum": [
+        "window",
+        "desktop"
+      ],
+      "type": "string",
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000]*$",
+      "minLength": 1
+    },
+    "x": {
+      "type": "number",
+      "minimum": -100000,
+      "maximum": 100000
+    },
+    "duration_ms": {
+      "maximum": 10000,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "steps": {
+      "maximum": 1000,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "amount": {
+      "maximum": 50,
+      "minimum": 1,
+      "type": "integer"
+    },
+    "by": {
+      "enum": [
+        "line",
+        "page"
+      ],
+      "type": "string",
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000]*$",
+      "minLength": 1
+    },
+    "direction": {
+      "enum": [
+        "up",
+        "down",
+        "left",
+        "right"
+      ],
+      "type": "string",
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000]*$",
+      "minLength": 1
+    },
+    "delay_ms": {
+      "maximum": 5000,
+      "minimum": 0,
+      "type": "integer"
+    },
+    "text": {
+      "type": "string",
+      "maxLength": 16384,
+      "pattern": "^[^\\u0000]*$"
+    },
+    "bounded_identifier_text": {
+      "type": "string",
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000]*$",
+      "minLength": 1
+    },
+    "ax_action": {
+      "type": "string",
+      "maxLength": 1024,
+      "pattern": "^[^\\u0000]*$",
+      "minLength": 1,
+      "enum": [
+        "press",
+        "show_menu",
+        "pick",
+        "confirm",
+        "cancel",
+        "open"
+      ]
+    }
+  }
+}

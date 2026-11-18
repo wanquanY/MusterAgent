@@ -1,0 +1,81 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "device_tool_delivery.proto";
+import "agent_dialogue.proto";
+
+message NativeDialogueCompletedTool {
+  uint32 ordinal = 1;
+  string tool_call_id = 2;
+  InvocationId invocation_id = 3;
+  VersionedRef tool_ref = 4;
+  bytes request_sha256 = 5;
+  ContentRef result_ref = 6;
+  LedgerRecordId terminal_record_id = 7;
+  uint64 terminal_run_sequence = 8;
+  bytes terminal_payload_hash = 9;
+}
+
+message NativeDialogueCompletionCoverage {
+  ContextSnapshotId context_snapshot_id = 1;
+  uint32 plan_generation = 2;
+  bytes plan_checksum = 3;
+  uint32 iteration = 4;
+  uint64 source_sequence_to = 5;
+  uint64 latest_consumed_source_sequence = 6;
+  InvocationId model_invocation_id = 7;
+  LedgerRecordId model_completed_record_id = 8;
+  uint64 model_completed_run_sequence = 9;
+  bytes model_completed_payload_hash = 10;
+  bytes model_completion_intent_hash = 11;
+  // Exactly the original batch, zero-based contiguous ordinals; 1..1024.
+  repeated NativeDialogueCompletedTool tools = 12;
+}
+
+enum NativeDialogueRunOutcome {
+  NATIVE_DIALOGUE_RUN_OUTCOME_UNSPECIFIED = 0;
+  NATIVE_DIALOGUE_RUN_OUTCOME_SUCCEEDED = 1;
+  NATIVE_DIALOGUE_RUN_OUTCOME_FAILED = 2;
+  NATIVE_DIALOGUE_RUN_OUTCOME_CANCELLED = 3;
+}
+
+message NativeDialogueRunSettlement {
+  NativeDialogueRunOutcome outcome = 1;
+  uint64 last_run_sequence = 2;
+  LedgerRecordId terminal_record_id = 3;
+  bytes terminal_payload_hash = 4;
+  bytes liveness_commitment = 5;
+  // Exact original WorkItemDevicePublicationCut canonical bytes, <=4MiB.
+  bytes publication_cut = 6;
+}
+
+message NativeDialogueTerminalAcknowledgement {
+  DeviceDeliveryBinding binding = 1;
+  // SHA256("musteragent.native-dialogue-terminal-receipt.v1\0" ||
+  // deterministic canonical NativeDialogueTerminalReceipt protobuf).
+  bytes receipt_commitment = 2;
+  NativeDialogueTerminalResolution resolution = 3;
+  // Present iff Published; replay returns the original exact acknowledgement.
+  optional DialogueEntryId entry_id = 4;
+}
+
+message NativeDialogueTerminalReceipt {
+  // Original direct-Intent admission only: work_item MUST be absent.
+  DeviceDeliveryBinding binding = 1;
+  NativeDialogueRunSettlement settlement = 2;
+  uint64 terminal_record_sequence = 3;
+  // Zero is possible when the real Run failed before its first model plan.
+  uint32 terminal_iteration = 4;
+  // Present iff Failed. Original non-retryable RunFailed code, no diagnostic.
+  optional ErrorCode failure_code = 5;
+  // Required for success; a prior partial publication is never coverage.
+  optional NativeDialogueCompletionCoverage completion = 6;
+}
+
+enum NativeDialogueTerminalResolution {
+  NATIVE_DIALOGUE_TERMINAL_RESOLUTION_UNSPECIFIED = 0;
+  NATIVE_DIALOGUE_TERMINAL_RESOLUTION_PUBLISHED = 1;
+  NATIVE_DIALOGUE_TERMINAL_RESOLUTION_SUPPRESSED = 2;
+}

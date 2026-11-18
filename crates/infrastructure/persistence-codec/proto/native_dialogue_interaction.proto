@@ -1,0 +1,77 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "device_tool_delivery.proto";
+import "agent_dialogue.proto";
+import "dialogue_interaction_services.proto";
+import "runtime.proto";
+
+message NativeDialogueInteractionApprovalPolicy {
+  Sha256 policy_sha256 = 1;
+  string tool_key = 2;
+  string capability_key = 3;
+  CapabilityProviderId provider_id = 4;
+  string effect = 5;
+}
+
+message NativeDialogueInteractionCommand {
+  CommandId command_id = 1;
+  InteractionId interaction_id = 2;
+  AgentDialogueId dialogue_id = 3;
+  DialogueEntryId entry_id = 4;
+  Sha256 expected_control_revision = 5;
+  DeviceDeliveryBinding admission = 6;
+  oneof response {
+    bytes answer = 7;
+    DialogueInteractionDecision approve_once = 8;
+    DialogueInteractionDecision deny = 9;
+    DialogueInteractionDecision cancel = 10;
+    // Original availability Owner verified this descriptor; never a user answer.
+    bytes capability = 11;
+  }
+}
+
+message NativeDialogueInteractionCommandCursor {
+  int64 queued_at_ms = 1;
+  CommandId command_id = 2;
+}
+
+enum NativeDialogueInteractionInstallationNamespace {
+  NATIVE_DIALOGUE_INTERACTION_INSTALLATION_NAMESPACE_UNSPECIFIED = 0;
+  NATIVE_DIALOGUE_INTERACTION_INSTALLATION_NAMESPACE_DIALOGUE_ORIGIN = 1;
+  NATIVE_DIALOGUE_INTERACTION_INSTALLATION_NAMESPACE_NATIVE_CLIENT = 2;
+}
+
+message NativeDialogueInteractionProjection {
+  DeviceDeliveryBinding admission = 1;
+  ConversationId conversation_id = 2;
+  InvocationId invocation_id = 3;
+  InteractionView interaction = 4;
+  bytes prompt_content = 5;
+  uint64 observed_run_sequence = 6;
+  // Absent means local presence only. This is original Tool policy evidence,
+  // never a renderer-selected authority. Consent v2 is checked independently.
+  NativeDialogueInteractionApprovalPolicy approval_policy = 7;
+  oneof resolution {
+    DialogueInteractionAnswer answer = 8;
+    DialogueInteractionDecision approved = 9;
+    DialogueInteractionDecision denied = 10;
+  }
+  // Original Run wait/cancellation fact; not inferred from Interaction status.
+  bool control_open = 11;
+}
+
+message NativeDialogueInteractionPublicationReceipt {
+  InteractionId interaction_id = 1;
+  AgentDialogueId dialogue_id = 2;
+  DialogueEntryId entry_id = 3;
+  Sha256 projection_sha256 = 4;
+  Sha256 control_revision = 5;
+}
+
+message NativeDialogueInteractionRejected {
+  // Closed Runtime ErrorCode; no private diagnostics or secure references.
+  ErrorCode code = 1;
+}

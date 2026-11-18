@@ -1,0 +1,53 @@
+// Kernel RPC contracts. Shared values are owned by persistence-codec.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "google/protobuf/timestamp.proto";
+import "rpc_common.proto";
+
+enum SecurityAuditAction {
+  SECURITY_AUDIT_ACTION_UNSPECIFIED = 0;
+  SECURITY_AUDIT_ACTION_APPROVAL_DECISION = 1;
+  SECURITY_AUDIT_ACTION_CREDENTIAL_ACCESS = 2;
+  SECURITY_AUDIT_ACTION_AUTHORIZATION_DENIED = 3;
+  SECURITY_AUDIT_ACTION_SKILL_LIFECYCLE_CHANGE = 4;
+  SECURITY_AUDIT_ACTION_AGENT_VERSION_PUBLISHED = 5;
+  SECURITY_AUDIT_ACTION_DATA_ERASURE = 6;
+  SECURITY_AUDIT_ACTION_OWNERSHIP_CUTOVER = 7;
+  SECURITY_AUDIT_ACTION_ADMISSION_DECISION = 8;
+  SECURITY_AUDIT_ACTION_MODEL_INVOCATION = 9;
+  SECURITY_AUDIT_ACTION_TOOL_INVOCATION = 10;
+  SECURITY_AUDIT_ACTION_INTERACTION_RESPONSE = 11;
+  SECURITY_AUDIT_ACTION_TOOL_INVOCATION_INDETERMINATE = 12;
+}
+
+enum SecurityAuditOutcome {
+  SECURITY_AUDIT_OUTCOME_UNSPECIFIED = 0;
+  SECURITY_AUDIT_OUTCOME_SUCCEEDED = 1;
+  SECURITY_AUDIT_OUTCOME_DENIED = 2;
+  SECURITY_AUDIT_OUTCOME_FAILED = 3;
+}
+
+message SecurityAuditRecord {
+  string schema_version = 1;
+  AuditRecordId audit_record_id = 2;
+  TenantId tenant_id = 3;
+  PrincipalId actor_principal_id = 4;
+  PrincipalKind actor_principal_kind = 5;
+  SecurityAuditAction action = 6;
+  SecurityAuditOutcome outcome = 7;
+  repeated ResourceRef resource_refs = 8;
+  oneof source_fact {
+    LedgerRecordId source_ledger_record_id = 9;
+    ErasureJobId source_erasure_job_id = 15;
+    InvocationId source_model_invocation_id = 16;
+    InvocationId source_tool_invocation_id = 17;
+  }
+  CorrelationId correlation_id = 10;
+  ContentRef detail_ref = 11;
+  string retention_policy_ref = 12;
+  google.protobuf.Timestamp occurred_at = 13;
+  google.protobuf.Timestamp committed_at = 14;
+  optional bytes trace_id = 18;
+}

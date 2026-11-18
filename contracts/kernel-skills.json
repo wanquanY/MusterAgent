@@ -1,0 +1,163 @@
+{
+  "schema_version": "musteragent.runtime.kernel-skills.v1",
+  "bundle_ref": "musteragent.skill-bundle@1",
+  "compatible_agent_contract": "musteragent.runtime-contract@1",
+  "released_at_ms": 1753689600000,
+  "active_skill_version_ids": [
+    "01982f80-0000-7000-8000-000000002901",
+    "01982f80-0000-7000-8000-000000002902",
+    "01982f80-0000-7000-8000-000000002903",
+    "01982f80-0000-7000-8000-000000002904",
+    "01982f80-0000-7000-8000-000000002905",
+    "01982f80-0000-7000-8000-000000002906",
+    "01982f80-0000-7000-8000-000000002907"
+  ],
+  "skills": [
+    {
+      "skill_id": "01982f80-0000-7000-8000-000000001901",
+      "skill_version_id": "01982f80-0000-7000-8000-000000002901",
+      "skill_key": "assistant-base",
+      "version": 1,
+      "supersedes": null,
+      "identity_created_at_ms": 1753689600000,
+      "released_at_ms": 1753689600000,
+      "surfaces": [
+        "web",
+        "api",
+        "desktop",
+        "channel",
+        "mobile"
+      ],
+      "sandbox": "none",
+      "source": "resources/skills/assistant-base/SKILL.md",
+      "resources": [],
+      "material_sha256": "82da60700cdc38fd96bff3d1f31de8d9a0a5f013fa622a2da5927c11735a362d"
+    },
+    {
+      "skill_id": "01982f80-0000-7000-8000-000000001902",
+      "skill_version_id": "01982f80-0000-7000-8000-000000002902",
+      "skill_key": "project-files",
+      "version": 1,
+      "supersedes": null,
+      "identity_created_at_ms": 1753689600000,
+      "released_at_ms": 1753689600000,
+      "surfaces": [
+        "web",
+        "api",
+        "desktop",
+        "channel",
+        "mobile"
+      ],
+      "sandbox": "none",
+      "source": "resources/skills/project-files/SKILL.md",
+      "resources": [],
+      "material_sha256": "1096bb90eb0add6600b2c0446245b651f6f2127152da7d4cc5a7d3197d446b85"
+    },
+    {
+      "skill_id": "01982f80-0000-7000-8000-000000001903",
+      "skill_version_id": "01982f80-0000-7000-8000-000000002903",
+      "skill_key": "data-analysis",
+      "version": 1,
+      "supersedes": null,
+      "identity_created_at_ms": 1753689600000,
+      "released_at_ms": 1753689600000,
+      "surfaces": [
+        "web",
+        "mobile"
+      ],
+      "sandbox": "browser-compatible",
+      "source": "resources/skills/data-analysis/SKILL.md",
+      "resources": [],
+      "material_sha256": "41098086eaf2d1794d1e5ffdd18a501f6afca1e12698b9ef88f2c96555b048cb"
+    },
+    {
+      "skill_id": "01982f80-0000-7000-8000-000000001904",
+      "skill_version_id": "01982f80-0000-7000-8000-000000002904",
+      "skill_key": "web-research",
+      "version": 1,
+      "supersedes": null,
+      "identity_created_at_ms": 1753689600000,
+      "released_at_ms": 1753689600000,
+      "surfaces": [
+        "web",
+        "api",
+        "desktop",
+        "channel",
+        "mobile"
+      ],
+      "sandbox": "none",
+      "source": "resources/skills/web-research/SKILL.md",
+      "resources": [],
+      "material_sha256": "5b0f81ab10d166e34ea4e2fca8d83744bfb2772d3ffd02ec3b4504ea44eb78f0"
+    },
+    {
+      "skill_id": "01982f80-0000-7000-8000-000000001905",
+      "skill_version_id": "01982f80-0000-7000-8000-000000002905",
+      "skill_key": "vision-analysis",
+      "version": 1,
+      "supersedes": null,
+      "identity_created_at_ms": 1753689600000,
+      "released_at_ms": 1753689600000,
+      "surfaces": [
+        "web",
+        "api",
+        "desktop",
+        "channel",
+        "mobile"
+      ],
+      "sandbox": "none",
+      "source": "resources/skills/vision-analysis/SKILL.md",
+      "resources": [],
+      "material_sha256": "ed95c5e67f52abe7373e2b9bc73b6aae84875fc66c63a1c98b7564bacd73ffcd"
+    },
+    {
+      "skill_id": "01982f80-0000-7000-8000-000000001906",
+      "skill_version_id": "01982f80-0000-7000-8000-000000002906",
+      "skill_key": "workspace-reading",
+      "version": 1,
+      "supersedes": null,
+      "identity_created_at_ms": 1753689600000,
+      "released_at_ms": 1753689600000,
+      "surfaces": [
+        "web",
+        "desktop",
+        "channel",
+        "mobile"
+      ],
+      "sandbox": "none",
+      "source": "resources/skills/workspace-reading/SKILL.md",
+      "resources": [],
+      "material_sha256": "25853f64d3a8c4a93c0a875c4d4dcba5b41ab9af319b1e84e8b73d4d7d0540b2"
+    },
+    {
+      "skill_id": "01982f80-0000-7000-8000-000000001907",
+      "skill_version_id": "01982f80-0000-7000-8000-000000002907",
+      "skill_key": "skill-creator",
+      "version": 1,
+      "supersedes": null,
+      "identity_created_at_ms": 1753689600000,
+      "released_at_ms": 1753689600000,
+      "surfaces": [
+        "web",
+        "api",
+        "desktop"
+      ],
+      "sandbox": "none",
+      "source": "resources/skills/skill-creator/SKILL.md",
+      "resources": [
+        "resources/skills/skill-creator/references/package-contract.md",
+        "resources/skills/skill-creator/references/private-lifecycle.md",
+        "resources/skills/skill-creator/templates/SKILL.md"
+      ],
+      "material_sha256": "159ab24c4f4186b6244a059ea7546a1db425d1ebb92a6f7c778c94c63b642cb1"
+    }
+  ],
+  "automatic_disclosures": [
+    {
+      "snapshot_schema_version": "musteragent.runtime.snapshot.v17",
+      "skill_key": "project-files",
+      "required_route_capability": null,
+      "required_tool_capability": "resource.search@4"
+    }
+  ]
+}

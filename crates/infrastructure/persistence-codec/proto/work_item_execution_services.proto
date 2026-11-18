@@ -1,0 +1,113 @@
+// Kernel persistence messages extracted from the original owner definitions.
+syntax = "proto3";
+package musteragent.v1;
+
+import "common.proto";
+import "execution_grant.proto";
+import "agent_dialogue.proto";
+import "snapshot.proto";
+
+message GetWorkItemExecutionGrantFactsResponse {
+  WorkItemExecutionGrantFacts facts = 1;
+  // Deterministic protobuf encoding of all facts, checked before signing.
+  bytes facts_sha256 = 2;
+}
+
+message SignedWorkItemAdmissionRejection {
+  string key_id = 1;
+  WorkItemAdmissionRejectionClaims claims = 2;
+  bytes signature = 3;
+}
+
+message WorkItemAdmissionRejectionClaims {
+  Actor actor = 1;
+  WorkItemId work_item_id = 2;
+  uint64 goal_revision = 3;
+  uint64 control_revision = 4;
+  uint64 assignment_epoch = 5;
+  CommandId decision_id = 6;
+  bytes facts_sha256 = 7;
+  WorkItemAdmissionRejectionReason reason = 8;
+  int64 issued_at_ms = 9;
+  int64 expires_at_ms = 10;
+}
+
+enum WorkItemAdmissionRejectionReason {
+  WORK_ITEM_ADMISSION_REJECTION_REASON_UNSPECIFIED = 0;
+  WORK_ITEM_ADMISSION_REJECTION_REASON_ACCOUNT_UNAVAILABLE = 1;
+  WORK_ITEM_ADMISSION_REJECTION_REASON_EXECUTION_NOT_ALLOWED = 2;
+}
+
+message WorkItemDelegationCeiling {
+  RunId source_run_id = 1;
+  InvocationId source_invocation_id = 2;
+  RuntimeSnapshotId source_snapshot_id = 3;
+  repeated CapabilityEntitlement capabilities = 4;
+  repeated ContentRef input_refs = 5;
+  // Exact publication authenticated by the original source Snapshot.
+  optional ProductReleaseRef product_release = 6;
+}
+
+message WorkItemDeviceConsentAnchor {
+  string authority_ref = 1;
+  string policy_ref = 2;
+  bytes effective_capabilities_sha256 = 3;
+}
+
+message WorkItemDeviceTarget {
+  DeviceId device_id = 1;
+  DeviceInstallationId installation_id = 2;
+  string membership_id = 3;
+  uint64 membership_epoch = 4;
+  string consent_id = 5;
+  bytes consent_sha256 = 6;
+  optional WorkItemDeviceConsentAnchor consent_anchor = 7;
+}
+
+message WorkItemExecutionGrantFacts {
+  Actor actor = 1;
+  WorkItemId work_item_id = 2;
+  uint64 goal_revision = 3;
+  uint64 control_revision = 4;
+  uint64 assignment_epoch = 5;
+  OwnerSpaceId space_id = 6;
+  PrincipalId owner_id = 7;
+  AgentId requesting_agent_id = 8;
+  AgentId executing_agent_id = 9;
+  AgentDialogueId source_dialogue_id = 10;
+  UserIntentId source_intent_id = 11;
+  AgentDialogueId executing_dialogue_id = 12;
+  AgentVersionId executing_agent_version_id = 13;
+  CommandId command_id = 14;
+  ConversationId conversation_id = 15;
+  ParticipantId requested_by = 16;
+  ParticipantId user = 17;
+  ParticipantId executor = 18;
+  MessageId message_id = 19;
+  RunId run_id = 20;
+  AgentDialogueCursor context_watermark = 21;
+  bytes context_source_sha256 = 22;
+  uint64 manifest_revision = 23;
+  uint64 instructions_revision = 24;
+  uint64 permission_revision = 25;
+  PermissionMode permission_mode = 26;
+  AgentId default_agent_id = 29;
+  WorkItemDelegationCeiling delegation = 30;
+  bytes source_sha256 = 31;
+  optional WorkItemExecutionReport report = 32;
+  // Absent is the historical Cloud target. No caller may synthesize this proof.
+  optional WorkItemDeviceTarget device_target = 33;
+  // Frozen by the original reservation owner before signing; absent for Cloud/report.
+  optional WorkspaceId device_workspace_id = 34;
+}
+
+message WorkItemExecutionReport {
+  RunId producing_run_id = 1;
+  RuntimeSnapshotId producing_snapshot_id = 2;
+  AgentId producing_agent_id = 3;
+  ContentRef content_ref = 4;
+  // Closed values: completed, failed, cancelled.
+  string outcome = 5;
+}
+
+message WorkItemId { string value = 1; }
