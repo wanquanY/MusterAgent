@@ -47,9 +47,7 @@ impl WorkspaceReleaseCatalog {
             return Err(Error);
         }
         let document: Document<'_> = serde_json::from_slice(bytes).map_err(|_| Error)?;
-        if document.schema_version != "musteragent.workspace-tool-releases.v1"
-            || document.releases.is_empty()
-        {
+        if document.schema_version != "musteragent.workspace-tool-releases.v1" {
             return Err(Error);
         }
         let mut releases = BTreeMap::<_, BTreeMap<_, _>>::new();
@@ -144,7 +142,18 @@ mod tests {
         doc["releases"][0]["tools"][0]["input_schema"]["type"] = "string".into();
         doc["releases"].as_array_mut().unwrap().truncate(1);
         assert_eq!(parse(&doc).unwrap_err(), Error);
-        doc["releases"] = serde_json::json!([]);
-        assert_eq!(parse(&doc).unwrap_err(), Error);
+    }
+
+    #[test]
+    fn empty_catalog_has_no_publications_or_resolvable_operations() {
+        let empty = br#"{"schema_version":"musteragent.workspace-tool-releases.v1","releases":[]}"#;
+        let catalog = WorkspaceReleaseCatalog::from_json(empty).unwrap();
+        assert_eq!(catalog.publications().count(), 0);
+        assert_eq!(
+            catalog
+                .resolve("unknown", "1.0.0", &"2".repeat(64))
+                .unwrap_err(),
+            Error
+        );
     }
 }

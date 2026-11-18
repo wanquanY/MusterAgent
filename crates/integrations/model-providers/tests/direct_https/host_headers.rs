@@ -5,13 +5,20 @@ use musteragent_runtime_model::{ModelRequestAuthority, ProviderError};
 use reqwest::header::{HeaderMap, HeaderValue};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
-struct SignedContext;
+struct SignedContext(ModelRequestAuthority);
 impl ModelRequestHeaderHook for SignedContext {
     fn headers<'a>(
         &'a self,
         authority: &'a ModelRequestAuthority,
     ) -> ApplicationFuture<'a, Result<HeaderMap, ProviderError>> {
         Box::pin(async move {
+            assert_eq!(authority.credential_grant_ref, self.0.credential_grant_ref);
+            assert_eq!(authority.route, self.0.route);
+            assert_eq!(authority.route_role, self.0.route_role);
+            assert_eq!(
+                authority.invocation.invocation_id,
+                self.0.invocation.invocation_id
+            );
             let mut headers = HeaderMap::new();
             headers.insert(
                 "x-host-invocation",
@@ -23,16 +30,20 @@ impl ModelRequestHeaderHook for SignedContext {
     }
 }
 
-struct RenewingCredential(AtomicUsize);
+struct RenewingCredential(AtomicUsize, ModelRequestAuthority);
 impl CredentialResolver for RenewingCredential {
     fn resolve<'a>(
         &'a self,
-        _: &'a CredentialGrantRef,
-        _: &'a ModelRoute,
-        _: musteragent_runtime_model::ModelInvocationRouteRole,
-        _: InvocationId,
+        grant: &'a CredentialGrantRef,
+        route: &'a ModelRoute,
+        role: musteragent_runtime_model::ModelInvocationRouteRole,
+        invocation: InvocationId,
     ) -> ApplicationFuture<'a, Result<CredentialMaterial, CredentialResolverError>> {
         Box::pin(async move {
+            assert_eq!(*grant, self.1.credential_grant_ref);
+            assert_eq!(*route, self.1.route);
+            assert_eq!(role, self.1.route_role);
+            assert_eq!(invocation, self.1.invocation.invocation_id);
             let first = self.0.fetch_add(1, Ordering::SeqCst) == 0;
             let now = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -63,7 +74,7 @@ async fn host_headers_and_idempotency_survive_retry_and_new_provider_with_renewa
         let address = listener.local_addr().expect("address");
         let capture = tokio::spawn(async move {
             let mut captured = Vec::new();
-            for _ in 0..2 {
+            for _ in 0..3 {
                 let (mut socket, _) = listener.accept().await.expect("accept");
                 let mut bytes = Vec::new();
                 let (end, length) = loop {
@@ -93,11 +104,12 @@ async fn host_headers_and_idempotency_survive_retry_and_new_provider_with_renewa
             }
             captured
         });
-        let credentials = Arc::new(RenewingCredential(AtomicUsize::new(0)));
         let mut call = request(fixture_model_provider_id(), fixture_model_entry_id());
         call.route.api_format = format;
         call.reasoning_policy = ReasoningPolicy::Disabled;
         call.cache_policy = CachePolicy::Disabled;
+        let authority = ModelRequestAuthority::from(&call);
+        let credentials = Arc::new(RenewingCredential(AtomicUsize::new(0), authority.clone()));
         for generation in 0..2 {
             let endpoints = StaticEndpointRegistry::new(
                 [ProviderEndpoint {
@@ -126,14 +138,17 @@ async fn host_headers_and_idempotency_survive_retry_and_new_provider_with_renewa
             .expect("provider")
             .with_host_headers(HostRequestHeaders {
                 static_headers,
-                hook: Some(Arc::new(SignedContext)),
+                hook: Some(Arc::new(SignedContext(authority.clone()))),
             });
-            provider.preflight(&call).await.expect("prepare");
-            if generation == 0 {
-                tokio::time::sleep(Duration::from_millis(350)).await;
+            // Retry the same invocation on the first provider, then on a new one.
+            for attempt in 0..if generation == 0 { 2 } else { 1 } {
+                provider.preflight(&call).await.expect("prepare");
+                if generation == 0 && attempt == 0 {
+                    tokio::time::sleep(Duration::from_millis(350)).await;
+                }
+                let events = provider.stream(call.clone()).collect::<Vec<_>>().await;
+                assert!(events.iter().any(Result::is_err), "503 must surface");
             }
-            let events = provider.stream(call.clone()).collect::<Vec<_>>().await;
-            assert!(events.iter().any(Result::is_err), "503 must surface");
         }
         let requests = tokio::time::timeout(Duration::from_secs(5), capture)
             .await
@@ -141,8 +156,8 @@ async fn host_headers_and_idempotency_survive_retry_and_new_provider_with_renewa
             .expect("capture task");
         assert_eq!(
             credentials.0.load(Ordering::SeqCst),
-            3,
-            "prepare, expiry renewal, resumed prepare"
+            4,
+            "prepare, expiry renewal, retry, resumed prepare"
         );
         for headers in requests {
             assert!(headers.contains("x-host-static: fixture-host"));

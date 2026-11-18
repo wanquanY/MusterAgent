@@ -15,6 +15,8 @@ struct Calls {
     lookups: AtomicUsize,
     dispatches: AtomicUsize,
     requests: Mutex<Vec<(String, Vec<u8>)>>,
+    // Only sequence numbers from the recording host. Never retain bearer values.
+    authorization: Mutex<Vec<(String, u32, u32)>>,
 }
 struct Gateway {
     endpoint: String,
@@ -125,10 +127,32 @@ async fn serve(
                 .map(|(_, value)| value.trim().to_owned())
         })
     };
-    assert_eq!(
-        header("authorization").as_deref(),
-        Some("Bearer test-only-model-key")
-    );
+    if let Some(signature) = header("x-fixture-signature") {
+        assert!(
+            header("x-fixture-preflight").is_none(),
+            "stale signature metadata"
+        );
+        assert!(
+            header("x-fixture-host").is_none(),
+            "custom hook replaces configured headers"
+        );
+        let method = headers.split_whitespace().next().expect("request method");
+        let token = header("authorization").expect("authorized request");
+        let generation = token
+            .strip_prefix("Bearer fixture-generation-")
+            .expect("fixture token");
+        calls.authorization.lock().expect("fixture lock").push((
+            method.into(),
+            generation.parse()?,
+            signature.parse()?,
+        ));
+    } else {
+        assert_eq!(header("x-fixture-host").as_deref(), Some("p9"));
+        assert_eq!(
+            header("authorization").as_deref(),
+            Some("Bearer test-only-model-key")
+        );
+    }
     if headers.starts_with("POST ") {
         let length = header("content-length")
             .expect("request length")
@@ -436,3 +460,6 @@ async fn sigkill_lookup_failure_is_surfaced_without_another_invocation() -> Resu
     )
     .await
 }
+
+#[path = "host_authority.rs"]
+mod host_authority;

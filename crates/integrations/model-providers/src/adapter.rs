@@ -39,6 +39,7 @@ mod google_continuation;
 pub(crate) mod http_clients;
 mod streaming;
 use credential_lease::PreparedCredentialLease;
+pub(crate) use credential_lease::credential_deadline;
 #[cfg(test)]
 mod aws_profile_tests;
 mod failures;
@@ -67,6 +68,7 @@ impl Default for ProviderAdapterConfig {
 }
 
 pub struct DirectModelProvider {
+    per_request_authorization: bool,
     host_headers: crate::HostRequestHeaders,
     existing_invocations: BTreeMap<
         (
@@ -117,6 +119,7 @@ impl DirectModelProvider {
         }
         let clients = ProviderHttpClients::new(config)?;
         Ok(Self {
+            per_request_authorization: false,
             host_headers: Default::default(),
             existing_invocations: BTreeMap::new(),
             clients,
@@ -133,6 +136,14 @@ impl DirectModelProvider {
     #[must_use]
     pub fn with_host_headers(mut self, headers: crate::HostRequestHeaders) -> Self {
         self.host_headers = headers;
+        self
+    }
+
+    /// Re-sign native HTTP metadata when a scoped bearer renews. Disable automatic
+    /// HTTP retries and redirects so each exchange has its own authorization.
+    #[must_use]
+    pub fn with_per_request_authorization(mut self) -> Self {
+        self.per_request_authorization = true;
         self
     }
 
@@ -244,10 +255,11 @@ impl DirectModelProvider {
         );
         let client = self.clients.for_endpoint(
             endpoint.connect_timeout,
-            self.existing_invocations.contains_key(&(
-                request.route.model_provider_id,
-                request.route.model_entry_id,
-            )),
+            self.per_request_authorization
+                || self.existing_invocations.contains_key(&(
+                    request.route.model_provider_id,
+                    request.route.model_entry_id,
+                )),
             &endpoint.invocation_url,
         )?;
         // Resolve scoped credentials only after potentially large content
@@ -266,7 +278,7 @@ impl DirectModelProvider {
             CredentialMaterial::VersionedApiKey { revision, .. } => Some(revision.clone()),
             _ => provider_revision,
         };
-        let credential_lease = PreparedCredentialLease::retain(request, &credentials)?;
+        let expiry = credential_deadline(&credentials)?;
         let mut outbound = build_request(
             &client,
             &endpoint,
@@ -305,23 +317,13 @@ impl DirectModelProvider {
             HeaderValue::from_str(idempotency_key).map_err(|_| protocol_error())?,
         );
         let authority = musteragent_runtime_model::ModelRequestAuthority::from(request);
-        let dynamic = match &self.host_headers.hook {
-            Some(hook) => hook.headers(&authority).await?,
-            None => Default::default(),
-        };
-        for headers in [&self.host_headers.static_headers, &dynamic] {
-            for (name, value) in headers {
-                if outbound.headers().contains_key(name)
-                    || matches!(
-                        name.as_str(),
-                        "host" | "content-length" | "transfer-encoding" | "connection"
-                    )
-                {
-                    return Err(protocol_error());
-                }
-                outbound.headers_mut().insert(name.clone(), value.clone());
-            }
-        }
+        let dynamic = self
+            .host_headers
+            .apply(&authority, outbound.headers_mut())
+            .await?;
+        let credential_lease = expiry.map(|deadline| {
+            PreparedCredentialLease::new(deadline, authority, dynamic.keys().cloned().collect())
+        });
         for (name, value) in annotations.headers() {
             // Selected exactly once above, before applying arbitrary metadata.
             if name == "idempotency-key" {
@@ -702,24 +704,6 @@ fn build_request(
             );
     }
     request = match credentials {
-        CredentialMaterial::Bearer(secret) | CredentialMaterial::ScopedBearer { secret, .. } => {
-            request.bearer_auth(secret.expose_secret())
-        }
-        CredentialMaterial::ApiKey(secret) | CredentialMaterial::VersionedApiKey { secret, .. } => {
-            match endpoint.api_format {
-                ApiFormat::AnthropicMessages => request.header("x-api-key", secret.expose_secret()),
-                ApiFormat::GoogleGenerateContent | ApiFormat::GoogleInteractions => {
-                    request.header("x-goog-api-key", secret.expose_secret())
-                }
-                ApiFormat::OpenAiChatCompletions
-                | ApiFormat::OpenAiResponses
-                | ApiFormat::TypeSafeSystemOne
-                | ApiFormat::OpenRouterDecisions => request.bearer_auth(secret.expose_secret()),
-                ApiFormat::BedrockConverse | ApiFormat::BedrockInvokeModel => {
-                    request.bearer_auth(secret.expose_secret())
-                }
-            }
-        }
         CredentialMaterial::AwsSigV4(credentials) => {
             #[cfg(feature = "direct-aws-signing")]
             {
@@ -742,6 +726,7 @@ fn build_request(
                 ));
             }
         }
+        token => authorize_token(request, endpoint.api_format, token)?,
     };
     request.body(body).build().map_err(|_| {
         provider_error(
@@ -750,6 +735,42 @@ fn build_request(
             false,
             None,
         )
+    })
+}
+
+/// Method-independent token authentication shared by inference and result lookup.
+pub(crate) fn authorize_token(
+    request: reqwest::RequestBuilder,
+    api_format: ApiFormat,
+    credentials: CredentialMaterial,
+) -> Result<reqwest::RequestBuilder, ProviderError> {
+    Ok(match credentials {
+        CredentialMaterial::Bearer(secret) | CredentialMaterial::ScopedBearer { secret, .. } => {
+            request.bearer_auth(secret.expose_secret())
+        }
+        CredentialMaterial::ApiKey(secret) | CredentialMaterial::VersionedApiKey { secret, .. } => {
+            match api_format {
+                ApiFormat::AnthropicMessages => request.header("x-api-key", secret.expose_secret()),
+                ApiFormat::GoogleGenerateContent | ApiFormat::GoogleInteractions => {
+                    request.header("x-goog-api-key", secret.expose_secret())
+                }
+                ApiFormat::OpenAiChatCompletions
+                | ApiFormat::OpenAiResponses
+                | ApiFormat::TypeSafeSystemOne
+                | ApiFormat::OpenRouterDecisions => request.bearer_auth(secret.expose_secret()),
+                ApiFormat::BedrockConverse | ApiFormat::BedrockInvokeModel => {
+                    request.bearer_auth(secret.expose_secret())
+                }
+            }
+        }
+        CredentialMaterial::AwsSigV4(_) => {
+            return Err(provider_error(
+                ProviderErrorKind::Authorization,
+                ProviderErrorCode::RouteConfigurationInvalid,
+                false,
+                None,
+            ));
+        }
     })
 }
 
@@ -867,7 +888,7 @@ fn timeout_error() -> ProviderError {
     )
 }
 
-fn protocol_error() -> ProviderError {
+pub(crate) fn protocol_error() -> ProviderError {
     provider_error(
         ProviderErrorKind::Protocol,
         ProviderErrorCode::ProtocolViolation,

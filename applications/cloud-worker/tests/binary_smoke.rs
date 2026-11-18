@@ -336,6 +336,22 @@ impl Smoke {
         server: Option<running_loop::Fixture>,
         recovery: &str,
     ) -> Result<Child, BuildError> {
+        let config = self.worker_config(name, model, endpoint, server, recovery)?;
+        let mut command = Command::new(env!("CARGO_BIN_EXE_musteragent-cloud-worker"));
+        command
+            .arg(config)
+            .env("P9_MODEL_KEY", "test-only-model-key");
+        self.spawn_worker(name, command)
+    }
+
+    fn worker_config(
+        &self,
+        name: &str,
+        model: &musteragent_model::ModelRoute,
+        endpoint: &str,
+        server: Option<running_loop::Fixture>,
+        recovery: &str,
+    ) -> Result<PathBuf, BuildError> {
         let config = self.dir.join(format!("{name}.toml"));
         let base = endpoint
             .strip_suffix("/chat/completions")
@@ -418,16 +434,18 @@ reregister_backoff_millis = 50
             ));
         }
         std::fs::write(&config, text)?;
+        Ok(config)
+    }
+
+    fn spawn_worker(&self, name: &str, mut command: Command) -> Result<Child, BuildError> {
         let output = std::fs::File::create(self.dir.join(format!("{name}.log")))?;
-        Ok(Command::new(env!("CARGO_BIN_EXE_musteragent-cloud-worker"))
-            .arg(config)
+        Ok(command
             // Ambient host deployment settings must never redirect a fixture.
             .env("MUSTERAGENT_DATABASE_URL", self.pg.connection_url())
             .env("MUSTERAGENT_WORKER_ID", name)
             .env("MUSTERAGENT_OTLP_MODE", "disabled")
             .env("P9_S3_KEY", MINIO_TEST_ACCESS_KEY)
             .env("P9_S3_SECRET", MINIO_TEST_SECRET_KEY)
-            .env("P9_MODEL_KEY", "test-only-model-key")
             .env("RUST_LOG", "info")
             .stdout(output.try_clone()?)
             .stderr(output)

@@ -152,6 +152,8 @@ pub struct ModelSettings {
     pub entry_id: String,
     pub protocol: String,
     pub base_url: String,
+    /// Required by the default environment resolver.
+    #[serde(default)]
     pub credential_env: String,
     #[serde(default)]
     pub allow_loopback_http: bool,
@@ -174,14 +176,28 @@ impl ExistingInvocationSettings {
     pub fn build(
         &self,
     ) -> Result<musteragent_model_providers::ExistingInvocationRecovery, BuildError> {
-        use musteragent_model_providers::*;
+        self.build_with_authorization(None)
+    }
+
+    pub(crate) fn build_with_authorization(
+        &self,
+        authorization: Option<(Arc<dyn CredentialResolver>, HostRequestHeaders)>,
+    ) -> Result<ExistingInvocationRecovery, BuildError> {
         let resolver = self
             .result_url
             .clone()
             .map(HttpExistingInvocationResolver::new)
             .transpose()
             .map_err(|e| format!("existing invocation resolver: {:?}", e.safe_code))?
-            .map(|r| Arc::new(r) as Arc<dyn ExistingInvocationResolver>);
+            .map(|resolver| {
+                let resolver = match authorization {
+                    Some((credentials, headers)) => {
+                        resolver.with_request_authorization(credentials, headers)
+                    }
+                    None => resolver,
+                };
+                Arc::new(resolver) as Arc<dyn ExistingInvocationResolver>
+            });
         Ok(ExistingInvocationRecovery {
             already_accepted: self.already_accepted.clone(),
             resolver,
@@ -224,6 +240,9 @@ impl EnvironmentCredentials {
     pub fn new(models: &[ModelSettings]) -> Result<Arc<Self>, BuildError> {
         let mut routes = BTreeMap::new();
         for model in models {
+            if model.credential_env.is_empty() {
+                return Err("credential_env is required for environment credentials".into());
+            }
             if routes
                 .insert(
                     (model.provider_id.parse()?, model.entry_id.parse()?),
@@ -263,6 +282,25 @@ impl CredentialResolver for EnvironmentCredentials {
 pub struct ConfiguredModelHeaders(
     pub BTreeMap<(ModelProviderId, ModelEntryId), reqwest::header::HeaderMap>,
 );
+impl ConfiguredModelHeaders {
+    pub(crate) fn from_settings(models: &[ModelSettings]) -> Result<Self, BuildError> {
+        let mut headers = BTreeMap::new();
+        for model in models {
+            let mut values = reqwest::header::HeaderMap::new();
+            for (name, value) in &model.headers {
+                values.insert(
+                    reqwest::header::HeaderName::from_bytes(name.as_bytes())?,
+                    reqwest::header::HeaderValue::from_str(value)?,
+                );
+            }
+            headers.insert(
+                (model.provider_id.parse()?, model.entry_id.parse()?),
+                values,
+            );
+        }
+        Ok(Self(headers))
+    }
+}
 impl ModelRequestHeaderHook for ConfiguredModelHeaders {
     fn headers<'a>(
         &'a self,

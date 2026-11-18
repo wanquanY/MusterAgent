@@ -115,6 +115,74 @@ OTLP uses the optional `musteragent-telemetry-otlp` environment configuration.
 Local structured logs work without an OTLP collector. Refer to that crate's
 `TelemetryConfig` for endpoint, TLS, signal enablement and exporter health rules.
 
+## Per-invocation model credentials
+
+A host executable can call `run_worker(settings, overrides, shutdown)` from
+`musteragent-cloud-worker`. It starts the same PostgreSQL worker, dispatcher,
+extensions, background tasks and recovery paths as the CLI. The shutdown
+future returns `std::io::Result<()>`. The library drains its tasks before it
+returns. Install the process signal handler before loading settings.
+
+This example adapts a host's existing grant client. The host supplies
+`GrantClient::connect` and `issue`; the latter authenticates the grant binding
+and returns a secret bearer and its UTC expiry.
+
+```rust
+use std::{path::Path, sync::Arc};
+use musteragent_cloud_worker::{BuildError, CloudWorkerSettings, WorkerOverrides, run_worker};
+use musteragent_identity::InvocationId;
+use musteragent_model::{CredentialGrantRef, ModelRoute};
+use musteragent_model_providers::{CredentialMaterial, CredentialResolver, CredentialResolverError};
+use musteragent_runtime_contract::ApplicationFuture;
+use musteragent_runtime_model::ModelInvocationRouteRole;
+
+struct HostCredentials(GrantClient);
+
+impl CredentialResolver for HostCredentials {
+    fn resolve<'a>(&'a self, grant: &'a CredentialGrantRef, route: &'a ModelRoute,
+        role: ModelInvocationRouteRole, invocation: InvocationId,
+    ) -> ApplicationFuture<'a, Result<CredentialMaterial, CredentialResolverError>> {
+        Box::pin(async move {
+            let (secret, expires_at) = self.0.issue(grant, route, role, invocation).await?;
+            Ok(CredentialMaterial::ScopedBearer { secret, expires_at })
+        })
+    }
+}
+
+#[tokio::main]
+async fn main() -> Result<(), BuildError> {
+    let mut signal = musteragent_cloud_lifecycle::ShutdownSignal::install()?;
+    let settings = CloudWorkerSettings::load(Path::new("worker.toml"))?;
+    let overrides = WorkerOverrides {
+        credentials: Some(Arc::new(HostCredentials(GrantClient::connect().await?))),
+        ..WorkerOverrides::default()
+    };
+    run_worker(settings, overrides, signal.recv()).await
+}
+```
+
+The resolver receives the grant reference frozen at admission, the full route,
+the route role and the original model invocation ID. A scoped bearer near
+expiry at dispatch is renewed for the prepared request, and the worker signs
+its host headers again with the same authority. An open response
+stream uses its existing HTTP connection. A retry of that invocation or a
+replacement worker recovers its authority from the frozen request. A newly
+admitted model invocation has its own ID.
+
+Set `WorkerOverrides::model_headers` to an implementation of
+`ModelRequestHeaderHook` to sign invocation metadata. Each override replaces
+its own default. The environment resolver requires `models[].credential_env`;
+a host resolver may omit it. The default header hook reads `[models.headers]`.
+
+With either override, the worker uses the same credential resolver and header
+hook for every same-origin result GET, including polls after a pending
+response. Each GET carries the original idempotency key, fresh authentication
+and fresh host metadata. HTTP redirects and transparent retries are disabled
+for these model requests. A failed lookup authorization ends recovery through
+the bounded lookup error path. With `WorkerOverrides::default()`, the CLI
+continues to use the named environment credential and configured headers, and
+lookup forwards the dispatched headers.
+
 ## Host ports
 
 `CloudWorkerComposition::build(WorkerHost, WorkerPolicy)` accepts the content
@@ -167,6 +235,12 @@ using `subagent_agents`. The standalone extension registry is empty. Maintenance
 goal evaluation policy. Neither path is coerced into chat.
 
 ## Immutable host tool publications
+
+A host with no workspace connectors can mount
+`{"schema_version":"musteragent.workspace-tool-releases.v1","releases":[]}`
+at `workspace_releases_file`. It publishes zero releases. A configured grant
+must still resolve its exact release, and existing runs replay their sealed
+tool selections.
 
 Use `workspace_releases_file` for workspace connector bundles. Its schema, publication and admission settings are described in [host-published workspace tools](workspace-releases.md).
 
