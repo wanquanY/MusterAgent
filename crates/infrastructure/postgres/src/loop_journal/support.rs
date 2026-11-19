@@ -672,11 +672,8 @@ pub(super) async fn persist_model_batch_observation(
                 _ => response_identity = Some((response_ref, response_model_key)),
             },
             ModelStreamEvent::Usage(observed) => {
-                if usage.is_some_and(|earlier| !observed.dominates(earlier)) {
-                    return Err(PostgresAgentLoopJournalError::InvalidModelBatch);
-                }
                 observed.validate()?;
-                usage = Some(*observed);
+                usage = Some(*observed); // The latest Provider report wins.
             }
             ModelStreamEvent::ResponseCompleted { stop_reason } => {
                 if terminal_stop_reason.replace(*stop_reason).is_some() {
@@ -716,11 +713,6 @@ pub(super) async fn persist_model_batch_observation(
     {
         return Err(PostgresAgentLoopJournalError::InvalidModelBatch);
     }
-    let existing_usage = row
-        .try_get::<Option<Vec<u8>>, _>("usage_fact")?
-        .as_deref()
-        .map(decode_usage)
-        .transpose()?;
     let existing_terminal_stop_reason = row
         .try_get::<Option<i16>, _>("terminal_stop_reason")?
         .map(decode_stop_reason)
@@ -731,11 +723,8 @@ pub(super) async fn persist_model_batch_observation(
     {
         return Err(PostgresAgentLoopJournalError::InvalidModelBatch);
     }
-    if let (Some(earlier), Some(observed)) = (existing_usage, usage)
-        && !observed.dominates(earlier)
-    {
-        return Err(PostgresAgentLoopJournalError::InvalidModelBatch);
-    }
+    // A later batch's usage is the Provider's latest report and replaces the
+    // stored one (`COALESCE($4, usage_fact)`), even when lower.
     let protected_response_ref = protect_optional(
         keyring,
         batch.invocation_id,

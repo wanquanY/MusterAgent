@@ -639,14 +639,20 @@ impl ModelUsage {
         Ok(())
     }
 
+    /// Provider usage is accounting the Provider owns: keep every reported
+    /// component and drop only an aggregate that contradicts them, instead of
+    /// failing the response that carried it.
     #[must_use]
-    pub const fn dominates(self, earlier: Self) -> bool {
-        self.input_tokens_uncached >= earlier.input_tokens_uncached
-            && self.output_tokens >= earlier.output_tokens
-            && self.reasoning_tokens >= earlier.reasoning_tokens
-            && self.provider_cache_read_tokens >= earlier.provider_cache_read_tokens
-            && self.provider_cache_write_tokens >= earlier.provider_cache_write_tokens
-            && self.provider_cache_write_1h_tokens >= earlier.provider_cache_write_1h_tokens
+    pub const fn reconciled(mut self) -> Self {
+        if let Some(total) = self.total_tokens
+            && total
+                < self
+                    .input_tokens_uncached
+                    .saturating_add(self.output_tokens)
+        {
+            self.total_tokens = None;
+        }
+        self
     }
 }
 

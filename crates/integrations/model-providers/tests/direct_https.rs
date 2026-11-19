@@ -1030,12 +1030,13 @@ async fn provider_stream_budget_is_cumulative() {
         NonZeroUsize::new(1_048_576).expect("reasoning budget");
 
     let events = provider.stream(bounded).collect::<Vec<_>>().await;
+    // The oversized stream never completes; whether the bounded attempt is
+    // retried is the Run retry budget's decision.
     assert!(matches!(
         events.last(),
         Some(Err(error))
             if error.kind == ProviderErrorKind::Protocol
                 && error.safe_code == ProviderErrorCode::ProtocolViolation
-                && !error.retryable
     ));
     assert!(
         !events

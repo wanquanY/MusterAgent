@@ -529,8 +529,22 @@ fn finish_error(error: crate::NormalizeError) -> ProviderError {
             );
             transport_interruption()
         }
-        _ => protocol_error(),
+        // Deterministic: retrying the same request cannot change the outcome.
+        crate::NormalizeError::StreamBudgetExceeded
+        | crate::NormalizeError::NativeCompactionStoreRequired => protocol_error(),
+        _ => retryable_protocol_error(),
     }
+}
+
+/// A malformed or inconsistent Provider response; another attempt, bounded by
+/// the Run's retry budget, usually succeeds.
+fn retryable_protocol_error() -> ProviderError {
+    provider_error(
+        ProviderErrorKind::Protocol,
+        ProviderErrorCode::ProtocolViolation,
+        true,
+        None,
+    )
 }
 
 fn transport_interruption() -> ProviderError {
@@ -926,7 +940,6 @@ fn canonical_error_kind(
         Error::ToolArgumentsNotObject => Kind::ToolArgumentsNotObject,
         Error::IncompleteToolCall => Kind::IncompleteToolCall,
         Error::InvalidUsage => Kind::InvalidUsage,
-        Error::UsageRegressed => Kind::UsageRegressed,
         Error::InvalidProviderReplay => Kind::InvalidProviderReplay,
         Error::RuntimeDerivedEventFromProvider => Kind::RuntimeDerivedEventFromProvider,
     }

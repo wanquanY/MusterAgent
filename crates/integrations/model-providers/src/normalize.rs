@@ -191,7 +191,9 @@ impl ProviderNormalizer {
         value: Value,
     ) -> Result<Vec<ModelStreamEvent>, NormalizeError> {
         if self.terminal {
-            return Err(NormalizeError::EventAfterTerminal);
+            // Relays send pings or trailing deltas after the terminal marker;
+            // the response is already complete.
+            return Ok(Vec::new());
         }
         let events = match self.format {
             ApiFormat::TypeSafeSystemOne | ApiFormat::OpenRouterDecisions => {
@@ -327,7 +329,11 @@ impl ProviderNormalizer {
         }
         self.capture_response_ref(object.get("id"))?;
         self.capture_response_model_key(object.get("model"))?;
-        let choices = array_required(object, "choices")?;
+        let no_choices = Vec::new();
+        let choices = match object.get("choices") {
+            None | Some(Value::Null) => &no_choices,
+            Some(value) => array(value)?,
+        };
         let mut events = if choices.is_empty() && object.get("usage").is_none_or(Value::is_null) {
             Vec::new()
         } else {
@@ -336,7 +342,10 @@ impl ProviderNormalizer {
         for choice in choices {
             let choice = json_object(choice)?;
             let index = u32_field_default(choice, "index", 0)?;
-            let delta = object_required(choice, "delta")?;
+            let Some(delta) = choice.get("delta").filter(|value| !value.is_null()) else {
+                continue;
+            };
+            let delta = json_object(delta)?;
             if let Some(value) = non_empty_text(delta.get("reasoning_summary"))? {
                 events.push(reasoning_summary(index, value)?);
             }
@@ -377,15 +386,9 @@ impl ProviderNormalizer {
         let index = u32_field_default(object, "index", 0)?;
         let function = object.get("function").map(json_object).transpose()?;
         let call_id = optional_text(object.get("id"))?;
-        let name = function
-            .and_then(|value| value.get("name"))
-            .map(required_text)
-            .transpose()?;
-        let arguments = function
-            .and_then(|value| value.get("arguments"))
-            .map(string_value)
-            .transpose()?
-            .unwrap_or_default();
+        let name = optional_text(function.and_then(|value| value.get("name")))?;
+        let arguments =
+            optional_text(function.and_then(|value| value.get("arguments")))?.unwrap_or_default();
         let mut events = Vec::new();
         match self.tools.entry(index) {
             std::collections::btree_map::Entry::Vacant(entry) => {
@@ -450,26 +453,33 @@ impl ProviderNormalizer {
             "response.created" | "response.in_progress" | "response.queued" => {
                 events.extend(self.ensure_started());
             }
+            // Empty or null deltas carry nothing; relays emit them.
             "response.output_text.delta" | "response.refusal.delta" => {
                 events.extend(self.ensure_started());
-                events.push(text_delta(
-                    u32_field_default(object, "output_index", 0)?,
-                    required_text_field(object, "delta")?,
-                )?);
+                if let Some(delta) = optional_text(object.get("delta"))? {
+                    events.push(text_delta(
+                        u32_field_default(object, "output_index", 0)?,
+                        delta,
+                    )?);
+                }
             }
             "response.reasoning_summary_text.delta" | "response.reasoning_summary.delta" => {
                 events.extend(self.ensure_started());
-                events.push(reasoning_summary(
-                    u32_field_default(object, "output_index", 0)?,
-                    required_text_field(object, "delta")?,
-                )?);
+                if let Some(delta) = optional_text(object.get("delta"))? {
+                    events.push(reasoning_summary(
+                        u32_field_default(object, "output_index", 0)?,
+                        delta,
+                    )?);
+                }
             }
             "response.reasoning_text.delta" | "response.reasoning.delta" => {
                 events.extend(self.ensure_started());
-                events.extend(self.disclosed_reasoning(
-                    u32_field_default(object, "output_index", 0)?,
-                    required_text_field(object, "delta")?,
-                )?);
+                if let Some(delta) = optional_text(object.get("delta"))? {
+                    events.extend(self.disclosed_reasoning(
+                        u32_field_default(object, "output_index", 0)?,
+                        delta,
+                    )?);
+                }
             }
             "response.output_item.added" => {
                 let item = object_required(object, "item")?;
@@ -517,7 +527,7 @@ impl ProviderNormalizer {
             }
             "response.function_call_arguments.delta" => {
                 let index = u32_field_default(object, "output_index", 0)?;
-                let delta = required_text_field(object, "delta")?;
+                let delta = optional_text(object.get("delta"))?.unwrap_or_default();
                 let state = self
                     .tools
                     .get_mut(&index)
@@ -643,7 +653,9 @@ impl ProviderNormalizer {
             other if other.contains("compaction") => {
                 return Err(NormalizeError::NativeCompactionStoreRequired);
             }
-            _ => return Err(NormalizeError::UnknownEventType),
+            // New event families (annotations, server tools, citations) carry
+            // nothing this Runtime consumes; Provider docs say to ignore them.
+            _ => {}
         }
         Ok(events)
     }
@@ -749,7 +761,7 @@ impl ProviderNormalizer {
                         }
                         events.extend(self.ensure_started());
                     }
-                    _ => return Err(NormalizeError::UnknownContentBlock),
+                    _ => {} // e.g. server_tool_use, web_search_tool_result
                 }
             }
             "content_block_delta" => {
@@ -832,7 +844,7 @@ impl ProviderNormalizer {
                         };
                         replay.push_str(signature);
                     }
-                    _ => return Err(NormalizeError::UnknownDeltaType),
+                    _ => {} // e.g. citations_delta
                 }
             }
             "content_block_stop" => {
@@ -866,7 +878,9 @@ impl ProviderNormalizer {
             }
             "ping" => {}
             "error" => return self.provider_error(&value, ProviderErrorKind::Server),
-            _ => return Err(NormalizeError::UnknownEventType),
+            // New event families (annotations, server tools, citations) carry
+            // nothing this Runtime consumes; Provider docs say to ignore them.
+            _ => {}
         }
         Ok(events)
     }
@@ -1029,7 +1043,9 @@ impl ProviderNormalizer {
             | "validationException"
             | "serviceUnavailableException"
             | "error" => return self.provider_error(&value, bedrock_error_kind(event_type)),
-            _ => return Err(NormalizeError::UnknownEventType),
+            // New event families (annotations, server tools, citations) carry
+            // nothing this Runtime consumes; Provider docs say to ignore them.
+            _ => {}
         }
         Ok(events)
     }

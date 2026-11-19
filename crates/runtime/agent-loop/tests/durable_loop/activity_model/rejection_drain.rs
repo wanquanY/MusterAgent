@@ -160,20 +160,21 @@ async fn rejected_action_eof_and_idle_preserve_unknown_stop_and_correction() {
 }
 
 #[tokio::test]
-async fn rejected_action_regressed_usage_cannot_manufacture_terminal() {
+async fn rejected_action_records_the_latest_provider_usage_report() {
+    let corrected = ModelUsage {
+        input_tokens_uncached: 1,
+        total_tokens: Some(1),
+        ..Default::default()
+    };
     let mut events = rejected_prefix();
     events.extend([
         Ok(ModelStreamEvent::Usage(terminal_usage())),
-        Ok(ModelStreamEvent::Usage(ModelUsage {
-            input_tokens_uncached: 1,
-            total_tokens: Some(1),
-            ..Default::default()
-        })),
+        Ok(ModelStreamEvent::Usage(corrected)),
         Ok(ModelStreamEvent::ResponseCompleted {
             stop_reason: StopReason::ToolCalls,
         }),
     ]);
-    let (f, runtime, journal, provider) = runtime_with_scripts(
+    let (f, runtime, journal, _provider) = runtime_with_scripts(
         vec![
             Script::Events(events),
             Script::Events(assistant_events("corrected", "Recovered.")),
@@ -191,11 +192,11 @@ async fn rejected_action_regressed_usage_cannot_manufacture_terminal() {
         )
         .await;
     assert!(matches!(exit, AgentLoopExit::Completed { .. }), "{exit:?}");
+    // A Provider correction downwards is its latest report, not a protocol failure.
     assert_eq!(
         journal.inner.action_rejections()[0].observation.usage,
-        Some(terminal_usage())
+        Some(corrected)
     );
-    assert!(!lock(&provider.controls)[0].terminal.load(Ordering::SeqCst));
     assert!(journal.inner.committed_tool_calls().is_empty());
 }
 

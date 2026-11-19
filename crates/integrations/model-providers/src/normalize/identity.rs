@@ -12,15 +12,10 @@ impl ProviderNormalizer {
         let Some(value) = optional_text(value)? else {
             return Ok(());
         };
-        let parsed = provider_ref(value)?;
-        if self
-            .response_ref
-            .as_ref()
-            .is_some_and(|prior| prior != &parsed)
-        {
-            return Err(NormalizeError::ResponseIdentityChanged);
+        // Some relays mint a new id per chunk; the first one names the response.
+        if self.response_ref.is_none() {
+            self.response_ref = Some(provider_ref(value)?);
         }
-        self.response_ref = Some(parsed);
         Ok(())
     }
 
@@ -31,10 +26,14 @@ impl ProviderNormalizer {
         let Some(value) = optional_text(value)? else {
             return Ok(());
         };
-        let parsed = ModelKey::new(value).map_err(|_| NormalizeError::InvalidModelIdentity)?;
-        if (self.started || self.response_model_reported) && self.response_model_key != parsed {
-            return Err(NormalizeError::ResponseIdentityChanged);
+        // The first reported model names the response; later variations
+        // (aliases, dated snapshots, relay rewrites) are informational.
+        if self.started || self.response_model_reported {
+            return Ok(());
         }
+        let Ok(parsed) = ModelKey::new(value) else {
+            return Ok(());
+        };
         self.response_model_key = parsed;
         self.response_model_reported = true;
         Ok(())

@@ -377,16 +377,22 @@ impl CanonicalConsumptionState {
         if !self.validator.is_terminal() {
             return Err(dependency());
         }
-        let stop_reason = self.stop_reason.ok_or_else(dependency)?;
         let tool_calls = self.tools.into_values().collect::<Vec<_>>();
-        if (stop_reason == StopReason::ToolCalls && tool_calls.is_empty())
-            || (!matches!(
-                stop_reason,
-                StopReason::ToolCalls
-                    | StopReason::MaxOutputTokens
-                    | StopReason::TokenLimit
-                    | StopReason::ContextWindowExceeded
-            ) && !tool_calls.is_empty())
+        // The calls the Provider actually emitted decide; relays and
+        // OpenAI-compatible gateways often send `stop`/`end_turn` with tool
+        // calls, or `tool_calls` with none.
+        let stop_reason = match (
+            self.stop_reason.ok_or_else(dependency)?,
+            tool_calls.is_empty(),
+        ) {
+            (StopReason::Stop, false) => StopReason::ToolCalls,
+            (StopReason::ToolCalls, true) => StopReason::Stop,
+            (reason, _) => reason,
+        };
+        if matches!(
+            stop_reason,
+            StopReason::ContentFilter | StopReason::Cancelled
+        ) && !tool_calls.is_empty()
         {
             return Err(invariant());
         }

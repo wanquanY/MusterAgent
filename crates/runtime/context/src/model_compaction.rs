@@ -463,18 +463,34 @@ fn validate_summary(value: String) -> Result<ModelText, ContextPlanError> {
         return Err(ContextPlanError {
             early_provider_cause: None,
             code: musteragent_runtime_contract::ErrorCode::ModelResponseInvalid,
-            retryable: false,
+            retryable: true,
             retry_after_ms: None,
         });
     }
     ModelText::new(value).map_err(|_| ContextPlanError::quota())
 }
 
+/// Headings are matched in any order and regardless of Markdown level,
+/// emphasis, trailing colon or letter case; models rarely reproduce them
+/// byte-for-byte.
 fn has_required_sections(value: &str) -> bool {
-    let mut lines = value.lines().map(str::trim);
+    fn bare(line: &str) -> String {
+        line.trim()
+            .trim_start_matches('#')
+            .trim()
+            .trim_matches('*')
+            .trim()
+            .trim_end_matches(':')
+            .trim()
+            .to_lowercase()
+    }
+    let present = value
+        .lines()
+        .map(bare)
+        .collect::<std::collections::BTreeSet<_>>();
     REQUIRED_SECTIONS
         .into_iter()
-        .all(|heading| lines.any(|line| line == heading))
+        .all(|heading| present.contains(&bare(heading)))
 }
 
 fn stream_provider_failure(error: &ProviderError, produced_output: bool) -> ContextPlanError {

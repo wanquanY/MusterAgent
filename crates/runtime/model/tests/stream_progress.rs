@@ -97,8 +97,10 @@ fn unchanged_usage_and_empty_tool_fragments_cannot_renew_model_execution() {
         Progress::Advanced
     );
     assert_eq!(
-        state.accept_with_progress(&Event::Usage(usage(1))),
-        Err(Error::UsageRegressed)
+        state
+            .accept_with_progress(&Event::Usage(usage(1)))
+            .expect("a Provider correction downwards is the latest report"),
+        Progress::Unchanged
     );
     let call_id = ToolCallId::new("call-1").expect("call");
     assert_eq!(

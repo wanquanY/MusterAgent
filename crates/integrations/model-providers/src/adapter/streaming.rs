@@ -184,7 +184,7 @@ impl DirectModelProvider {
                                         ) {
                                             Ok(value) => value,
                                             Err(()) => {
-                                                break 'generation Err(protocol_error());
+                                                break 'generation Err(retryable_protocol_error());
                                             }
                                         };
                                         timing.provider_event();
@@ -203,7 +203,7 @@ impl DirectModelProvider {
                                                     provider.protocol_error = error.telemetry_kind().as_str(),
                                                     "Model Provider response normalization failed"
                                                 );
-                                                break 'generation Err(protocol_error());
+                                                break 'generation Err(finish_error(error));
                                             }
                                         };
                                         for mut event in events {
@@ -220,7 +220,7 @@ impl DirectModelProvider {
                                                     provider.protocol_error = canonical_error_kind(error).as_str(),
                                                     "Model Provider canonical stream validation failed"
                                                 );
-                                                break 'generation Err(protocol_error());
+                                                break 'generation Err(retryable_protocol_error());
                                             }
                                             if matches!(event, ModelStreamEvent::ResponseCompleted { .. } | ModelStreamEvent::ResponseError(_))
                         && let Some(control) = &control
@@ -233,7 +233,8 @@ impl DirectModelProvider {
                                     }
                                     Ok(DecodedFrame::Incomplete) => break,
                                     Err(_) => {
-                                        break 'generation Err(protocol_error());
+                                        // A corrupt frame on the wire: retry the attempt.
+                                        break 'generation Err(retryable_protocol_error());
                                     }
                                 }
                             }
@@ -330,19 +331,22 @@ impl DirectModelProvider {
                     if frame.data.len() > stream_budget.max_event_bytes.get() {
                         break 'generation Err(protocol_error());
                     }
+                    let mut keepalive_with_data = false;
                     match keepalive::classify(&frame.event, &frame.data) {
                         Ok(true) => continue,
                         Ok(false) => {},
                         Err(()) => {
+                            keepalive_with_data = true;
                             // Report protocol shape only; never log response
                             // contents, timestamps, credentials or tool args.
                             let keys = serde_json::from_str::<Value>(&frame.data).ok()
                                 .and_then(|v| v.as_object().map(|m| m.keys().filter(|k| k.len() <= 32
                                     && k.bytes().all(|b| b.is_ascii_alphanumeric() || b"_-".contains(&b)))
                                     .take(12).cloned().collect::<Vec<_>>()));
-                            tracing::warn!(provider.failure="invalid_transport_keepalive", metadata_keys=?keys,
-                                "Named keepalive contained unsupported payload fields");
-                            break 'generation Err(protocol_error());
+                            // A "keepalive" carrying data is processed as an
+                            // ordinary frame: content is never silently dropped.
+                            tracing::info!(provider.keepalive="extra_fields", metadata_keys=?keys,
+                                "Named keepalive carried payload fields; processed as data");
                         }
                     }
                     timing.provider_event();
@@ -371,7 +375,7 @@ impl DirectModelProvider {
                                     provider.protocol_error = canonical_error_kind(error).as_str(),
                                     "Model Provider canonical stream validation failed"
                                 );
-                                break 'generation Err(protocol_error());
+                                break 'generation Err(retryable_protocol_error());
                             }
                             if matches!(event, ModelStreamEvent::ResponseCompleted { .. } | ModelStreamEvent::ResponseError(_))
                         && let Some(control) = &control
@@ -386,12 +390,16 @@ impl DirectModelProvider {
                     let value: Value = match serde_json::from_str(&frame.data) {
                         Ok(value) => value,
                         Err(_) => {
-                            break 'generation Err(protocol_error());
+                            // `data: ping` and similar non-JSON keepalives.
+                            tracing::info!(provider.frame = "non_json_ignored", bytes = frame.data.len(),
+                                "Ignored a non-JSON stream frame");
+                            continue;
                         }
                     };
                     let event_name = frame.event.as_str();
                     let event_subtype = provider_event_subtype(&value);
-                    let normalized = match normalizer.observe(Some(event_name), value) {
+                    let dispatch_name = (!keepalive_with_data).then_some(event_name);
+                    let normalized = match normalizer.observe(dispatch_name, value) {
                         Ok(value) => value,
                         Err(error) => {
                             tracing::warn!(
@@ -402,7 +410,7 @@ impl DirectModelProvider {
                                 provider.protocol_error = error.telemetry_kind().as_str(),
                                 "Model Provider response normalization failed"
                             );
-                            break 'generation Err(protocol_error());
+                            break 'generation Err(finish_error(error));
                         }
                     };
                     for mut event in normalized {
@@ -418,7 +426,7 @@ impl DirectModelProvider {
                                 provider.protocol_error = canonical_error_kind(error).as_str(),
                                 "Model Provider canonical stream validation failed"
                             );
-                            break 'generation Err(protocol_error());
+                            break 'generation Err(retryable_protocol_error());
                         }
                         if matches!(event, ModelStreamEvent::ResponseCompleted { .. } | ModelStreamEvent::ResponseError(_))
                         && let Some(control) = &control
@@ -476,7 +484,7 @@ impl DirectModelProvider {
                             provider.protocol_error = canonical_error_kind(error).as_str(),
                             "Model Provider canonical stream validation failed"
                         );
-                        break 'generation Err(protocol_error());
+                        break 'generation Err(retryable_protocol_error());
                     }
                     if matches!(event, ModelStreamEvent::ResponseCompleted { .. } | ModelStreamEvent::ResponseError(_))
                         && let Some(control) = &control

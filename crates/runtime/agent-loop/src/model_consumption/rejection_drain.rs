@@ -48,13 +48,7 @@ impl CanonicalConsumptionState {
             | ModelStreamEvent::ArtifactContentFrame { .. } => return Err(invariant()),
             ModelStreamEvent::Usage(usage) => {
                 usage.validate().map_err(|_| invariant())?;
-                if staged
-                    .usage
-                    .is_some_and(|previous| !usage.dominates(previous))
-                {
-                    return Err(invariant());
-                }
-                staged.usage = Some(*usage);
+                staged.usage = Some(*usage); // The latest Provider report wins.
                 update = staged.coalescer.accept(event).map_err(|_| invariant())?;
             }
             ModelStreamEvent::ResponseCompleted { stop_reason } => {

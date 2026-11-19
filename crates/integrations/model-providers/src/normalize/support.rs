@@ -68,17 +68,40 @@ pub(super) fn provider_ref(value: impl Into<String>) -> Result<ProviderRequestRe
     Ok(ProviderRequestRef::from_opaque(value))
 }
 
+/// Models echo terminal output (ANSI escapes, NUL, backspace). Canonical text
+/// excludes control characters, so drop them here instead of failing the
+/// stream; a delta made only of them keeps one visible replacement mark.
+fn provider_text(value: &str) -> Result<ModelText, NormalizeError> {
+    let text = if value
+        .chars()
+        .any(|character| character.is_control() && !matches!(character, '\n' | '\r' | '\t'))
+    {
+        let kept: String = value
+            .chars()
+            .filter(|character| !character.is_control() || matches!(character, '\n' | '\r' | '\t'))
+            .collect();
+        if kept.is_empty() {
+            "\u{FFFD}".to_owned()
+        } else {
+            kept
+        }
+    } else {
+        value.to_owned()
+    };
+    ModelText::new(text).map_err(|_| NormalizeError::InvalidText)
+}
+
 pub(super) fn text_delta(index: u32, value: &str) -> Result<ModelStreamEvent, NormalizeError> {
     Ok(ModelStreamEvent::TextDelta {
         output_index: index,
-        delta: ModelText::new(value).map_err(|_| NormalizeError::InvalidText)?,
+        delta: provider_text(value)?,
     })
 }
 
 pub(super) fn reasoning(index: u32, value: &str) -> Result<ModelStreamEvent, NormalizeError> {
     Ok(ModelStreamEvent::ReasoningDelta {
         output_index: index,
-        delta: ModelText::new(value).map_err(|_| NormalizeError::InvalidText)?,
+        delta: provider_text(value)?,
     })
 }
 
@@ -88,7 +111,7 @@ pub(super) fn reasoning_summary(
 ) -> Result<ModelStreamEvent, NormalizeError> {
     Ok(ModelStreamEvent::ReasoningSummaryDelta {
         output_index: index,
-        delta: ModelText::new(value).map_err(|_| NormalizeError::InvalidText)?,
+        delta: provider_text(value)?,
     })
 }
 
@@ -205,10 +228,7 @@ pub(super) fn anthropic_usage(
         None,
     )?;
     normalized.provider_cache_write_1h_tokens = cache_write_1h;
-    normalized
-        .validate()
-        .map_err(|_| NormalizeError::InvalidUsage)?;
-    Ok(normalized)
+    Ok(normalized.reconciled())
 }
 
 pub(super) fn google_usage(value: &Value) -> Result<ModelUsage, NormalizeError> {
@@ -348,8 +368,7 @@ pub(super) fn usage_value(
         provider_cache_write_1h_tokens: 0,
         total_tokens,
     };
-    usage.validate().map_err(|_| NormalizeError::InvalidUsage)?;
-    Ok(usage)
+    Ok(usage.reconciled())
 }
 
 pub(super) fn serde_to_canonical(value: &Value) -> Result<JsonValue, NormalizeError> {
@@ -417,10 +436,28 @@ pub(super) fn stop_reason(
         | "recitation"
         | "refusal"
         | "sensitive"
-        | "malformed_function_call"
-        | "unexpected_tool_call" => Ok(StopReason::ContentFilter),
+        | "image_safety"
+        | "image_prohibited_content"
+        | "language" => Ok(StopReason::ContentFilter),
         "cancelled" | "canceled" => Ok(StopReason::Cancelled),
-        _ => Err(NormalizeError::UnknownStopReason),
+        // Transient generation failures: the attempt is retried, not the Run failed.
+        "malformed_function_call"
+        | "unexpected_tool_call"
+        | "malformed_response"
+        | "missing_thought_signature"
+        | "insufficient_system_resource"
+        | "error"
+        | "abort" => Err(NormalizeError::UnknownStopReason),
+        other => {
+            // Unlisted reasons (`other`, `finish_reason_unspecified`,
+            // `function_call`, `too_many_tool_calls`, ...) end the turn; the
+            // emitted Tool calls, not this label, decide whether tools run.
+            tracing::info!(
+                provider.stop_reason = other,
+                "Unlisted Provider stop reason treated as stop"
+            );
+            Ok(StopReason::Stop)
+        }
     }
 }
 
@@ -480,16 +517,6 @@ pub(super) fn object_required<'a>(
 
 pub(super) fn array(value: &Value) -> Result<&Vec<Value>, NormalizeError> {
     value.as_array().ok_or(NormalizeError::ArrayRequired)
-}
-
-pub(super) fn array_required<'a>(
-    object: &'a serde_json::Map<String, Value>,
-    field: &'static str,
-) -> Result<&'a Vec<Value>, NormalizeError> {
-    object
-        .get(field)
-        .ok_or(NormalizeError::MissingField(field))
-        .and_then(array)
 }
 
 pub(super) fn required_text(value: &Value) -> Result<&str, NormalizeError> {

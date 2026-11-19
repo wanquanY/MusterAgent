@@ -42,7 +42,6 @@ pub enum ProviderProtocolError {
     DuplicateToolCall,
     UnknownOrCompletedToolCall,
     IncompleteToolCall,
-    UsageRegressed,
     RuntimeDerivedEventFromProvider,
 }
 impl ProviderProtocolError {
@@ -89,7 +88,6 @@ impl ProviderProtocolError {
             Self::DuplicateToolCall => "duplicate_tool_call",
             Self::UnknownOrCompletedToolCall => "unknown_or_completed_tool_call",
             Self::IncompleteToolCall => "incomplete_tool_call",
-            Self::UsageRegressed => "usage_regressed",
             Self::RuntimeDerivedEventFromProvider => "runtime_derived_event_from_provider",
         }
     }
@@ -136,7 +134,6 @@ impl ProviderProtocolError {
             "duplicate_tool_call" => Some(Self::DuplicateToolCall),
             "unknown_or_completed_tool_call" => Some(Self::UnknownOrCompletedToolCall),
             "incomplete_tool_call" => Some(Self::IncompleteToolCall),
-            "usage_regressed" => Some(Self::UsageRegressed),
             "runtime_derived_event_from_provider" => Some(Self::RuntimeDerivedEventFromProvider),
             _ => None,
         }

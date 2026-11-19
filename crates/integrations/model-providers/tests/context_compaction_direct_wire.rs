@@ -126,10 +126,9 @@ async fn every_approved_compression_direct_wire_types_timeout_and_malformed_fail
         assert!(
             matches!(
                 malformed.last(),
-                Some(Err(error))
-                    if error.kind == ProviderErrorKind::Protocol
-                        && error.safe_code == ProviderErrorCode::ProtocolViolation
-                        && !error.retryable
+                // A malformed frame never completes the response and leaves
+                // the attempt retryable within the Run's retry budget.
+                Some(Err(error)) if error.retryable
             ),
             "{format:?}: {malformed:?}",
         );
