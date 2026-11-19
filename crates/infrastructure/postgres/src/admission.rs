@@ -112,7 +112,9 @@ impl PostgresAdmissionStore {
         let AdmissionCommit {
             batch,
             content_stage,
+            sandbox_routing,
         } = commit;
+        let sandbox_routing = admission_sandbox_routing(api_routing, sandbox_routing)?;
         if api_routing
             && (batch.run.context.control_home != RuntimeHome::Cloud
                 || batch.run.context.execution_home != RuntimeHome::Cloud)
@@ -174,17 +176,16 @@ impl PostgresAdmissionStore {
             &decoded,
         )
         .await?;
-        if api_routing {
-            // API surface, foreground trigger, PreferBrowser policy. The router
-            // records ApiSurface as the server reason; no executor is inferred.
-            sqlx::query("INSERT INTO runtime.sandbox_routing_contexts(run_id,tenant_id,principal_id,surface,trigger,policy) VALUES($1,$2,$3,$4,$5,$6)")
-                .bind(batch.run.context.run_id.into_uuid())
-                .bind(batch.actor.tenant_id.into_uuid())
-                .bind(batch.actor.principal_id.into_uuid())
-                .bind(crate::sandbox_routing::surface_code(musteragent_sandbox::SandboxClientSurface::Api))
-                .bind(crate::sandbox_routing::trigger_code(musteragent_sandbox::SandboxTrigger::Interactive))
-                .bind(crate::sandbox_routing::policy_code(musteragent_sandbox::SandboxRoutingPolicy::PreferBrowser))
-                .execute(prepared.transaction_mut()).await?;
+        if let Some(routing) = sandbox_routing {
+            // The route authority becomes visible with the Run and its
+            // dispatch; a worker never observes the Run without it.
+            crate::sandbox_routing::insert_run_context(
+                prepared.transaction_mut(),
+                batch.run.context.run_id,
+                batch.actor,
+                routing,
+            )
+            .await?;
         }
         if let Some(start) = start {
             crate::standing_goal::start::stage(prepared.transaction_mut(), &batch, start).await?;
@@ -495,6 +496,27 @@ impl PostgresAdmissionStore {
             &decoded,
         )
         .await?;
+        // The routing context references the Run row persisted above.
+        match batch.sandbox_routing {
+            Some(routing) => {
+                crate::sandbox_routing::insert_run_context(
+                    prepared.transaction_mut(),
+                    batch.run.context.run_id,
+                    batch.actor,
+                    routing,
+                )
+                .await?;
+            }
+            None => {
+                crate::sandbox_routing::inherit_run_context(
+                    prepared.transaction_mut(),
+                    batch.run.context.run_id,
+                    batch.source_run_id,
+                    batch.actor,
+                )
+                .await?;
+            }
+        }
         let mut staged = prepared.stage(&batch.append).await?;
         self.audit
             .append_admission_allowed_in_transaction(
@@ -506,6 +528,31 @@ impl PostgresAdmissionStore {
         let receipt = staged.commit().await?;
         debug_assert_eq!(receipt.disposition, AppendDisposition::Committed);
         Ok(receipt)
+    }
+}
+
+/// API admissions always route as the API surface. A host may tighten the
+/// policy or trigger, but cannot claim an attended browser surface for them.
+fn admission_sandbox_routing(
+    api_routing: bool,
+    supplied: Option<musteragent_sandbox::SandboxRoutingContext>,
+) -> Result<Option<musteragent_sandbox::SandboxRoutingContext>, PostgresAdmissionError> {
+    use musteragent_sandbox::{
+        SandboxClientSurface, SandboxRoutingContext, SandboxRoutingPolicy, SandboxTrigger,
+    };
+    if !api_routing {
+        return Ok(supplied);
+    }
+    match supplied {
+        // API surface, foreground trigger, PreferBrowser policy. The router
+        // records ApiSurface as the server reason; no executor is inferred.
+        None => Ok(Some(SandboxRoutingContext {
+            surface: SandboxClientSurface::Api,
+            trigger: SandboxTrigger::Interactive,
+            policy: SandboxRoutingPolicy::PreferBrowser,
+        })),
+        Some(routing) if routing.surface == SandboxClientSurface::Api => Ok(Some(routing)),
+        Some(_) => Err(PostgresAdmissionError::SandboxRoutingMismatch),
     }
 }
 
@@ -1924,6 +1971,8 @@ pub enum PostgresAdmissionError {
     MaintenanceAuthorityMismatch,
     #[error("retry source Run, Message, Attempt or active-Run fence is invalid")]
     RetrySourceInvalid,
+    #[error("sandbox routing context does not match the admission surface")]
+    SandboxRoutingMismatch,
     #[error("ContentRef identity was reused with different immutable metadata")]
     ContentRefConflict,
     #[error("signed execution grant was already consumed")]
@@ -1979,6 +2028,7 @@ impl PostgresAdmissionError {
             | Self::InstinctSelectionInvalid => MaintenanceAdmissionFailureClass::Denied,
             Self::StandingGoalInvariant
             | Self::Contract(_)
+            | Self::SandboxRoutingMismatch
             | Self::SnapshotGrantProjectionMismatch
             | Self::Ledger(_)
             | Self::ContentRefConflict
@@ -1989,5 +2039,50 @@ impl PostgresAdmissionError {
             | Self::AuditContract(_)
             | Self::Audit(_) => MaintenanceAdmissionFailureClass::Invalid,
         }
+    }
+}
+
+#[cfg(test)]
+mod sandbox_routing_tests {
+    use super::{PostgresAdmissionError, admission_sandbox_routing};
+    use musteragent_sandbox::{
+        SandboxClientSurface, SandboxRoutingContext, SandboxRoutingPolicy, SandboxTrigger,
+    };
+
+    fn context(
+        surface: SandboxClientSurface,
+        policy: SandboxRoutingPolicy,
+    ) -> SandboxRoutingContext {
+        SandboxRoutingContext {
+            surface,
+            trigger: SandboxTrigger::Interactive,
+            policy,
+        }
+    }
+
+    #[test]
+    fn host_context_is_bound_as_supplied_and_api_admissions_keep_their_surface() {
+        let browser_only = context(SandboxClientSurface::Web, SandboxRoutingPolicy::BrowserOnly);
+        assert_eq!(admission_sandbox_routing(false, None).unwrap(), None);
+        assert_eq!(
+            admission_sandbox_routing(false, Some(browser_only)).unwrap(),
+            Some(browser_only)
+        );
+        assert_eq!(
+            admission_sandbox_routing(true, None).unwrap(),
+            Some(context(
+                SandboxClientSurface::Api,
+                SandboxRoutingPolicy::PreferBrowser
+            ))
+        );
+        let api_server_only = context(SandboxClientSurface::Api, SandboxRoutingPolicy::ServerOnly);
+        assert_eq!(
+            admission_sandbox_routing(true, Some(api_server_only)).unwrap(),
+            Some(api_server_only)
+        );
+        assert!(matches!(
+            admission_sandbox_routing(true, Some(browser_only)),
+            Err(PostgresAdmissionError::SandboxRoutingMismatch)
+        ));
     }
 }

@@ -586,6 +586,9 @@ pub struct RetryAdmissionBatch {
     pub activity: Activity,
     pub run: Run,
     pub runtime_snapshot: RuntimeSnapshotBlob,
+    /// Trusted host routing context for the retry Run. `None` inherits the
+    /// source Run's context, when it has one, in the same transaction.
+    pub sandbox_routing: Option<musteragent_sandbox::SandboxRoutingContext>,
 }
 
 /// Shared execution dispatch is consumed by the assigned Executor path.

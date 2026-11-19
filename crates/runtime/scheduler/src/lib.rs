@@ -32,14 +32,30 @@ pub use musteragent_skill::Surface as AdmissionSurface;
 pub struct AdmissionSelection {
     pub surface: AdmissionSurface,
     pub requested_skill_refs: BTreeSet<VersionedKey>,
+    /// Trusted host sandbox routing context for the admitted Run. When set,
+    /// it is persisted in the admission transaction, so a worker can never
+    /// observe the Run without its route authority. Part of the admission
+    /// idempotency fingerprint.
+    pub sandbox_routing: Option<musteragent_sandbox::SandboxRoutingContext>,
 }
 
 impl AdmissionSelection {
+    /// Bind the host's sandbox routing context atomically with admission.
+    #[must_use]
+    pub fn with_sandbox_routing(
+        mut self,
+        routing: musteragent_sandbox::SandboxRoutingContext,
+    ) -> Self {
+        self.sandbox_routing = Some(routing);
+        self
+    }
+
     #[must_use]
     pub fn web(requested_skill_refs: BTreeSet<VersionedKey>) -> Self {
         Self {
             surface: AdmissionSurface::Web,
             requested_skill_refs,
+            sandbox_routing: None,
         }
     }
 
@@ -48,6 +64,7 @@ impl AdmissionSelection {
         Self {
             surface: AdmissionSurface::Studio,
             requested_skill_refs,
+            sandbox_routing: None,
         }
     }
 
@@ -56,6 +73,7 @@ impl AdmissionSelection {
         Self {
             surface: AdmissionSurface::Channel,
             requested_skill_refs,
+            sandbox_routing: None,
         }
     }
 }

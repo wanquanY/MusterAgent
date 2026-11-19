@@ -403,6 +403,24 @@ impl InputMessageHarness {
         idempotency: &str,
         text: &str,
     ) -> (MessageId, RunId) {
+        self.submit_user_message_with_selection(
+            conversation_id,
+            participant_id,
+            idempotency,
+            text,
+            AdmissionSelection::web(BTreeSet::new()),
+        )
+        .await
+    }
+
+    pub async fn submit_user_message_with_selection(
+        &self,
+        conversation_id: ConversationId,
+        participant_id: ParticipantId,
+        idempotency: &str,
+        text: &str,
+        selection: AdmissionSelection,
+    ) -> (MessageId, RunId) {
         let guard = self.current_guard(conversation_id).await;
         let command_id = CommandId::generate();
         let message_id = MessageId::generate();
@@ -428,7 +446,7 @@ impl InputMessageHarness {
             .submit_message_authorized(
                 command,
                 signed_test_grant(self.actor, run_id, self.now),
-                AdmissionSelection::web(BTreeSet::new()),
+                selection,
             )
             .await
             .expect("submit message authorized");
@@ -551,6 +569,32 @@ impl InputMessageHarness {
         expected_attempt_number: u32,
         idempotency: &str,
     ) -> RunId {
+        self.retry_failed_run_with_selection(
+            conversation_id,
+            participant_id,
+            source_run_id,
+            source_message_id,
+            expected_attempt_number,
+            idempotency,
+            AdmissionSelection::web(BTreeSet::new()),
+        )
+        .await
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Mirrors the RetryRun command fields plus the host selection."
+    )]
+    pub async fn retry_failed_run_with_selection(
+        &self,
+        conversation_id: ConversationId,
+        participant_id: ParticipantId,
+        source_run_id: RunId,
+        source_message_id: MessageId,
+        expected_attempt_number: u32,
+        idempotency: &str,
+        selection: AdmissionSelection,
+    ) -> RunId {
         let guard = self.current_guard(conversation_id).await;
         let command_id = CommandId::generate();
         let retry_run_id = derive_admission_run_id(command_id).expect("derive retry run id");
@@ -574,7 +618,7 @@ impl InputMessageHarness {
             .retry_run_authorized(
                 command,
                 signed_test_grant(self.actor, retry_run_id, self.now),
-                AdmissionSelection::web(BTreeSet::new()),
+                selection,
             )
             .await
             .expect("retry failed run");

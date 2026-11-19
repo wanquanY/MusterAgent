@@ -26,11 +26,11 @@ musteragent-runtime-memory.workspace = true
 musteragent-runtime-model.workspace = true
 musteragent-runtime-snapshot.workspace = true
 musteragent-telemetry.workspace = true
+musteragent-sandbox.workspace = true
 musteragent-tool.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-musteragent-sandbox.workspace = true
 musteragent-capability.workspace = true
 musteragent-evolution.workspace = true
 musteragent-policy.workspace = true

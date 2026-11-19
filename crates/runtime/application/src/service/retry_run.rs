@@ -446,6 +446,7 @@ impl RuntimeApplication {
                 execution_grant,
                 execution_grant_proof,
             },
+            sandbox_routing: selection.sandbox_routing,
         };
         let outcome = self
             .store

@@ -126,6 +126,7 @@ pub(super) fn retry_run_command_fingerprint(
     for skill_ref in &selection.requested_skill_refs {
         append_fingerprint_field(&mut bytes, skill_ref.as_str().as_bytes());
     }
+    append_sandbox_routing(&mut bytes, selection);
     Sha256::digest(bytes)
 }
 
@@ -237,6 +238,17 @@ pub(super) fn append_submit_payload_fingerprint(
     if let Some(target) = payload.project_task_target {
         append_fingerprint_field(bytes, &target.canonical_bytes());
     }
+    append_sandbox_routing(bytes, selection);
+}
+
+/// A host-bound routing context is part of what the command asks for. It is
+/// appended only when present, so fingerprints of commands without one are
+/// unchanged.
+fn append_sandbox_routing(bytes: &mut Vec<u8>, selection: &AdmissionSelection) {
+    if let Some(routing) = selection.sandbox_routing {
+        append_fingerprint_field(bytes, b"sandbox-routing");
+        append_fingerprint_field(bytes, &routing.canonical_bytes());
+    }
 }
 
 pub(super) fn admission_ack(
@@ -322,6 +334,34 @@ mod tests {
         KERNEL_COMMAND_FINGERPRINT_DOMAIN_V2, LEGACY_COMMAND_FINGERPRINT_DOMAIN_V1,
         command_fingerprint_domain,
     };
+
+    #[test]
+    fn sandbox_routing_extends_the_fingerprint_only_when_bound() {
+        use musteragent_sandbox::{
+            SandboxClientSurface, SandboxRoutingContext, SandboxRoutingPolicy, SandboxTrigger,
+        };
+        use musteragent_scheduler::AdmissionSelection;
+
+        let unbound = AdmissionSelection::web(Default::default());
+        let mut bytes = b"prefix".to_vec();
+        super::append_sandbox_routing(&mut bytes, &unbound);
+        assert_eq!(bytes, b"prefix", "unbound commands keep their fingerprint");
+
+        let encode = |policy| {
+            let selection = unbound.clone().with_sandbox_routing(SandboxRoutingContext {
+                surface: SandboxClientSurface::Web,
+                trigger: SandboxTrigger::Interactive,
+                policy,
+            });
+            let mut bytes = Vec::new();
+            super::append_sandbox_routing(&mut bytes, &selection);
+            bytes
+        };
+        let browser_only = encode(SandboxRoutingPolicy::BrowserOnly);
+        assert!(!browser_only.is_empty());
+        assert_ne!(browser_only, encode(SandboxRoutingPolicy::PreferBrowser));
+        assert_eq!(browser_only, encode(SandboxRoutingPolicy::BrowserOnly));
+    }
 
     #[test]
     fn command_schema_selects_exact_current_or_legacy_fingerprint_domain() {

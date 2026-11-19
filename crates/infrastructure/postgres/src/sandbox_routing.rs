@@ -354,6 +354,46 @@ fn lane(e: crate::commit_lane::CommitLaneError) -> Error {
         _ => Error::DurabilityUnavailable,
     }
 }
+/// Insert the trusted routing context of a newly admitted Run inside its
+/// admission transaction. The caller has already authenticated `actor` as the
+/// Run's requester.
+pub(crate) async fn insert_run_context(
+    tx: &mut PgConnection,
+    run: RunId,
+    actor: Actor,
+    routing: SandboxRoutingContext,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("INSERT INTO runtime.sandbox_routing_contexts(run_id,tenant_id,principal_id,surface,trigger,policy) VALUES($1,$2,$3,$4,$5,$6)")
+        .bind(run.into_uuid())
+        .bind(actor.tenant_id.into_uuid())
+        .bind(actor.principal_id.into_uuid())
+        .bind(surface_code(routing.surface))
+        .bind(trigger_code(routing.trigger))
+        .bind(policy_code(routing.policy))
+        .execute(&mut *tx)
+        .await
+        .map(|_| ())
+}
+
+/// Copy a source Run's routing context to a derived Run (retry or delegated
+/// child) in the derived Run's admission transaction. Only a context owned by
+/// the same tenant and principal is inherited; returns whether one was copied.
+pub(crate) async fn inherit_run_context(
+    tx: &mut PgConnection,
+    run: RunId,
+    source: RunId,
+    actor: Actor,
+) -> Result<bool, sqlx::Error> {
+    let copied = sqlx::query("INSERT INTO runtime.sandbox_routing_contexts(run_id,tenant_id,principal_id,surface,trigger,policy) SELECT $1,tenant_id,principal_id,surface,trigger,policy FROM runtime.sandbox_routing_contexts WHERE run_id=$2 AND tenant_id=$3 AND principal_id=$4")
+        .bind(run.into_uuid())
+        .bind(source.into_uuid())
+        .bind(actor.tenant_id.into_uuid())
+        .bind(actor.principal_id.into_uuid())
+        .execute(&mut *tx)
+        .await?;
+    Ok(copied.rows_affected() == 1)
+}
+
 pub(crate) fn surface_code(s: SandboxClientSurface) -> i16 {
     match s {
         SandboxClientSurface::Web => 1,

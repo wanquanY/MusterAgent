@@ -8,6 +8,8 @@ mod input_message;
 mod physical_failover;
 #[path = "postgres_admission/plan_history.rs"]
 mod plan_history;
+#[path = "postgres_admission/sandbox_routing.rs"]
+mod sandbox_routing;
 #[path = "postgres_admission/source_selection.rs"]
 mod source_selection;
 #[path = "postgres_admission/worker_compatibility.rs"]

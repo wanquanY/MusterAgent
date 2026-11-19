@@ -192,6 +192,7 @@ impl Api {
             musteragent_scheduler::AdmissionSelection {
                 surface: musteragent_skill::Surface::Api,
                 requested_skill_refs: Default::default(),
+                sandbox_routing: None,
             },
         )
         .await

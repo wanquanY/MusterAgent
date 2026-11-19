@@ -207,6 +207,7 @@ impl RuntimeApplication {
             admission: AdmissionCommit {
                 batch,
                 content_stage,
+                sandbox_routing: selection.sandbox_routing,
             },
         };
         commit

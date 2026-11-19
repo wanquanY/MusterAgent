@@ -129,6 +129,11 @@ pub(super) fn map_admission(
             false,
             "Submit Message admission batch is invalid",
         ),
+        PostgresAdmissionError::SandboxRoutingMismatch => (
+            ErrorCode::InvalidCommand,
+            false,
+            "Sandbox routing context does not match the admission surface",
+        ),
         PostgresAdmissionError::SnapshotGrantProjectionMismatch => (
             ErrorCode::RuntimeSnapshotInvalid,
             false,

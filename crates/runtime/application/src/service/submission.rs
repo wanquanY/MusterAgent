@@ -253,6 +253,7 @@ impl RuntimeApplication {
         let commit = AdmissionCommit {
             batch,
             content_stage,
+            sandbox_routing: selection.sandbox_routing,
         };
         let committed = if let Some(start) = goal_start {
             self.store
