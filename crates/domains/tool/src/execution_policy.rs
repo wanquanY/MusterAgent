@@ -21,6 +21,8 @@ impl ToolExecutionPolicy {
     /// timeout bounded the admission RPC, not generation. A non-streaming media
     /// stage can be silent for the provider's 600s read window. Queries and
     /// unchanged task records do not refresh this finite stage budget.
+    /// Long local work (see [`Self::runs_long_local_work`]) is bounded only by
+    /// [`LONG_WORK_SILENCE_WINDOW`](musteragent_runtime_contract::execution_liveness::LONG_WORK_SILENCE_WINDOW).
     /// Existing Run snapshots keep their already sealed policy unchanged.
     #[must_use]
     pub fn builtin_activity(
@@ -30,10 +32,26 @@ impl ToolExecutionPolicy {
     ) -> Self {
         let idle = if media_artifact.is_some() {
             default_idle.max(Duration::from_secs(600))
+        } else if Self::runs_long_local_work(key.as_str()) {
+            // An arbitrary process has no total lifetime. Its own output and
+            // process work renew this window; a legitimate quiet stretch
+            // (dependency download, compiler warm-up) must not end it.
+            default_idle
+                .max(musteragent_runtime_contract::execution_liveness::LONG_WORK_SILENCE_WINDOW)
         } else {
             default_idle
         };
         Self::admitted_activity(key, idle)
+    }
+
+    /// Tools whose execution is an arbitrary, possibly hours-long process.
+    /// Matches every version of the logical Tool key.
+    #[must_use]
+    pub fn runs_long_local_work(key: &str) -> bool {
+        matches!(
+            key.rsplit_once('@').map_or(key, |(logical, _)| logical),
+            "device.terminal.exec" | "data.python.run" | "application.web.build"
+        )
     }
 
     /// Shared admission policy for built-in, deployed and private Tools. A
@@ -95,6 +113,89 @@ impl ToolExecutionPolicy {
 mod tests {
     use super::*;
     use musteragent_identity::VersionedKey;
+
+    #[test]
+    fn long_local_work_is_bounded_by_a_generous_silence_window_only() {
+        use musteragent_runtime_contract::execution_liveness::LONG_WORK_SILENCE_WINDOW;
+        for key in [
+            "device.terminal.exec@3",
+            "device.terminal.exec@4",
+            "data.python.run@11",
+            "application.web.build@1",
+        ] {
+            let policy = ToolExecutionPolicy::builtin_activity(
+                VersionedKey::new(key).expect("valid test fixture"),
+                Duration::from_secs(120),
+                None,
+            );
+            assert!(
+                policy.legacy_timeout().is_err(),
+                "{key} has no total lifetime"
+            );
+            let windows = policy.liveness().expect("activity").windows();
+            assert_eq!(windows.idle, LONG_WORK_SILENCE_WINDOW, "{key}");
+            assert_eq!(windows.startup, LONG_WORK_SILENCE_WINDOW, "{key}");
+        }
+        // A capability asking for even longer silence keeps its own window.
+        let longer = ToolExecutionPolicy::builtin_activity(
+            VersionedKey::new("data.python.run@11").expect("valid test fixture"),
+            Duration::from_secs(3_600),
+            None,
+        );
+        assert_eq!(
+            longer.liveness().expect("activity").windows().idle,
+            Duration::from_secs(3_600)
+        );
+        for key in [
+            "device.terminal.session.read@2",
+            "device.workspace.file.read@5",
+        ] {
+            let ordinary = ToolExecutionPolicy::builtin_activity(
+                VersionedKey::new(key).expect("valid test fixture"),
+                Duration::from_secs(120),
+                None,
+            );
+            assert_eq!(
+                ordinary.liveness().expect("activity").windows().idle,
+                Duration::from_secs(120),
+                "{key}"
+            );
+        }
+        // A Run admitted before this window existed keeps its sealed policy.
+        let sealed = ToolExecutionPolicy::activity(
+            VersionedKey::new("data.python.run@11").expect("valid test fixture"),
+            Duration::from_secs(120),
+        );
+        assert_eq!(
+            sealed.liveness().expect("activity").windows().idle,
+            Duration::from_secs(120)
+        );
+    }
+
+    #[test]
+    fn long_work_catalog_tools_are_pinned_with_the_silence_window() {
+        use musteragent_runtime_contract::execution_liveness::LONG_WORK_SILENCE_WINDOW;
+        let mut seen = 0;
+        for catalog in [
+            crate::BuiltinToolCatalog::load_cloud().unwrap(),
+            crate::BuiltinToolCatalog::load_device().unwrap(),
+        ] {
+            for tool in catalog.definitions() {
+                if !ToolExecutionPolicy::runs_long_local_work(tool.key.as_str()) {
+                    continue;
+                }
+                seen += 1;
+                let manifest = tool.pin(musteragent_identity::CapabilityProviderId::generate());
+                let windows = manifest.execution_policy.liveness().unwrap().windows();
+                assert!(
+                    windows.idle >= LONG_WORK_SILENCE_WINDOW,
+                    "{}",
+                    tool.key.as_str()
+                );
+            }
+        }
+        assert!(seen > 0, "no long-work tool in the built-in catalogs");
+    }
 
     #[test]
     fn media_stage_silence_is_distinct_from_bounded_status_requests() {

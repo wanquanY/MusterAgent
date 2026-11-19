@@ -357,6 +357,13 @@ pub struct DurableWaitBinding {
 /// Minimum startup/silence budget for newly admitted Tools. Observation cadence
 /// and cancellation cleanup are control-plane bounds, not execution timeouts.
 pub const MIN_TOOL_EXECUTION_WINDOW: Duration = Duration::from_secs(60);
+/// Silence window for Tools that run an arbitrary local process (a shell
+/// command, a Python program, a build). Their output and observed process work
+/// renew it; only this long without either stops them. A legitimate download
+/// or dependency install may be quiet for minutes, so it is generous on
+/// purpose. There is no total lifetime unless the invocation carries an
+/// explicit deadline.
+pub const LONG_WORK_SILENCE_WINDOW: Duration = Duration::from_secs(15 * 60);
 
 /// Communication window for discovering frozen execution policy/material.
 /// No tool has been dispatched yet. Once loaded, its original policy governs
