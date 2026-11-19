@@ -1726,3 +1726,59 @@ fn provider_default_output_limit_omits_the_field_except_where_required() {
         .body;
     assert_eq!(body["max_tokens"], 256);
 }
+
+/// Anthropic only caches up to explicit breakpoints; without them every step
+/// pays full input price for the whole history.
+#[test]
+fn anthropic_requests_mark_prompt_cache_breakpoints() {
+    for format in [ApiFormat::AnthropicMessages, ApiFormat::BedrockInvokeModel] {
+        let mut unmarked = request(format);
+        unmarked.cache_policy = CachePolicy::Disabled;
+        let plain = map_request(&unmarked, &ResolvedContents::default()).expect("disabled mapping");
+        assert!(
+            !serde_json::to_string(&plain.body)
+                .expect("JSON")
+                .contains("cache_control"),
+            "{format:?}: a cache-disabled request was marked"
+        );
+        let mut agent_turn = request(format);
+        agent_turn.cache_policy = CachePolicy::ExplicitEphemeralPrefix;
+        let mapped = map_request(&agent_turn, &ResolvedContents::default())
+            .unwrap_or_else(|error| panic!("{format:?} mapping failed: {error}"));
+        let body = &mapped.body;
+        let encoded = serde_json::to_string(body).expect("mapped body JSON");
+        let breakpoints = encoded.matches("\"cache_control\"").count();
+        assert!(
+            (1..=4).contains(&breakpoints),
+            "{format:?}: {breakpoints} breakpoints"
+        );
+        let tools = body["tools"].as_array().expect("tools");
+        assert_eq!(
+            tools.last().expect("tool")["cache_control"]["type"],
+            "ephemeral",
+            "{format:?}"
+        );
+        let messages = body["messages"].as_array().expect("messages");
+        let last = messages.last().expect("message")["content"]
+            .as_array()
+            .expect("content");
+        assert!(
+            last.iter()
+                .any(|block| block.get("cache_control").is_some()),
+            "{format:?}: last message carries no breakpoint"
+        );
+        for message in messages {
+            for block in message["content"].as_array().into_iter().flatten() {
+                if matches!(
+                    block["type"].as_str(),
+                    Some("thinking" | "redacted_thinking")
+                ) {
+                    assert!(
+                        block.get("cache_control").is_none(),
+                        "{format:?}: thinking block marked"
+                    );
+                }
+            }
+        }
+    }
+}

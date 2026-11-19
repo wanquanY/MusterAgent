@@ -556,7 +556,68 @@ fn anthropic(
             "schema": crate::structured_output::anthropic_schema(to_serde(schema)?),
         }});
     }
+    if request.cache_policy == CachePolicy::ExplicitEphemeralPrefix {
+        apply_anthropic_cache_breakpoints(&mut body);
+    }
     Ok(body)
+}
+
+/// `CachePolicy::ExplicitEphemeralPrefix` on Anthropic. The provider caches
+/// only prefixes ending at an explicit `cache_control` breakpoint (no automatic
+/// caching), so without these every agent step pays full input price for the
+/// whole history. `Disabled` requests (one-shot compaction, vision) stay
+/// unmarked. Prefix order is tools → system →
+/// messages; the provider allows at most four breakpoints. Mark the last tool,
+/// the last system block, and the last two messages: each step writes the
+/// conversation so far and the next step reads it back, even when one step
+/// appended more than the provider's 20-block lookback.
+fn apply_anthropic_cache_breakpoints(body: &mut Value) {
+    const BREAKPOINT: &str = "cache_control";
+    let ephemeral = || json!({"type": "ephemeral"});
+    if let Some(tool) = body
+        .get_mut("tools")
+        .and_then(Value::as_array_mut)
+        .and_then(|tools| tools.last_mut())
+        .and_then(Value::as_object_mut)
+    {
+        tool.insert(BREAKPOINT.into(), ephemeral());
+    }
+    if let Some(block) = body
+        .get_mut("system")
+        .and_then(Value::as_array_mut)
+        .and_then(|blocks| blocks.last_mut())
+        .and_then(Value::as_object_mut)
+    {
+        block.insert(BREAKPOINT.into(), ephemeral());
+    }
+    let Some(messages) = body.get_mut("messages").and_then(Value::as_array_mut) else {
+        return;
+    };
+    let count = messages.len();
+    for message in messages.iter_mut().skip(count.saturating_sub(2)) {
+        // Thinking blocks and empty text cannot carry a breakpoint.
+        if let Some(block) = message
+            .get_mut("content")
+            .and_then(Value::as_array_mut)
+            .and_then(|blocks| {
+                blocks.iter_mut().rev().find(|block| {
+                    let kind = block
+                        .get("type")
+                        .and_then(Value::as_str)
+                        .unwrap_or_default();
+                    let empty_text = kind == "text"
+                        && block
+                            .get("text")
+                            .and_then(Value::as_str)
+                            .is_none_or(str::is_empty);
+                    !matches!(kind, "thinking" | "redacted_thinking") && !empty_text
+                })
+            })
+            .and_then(Value::as_object_mut)
+        {
+            block.insert(BREAKPOINT.into(), ephemeral());
+        }
+    }
 }
 
 fn bedrock_converse(
