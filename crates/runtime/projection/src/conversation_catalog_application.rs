@@ -134,7 +134,7 @@ impl ConversationCatalogV2Application for SharedConversationCatalogV2Application
         query: ListConversationCatalogV2,
     ) -> ApplicationFuture<'_, Result<ConversationCatalogPageV2, RuntimeError>> {
         Box::pin(async move {
-            query.validate().map_err(|_| {
+            let query = query.validate().map_err(|_| {
                 self.errors
                     .map(ConversationCatalogSourceError::InvalidQuery)
             })?;
@@ -299,14 +299,14 @@ async fn stream_catalog(mut task: CatalogStreamTask) {
             }
             let page = task
                 .source
-                .list(ListConversationCatalogV2 {
-                    actor: task.query.actor,
-                    conversation_id: Some(invalidation.conversation_id),
-                    workspace_id: None,
-                    lifecycle: task.query.lifecycle,
-                    page_size: 1,
-                    after: None,
-                })
+                .list(ListConversationCatalogV2::from_workspace_id(
+                    task.query.actor,
+                    Some(invalidation.conversation_id),
+                    None,
+                    task.query.lifecycle,
+                    1,
+                    None,
+                ))
                 .await;
             let change = match page {
                 Ok(mut value) => value.conversations.pop().map_or(

@@ -198,3 +198,39 @@ fn sandbox_decisions_round_trip_and_reject_inconsistent_routes() {
         );
     }
 }
+
+#[test]
+fn list_conversation_catalog_v2_request_preserves_legacy_and_additive_filter_fields() {
+    let legacy = wire::ListConversationCatalogV2Request {
+        actor: None,
+        conversation_id: None,
+        workspace_id: None,
+        lifecycle: wire::ConversationLifecycle::Active as i32,
+        page_size: 25,
+        after: None,
+        workspace_filter_mode: wire::CatalogWorkspaceFilterMode::Unspecified as i32,
+        title_query: None,
+    };
+    let legacy_decoded =
+        wire::ListConversationCatalogV2Request::decode(legacy.encode_to_vec().as_slice())
+            .expect("decode legacy request");
+    assert_eq!(
+        wire::CatalogWorkspaceFilterMode::try_from(legacy_decoded.workspace_filter_mode),
+        Ok(wire::CatalogWorkspaceFilterMode::Unspecified)
+    );
+    assert_eq!(legacy_decoded.title_query, None);
+
+    let filtered = wire::ListConversationCatalogV2Request {
+        workspace_filter_mode: wire::CatalogWorkspaceFilterMode::Unassigned as i32,
+        title_query: Some("budget 100%".to_owned()),
+        ..legacy
+    };
+    let filtered_decoded =
+        wire::ListConversationCatalogV2Request::decode(filtered.encode_to_vec().as_slice())
+            .expect("decode filtered request");
+    assert_eq!(
+        wire::CatalogWorkspaceFilterMode::try_from(filtered_decoded.workspace_filter_mode),
+        Ok(wire::CatalogWorkspaceFilterMode::Unassigned)
+    );
+    assert_eq!(filtered_decoded.title_query.as_deref(), Some("budget 100%"));
+}

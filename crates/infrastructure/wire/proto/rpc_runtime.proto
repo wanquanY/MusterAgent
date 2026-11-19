@@ -262,6 +262,13 @@ enum CatalogWaitReason {
   CATALOG_WAIT_REASON_COMPLETIONS = 15;
 }
 
+enum CatalogWorkspaceFilterMode {
+  CATALOG_WORKSPACE_FILTER_MODE_UNSPECIFIED = 0;
+  CATALOG_WORKSPACE_FILTER_MODE_ALL = 1;
+  CATALOG_WORKSPACE_FILTER_MODE_UNASSIGNED = 2;
+  CATALOG_WORKSPACE_FILTER_MODE_ASSIGNED = 3;
+}
+
 message CommitResourceChangeSetCommand {
   CommandMetadata metadata = 1;
   ResourceChangeSetId change_set_id = 2;
@@ -708,6 +715,8 @@ message ListConversationCatalogV2Request {
   ConversationLifecycle lifecycle = 4;
   uint32 page_size = 5;
   optional ConversationCatalogCursorV2 after = 6;
+  CatalogWorkspaceFilterMode workspace_filter_mode = 7;
+  optional string title_query = 8;
 }
 
 message ListConversationCatalogV2Response {

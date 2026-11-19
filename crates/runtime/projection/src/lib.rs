@@ -28,13 +28,14 @@ pub use conversation_catalog::{
     adapt_interaction_event, adapt_run_event, adapt_standing_goal,
 };
 pub use conversation_catalog_api::{
-    AcknowledgeConversationSeenThrough, ConversationActionSummaryV2, ConversationCatalogChangeV2,
-    ConversationCatalogCursorV2, ConversationCatalogInvalidationBatchV2,
-    ConversationCatalogInvalidationV2, ConversationCatalogPageV2, ConversationCatalogQueryError,
-    ConversationCatalogSourceError, ConversationCatalogSummaryV2, ConversationCatalogV2Application,
-    ConversationCatalogV2Source, ConversationExecutionSummaryV2, ConversationOwnedOutcomeSummaryV2,
-    ConversationReadReceiptAck, ConversationUnreadSummaryV2, ListConversationCatalogV2,
-    MAX_CONVERSATION_CATALOG_PAGE_SIZE, SubscribeConversationCatalogV2,
+    AcknowledgeConversationSeenThrough, CatalogWorkspaceFilter, ConversationActionSummaryV2,
+    ConversationCatalogChangeV2, ConversationCatalogCursorV2,
+    ConversationCatalogInvalidationBatchV2, ConversationCatalogInvalidationV2,
+    ConversationCatalogPageV2, ConversationCatalogQueryError, ConversationCatalogSourceError,
+    ConversationCatalogSummaryV2, ConversationCatalogV2Application, ConversationCatalogV2Source,
+    ConversationExecutionSummaryV2, ConversationOwnedOutcomeSummaryV2, ConversationReadReceiptAck,
+    ConversationUnreadSummaryV2, ListConversationCatalogV2, MAX_CONVERSATION_CATALOG_PAGE_SIZE,
+    MAX_CONVERSATION_CATALOG_TITLE_QUERY_CHARS, SubscribeConversationCatalogV2,
 };
 pub use conversation_catalog_application::{
     ConversationCatalogInvalidationFeed, ConversationCatalogInvalidationSubscription,
@@ -44,9 +45,10 @@ pub use conversation_catalog_application::{
 pub use conversation_catalog_projector::{
     CatalogGoalEvaluationProjectionSnapshot, CatalogGoalProjectionSnapshot,
     CatalogProjectionAuthority, CatalogProjectionDeferral, CatalogProjectionRecord,
-    CatalogProjectionRecordPage, CatalogRunAuthority, ConversationCatalogLedgerProjector,
-    ConversationCatalogProjectionPass, ConversationCatalogProjectionPort,
-    ConversationCatalogProjectorError, ConversationCatalogRecordSource,
+    CatalogProjectionRecordPage, CatalogRunAuthority, CatalogRunCancellationAuthority,
+    ConversationCatalogLedgerProjector, ConversationCatalogProjectionPass,
+    ConversationCatalogProjectionPort, ConversationCatalogProjectorError,
+    ConversationCatalogRecordSource,
 };
 pub use failure_backfill::{
     PROJECTION_FAILURE_BACKFILL_PAGE_SIZE, ProjectionRunFailureQuery, ProjectionRunFailureSource,

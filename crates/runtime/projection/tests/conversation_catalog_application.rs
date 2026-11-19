@@ -432,3 +432,109 @@ async fn shutdown_joins_admitted_initial_read_and_prevents_late_subscription() {
         "closed service must not touch source"
     );
 }
+
+#[tokio::test]
+async fn list_validates_and_trims_title_query_before_forwarding_to_source() {
+    struct CapturingListSource {
+        captured: std::sync::Mutex<Vec<ListConversationCatalogV2>>,
+    }
+
+    impl ConversationCatalogV2Source for CapturingListSource {
+        fn list(
+            &self,
+            query: ListConversationCatalogV2,
+        ) -> ApplicationFuture<'_, Result<ConversationCatalogPageV2, ConversationCatalogSourceError>>
+        {
+            self.captured.lock().expect("captured lock").push(query);
+            Box::pin(async {
+                Ok(ConversationCatalogPageV2 {
+                    snapshot_position: CatalogActivityPosition::ZERO,
+                    conversations: Vec::new(),
+                    next_cursor: None,
+                })
+            })
+        }
+
+        fn acknowledge(
+            &self,
+            _command: AcknowledgeConversationSeenThrough,
+        ) -> ApplicationFuture<'_, Result<ConversationReadReceiptAck, ConversationCatalogSourceError>>
+        {
+            Box::pin(async { unreachable!() })
+        }
+
+        fn read_invalidations(
+            &self,
+            _actor: Actor,
+            _after: CatalogActivityPosition,
+            _limit: u16,
+        ) -> ApplicationFuture<
+            '_,
+            Result<ConversationCatalogInvalidationBatchV2, ConversationCatalogSourceError>,
+        > {
+            Box::pin(async { unreachable!() })
+        }
+    }
+
+    impl musteragent_projection::WorkspaceCatalogActivitySource for CapturingListSource {
+        fn workspace_activity(
+            &self,
+            _query: musteragent_projection::ListWorkspaceCatalogActivity,
+        ) -> ApplicationFuture<
+            '_,
+            Result<
+                musteragent_projection::WorkspaceCatalogActivityBatch,
+                ConversationCatalogSourceError,
+            >,
+        > {
+            Box::pin(async { unreachable!() })
+        }
+    }
+
+    let source = Arc::new(CapturingListSource {
+        captured: std::sync::Mutex::new(Vec::new()),
+    });
+    let service = SharedConversationCatalogV2Application::new(
+        ConversationCatalogV2Policy {
+            invalidation_page_size: 64,
+            channel_capacity: 4,
+            poll_interval: Duration::from_secs(30),
+        },
+        source.clone(),
+        Arc::new(ErrorMapper),
+    )
+    .expect("valid policy");
+    let actor = query().actor;
+
+    for invalid in ["", "   \t  ", &"x".repeat(101)] {
+        assert!(
+            service
+                .list_conversation_catalog_v2(
+                    ListConversationCatalogV2::new(actor, ConversationLifecycle::Active, 10)
+                        .with_title_query(Some(invalid)),
+                )
+                .await
+                .is_err()
+        );
+    }
+    assert!(
+        source.captured.lock().expect("captured lock").is_empty(),
+        "invalid title queries must be rejected before touching the persistence source"
+    );
+
+    service
+        .list_conversation_catalog_v2(
+            ListConversationCatalogV2::new(actor, ConversationLifecycle::Active, 10)
+                .with_workspace_filter(musteragent_projection::CatalogWorkspaceFilter::Unassigned)
+                .with_title_query(Some("  Budget 100%  ")),
+        )
+        .await
+        .expect("trimmed query succeeds");
+    let captured = source.captured.lock().expect("captured lock");
+    assert_eq!(captured.len(), 1);
+    assert_eq!(
+        captured[0].workspace_filter,
+        musteragent_projection::CatalogWorkspaceFilter::Unassigned
+    );
+    assert_eq!(captured[0].title_query.as_deref(), Some("Budget 100%"));
+}
