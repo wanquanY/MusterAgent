@@ -63,6 +63,18 @@ snapshot. Its additive cloud catalog includes:
 | `delegation.cancel@2` | Request stop of a child and its descendants |
 | `delegation.retry@2` | Start a fresh child from a terminal child's original specification |
 
+`musteragent.cloud-orchestration-discovery@2` is an additive frozen policy for
+cloud web hosts. Its ceiling is the `@1` ceiling plus conversation delivery
+(`dialogue.publish@1`, `artifacts.deliver@2`) and the agent work-item tools
+(`tasks.amend@2`, `tasks.control@1`, `tasks.executions.list@2`,
+`tasks.feedback@1`, `tasks.followup@1`, `tasks.handoff@1`, `tasks.inspect@1`,
+`tasks.list@1`, `tasks.start@3`, `tasks.submit_result@1`, `tasks.verify@3`),
+all granted at the cloud location. Its bootstrap is the same as `@1`. `@1`
+stays frozen and rejects these keys with `InvalidDiscovery`; Goal and WorkItem
+subject ceilings still apply under `@2`. `cloud_orchestration_discovery_policy_for`
+returns `@1` for every catalog `@1` admits, so existing hosts seal unchanged
+snapshots, and `@2` only when the catalog includes one of these tools.
+
 Children have private Activities and execution contexts. The parent receives a
 typed completion event, then retains the acknowledged report in its context
 history with the delivery ContextPlan as provenance. Child transcripts and

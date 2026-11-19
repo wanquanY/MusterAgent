@@ -329,7 +329,9 @@ impl KernelSnapshotBuilder {
                     .collect(),
                 carry_forward_source_run_id,
                 carry_forward_decision_ref,
-                discovery_policy_ref: VersionedKey::new(CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1)?,
+                discovery_policy_ref: VersionedKey::new(cloud_orchestration_discovery_policy_for(
+                    tools.iter().map(|t| t.manifest.key.as_str()),
+                ))?,
                 max_exposed_tools,
                 max_search_results: NonZeroU32::new(20).ok_or(ErrorCode::RuntimeSnapshotInvalid)?,
             }),
