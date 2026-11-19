@@ -1,7 +1,7 @@
 use musteragent_content_ref::Sha256;
 use musteragent_conversation::{
     ArchiveConversation, ConversationKind, ConversationTitleOrigin, CreateConversation,
-    RetractMessage, SetConversationTitle, SubmitMessage,
+    RetractMessage, SetConversationTitle, SubmitMessage, UnarchiveConversation,
 };
 use musteragent_event_envelope::RuntimeHome;
 use musteragent_ledger::AppendReceipt;
@@ -171,6 +171,13 @@ pub(super) fn archive_conversation_command_fingerprint(
         ActiveRunArchivePolicy::CancelThenArchive => 2,
     });
     Sha256::digest(bytes)
+}
+
+/// Unarchive carries no payload; the operation tag, actor and guard identify it.
+pub(super) fn unarchive_conversation_command_fingerprint(
+    command: &CommandEnvelope<UnarchiveConversation>,
+) -> Sha256 {
+    Sha256::digest(command_fingerprint_base(command, b"unarchive-conversation"))
 }
 
 pub(super) fn set_conversation_title_command_fingerprint(

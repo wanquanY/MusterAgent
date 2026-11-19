@@ -24,6 +24,7 @@ pub enum CommandType {
     CancelInteraction,
     SetConversationTitle,
     ArchiveConversation,
+    UnarchiveConversation,
     ImportConversation,
 }
 

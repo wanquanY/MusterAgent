@@ -204,6 +204,16 @@ impl CommandPayload for ArchiveConversation {
     const COMMAND_TYPE: CommandType = CommandType::ArchiveConversation;
 }
 
+/// Returns an archived Conversation to the active catalog. Archive-driven
+/// cancellations stay as they were; the restored Conversation accepts new
+/// messages again. Unarchiving an already active Conversation is a duplicate.
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Hash)]
+pub struct UnarchiveConversation {}
+
+impl CommandPayload for UnarchiveConversation {
+    const COMMAND_TYPE: CommandType = CommandType::UnarchiveConversation;
+}
+
 /// Origin of the canonical title change recorded in the Conversation Ledger.
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
 pub enum ConversationTitleOrigin {
@@ -440,6 +450,11 @@ pub trait ConversationApplication: Send + Sync {
     fn archive_conversation(
         &self,
         command: CommandEnvelope<ArchiveConversation>,
+    ) -> ApplicationFuture<'_, Result<CommandAck, RuntimeError>>;
+
+    fn unarchive_conversation(
+        &self,
+        command: CommandEnvelope<UnarchiveConversation>,
     ) -> ApplicationFuture<'_, Result<CommandAck, RuntimeError>>;
 
     fn set_conversation_title(

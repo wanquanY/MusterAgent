@@ -35,7 +35,8 @@ use musteragent_runtime_session::{
     EditAndResubmitAuthority, EditAndResubmitCommit, ForkContextAuthority, ForkContextCommit,
     RetractMessageAuthority, RetractMessageCommit, RunControlAuthority, RunControlCommit,
     RunDiscoveryQuery, RuntimeApplicationStore, SetConversationTitleAuthority,
-    SetConversationTitleCommit, StandingGoalAdmissionCommit, runtime_error,
+    SetConversationTitleCommit, StandingGoalAdmissionCommit, UnarchiveConversationAuthority,
+    UnarchiveConversationCommit, runtime_error,
 };
 use sqlx::postgres::PgRow;
 use sqlx::{PgPool, Row as _};
@@ -1125,6 +1126,152 @@ impl PostgresRuntimeApplicationStore {
         })
     }
 
+    /// Same tenant, participant and control-home authorization as archive.
+    async fn authorize_unarchive_inner(
+        &self,
+        actor: Actor,
+        conversation_id: ConversationId,
+        correlation_id: CorrelationId,
+    ) -> Result<UnarchiveConversationAuthority, RuntimeError> {
+        let row = sqlx::query(
+            "SELECT conversation.lifecycle,
+                    conversation.home_epoch::text AS home_epoch,
+                    stream.last_sequence::text AS conversation_offset,
+                    viewer.participant_id
+             FROM conversation.conversations AS conversation
+             JOIN event_store.ledger_streams AS stream
+               ON stream.tenant_id = conversation.tenant_id
+              AND stream.conversation_id = conversation.conversation_id
+             JOIN conversation.participants AS viewer
+               ON viewer.tenant_id = conversation.tenant_id
+              AND viewer.conversation_id = conversation.conversation_id
+              AND viewer.kind = 1
+              AND viewer.principal_ref = $3
+              AND viewer.left_at_ms IS NULL
+             WHERE conversation.purpose = 'standard' AND conversation.tenant_id = $1
+               AND conversation.conversation_id = $2
+               AND conversation.control_home_kind = 1
+               AND conversation.control_device_id IS NULL",
+        )
+        .bind(actor.tenant_id.into_uuid())
+        .bind(conversation_id.into_uuid())
+        .bind(actor.principal_id.into_uuid())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| dependency(correlation_id))?
+        .ok_or_else(|| not_found(ErrorCode::ConversationNotFound, correlation_id))?;
+        let lifecycle = match row
+            .try_get::<i16, _>("lifecycle")
+            .map_err(|_| dependency(correlation_id))?
+        {
+            1 => ConversationLifecycle::Active,
+            2 => ConversationLifecycle::Archived,
+            _ => return Err(corrupt(correlation_id)),
+        };
+        Ok(UnarchiveConversationAuthority {
+            tenant_id: actor.tenant_id,
+            conversation_id,
+            home_epoch: HomeEpoch::new(parse_u64(
+                row.try_get("home_epoch")
+                    .map_err(|_| dependency(correlation_id))?,
+                correlation_id,
+            )?)
+            .map_err(|_| corrupt(correlation_id))?,
+            current_offset: LedgerOffset::new(parse_u64(
+                row.try_get("conversation_offset")
+                    .map_err(|_| dependency(correlation_id))?,
+                correlation_id,
+            )?),
+            lifecycle,
+            requested_by_participant_id: id(
+                row.try_get("participant_id")
+                    .map_err(|_| dependency(correlation_id))?,
+                correlation_id,
+            )?,
+        })
+    }
+
+    async fn unarchive_inner(
+        &self,
+        correlation_id: CorrelationId,
+        commit: UnarchiveConversationCommit,
+    ) -> Result<musteragent_ledger::AppendReceipt, RuntimeError> {
+        if commit.actor.tenant_id != commit.append.tenant_id
+            || commit.append.records.len() != 1
+            || !commit.append.outbox.is_empty()
+        {
+            return Err(runtime_error(
+                ErrorCode::InvalidCommand,
+                correlation_id,
+                false,
+                "Unarchive Conversation commit is invalid",
+            ));
+        }
+        let mut prepared = match self.ledger.begin_append(&commit.append).await {
+            Ok(BeginAppend::Duplicate(receipt)) => return Ok(receipt),
+            Ok(BeginAppend::Ready(prepared)) => prepared,
+            Err(error) => return Err(map_ledger(error, correlation_id)),
+        };
+        let lifecycle: Option<i16> = sqlx::query_scalar(
+            "SELECT lifecycle
+             FROM conversation.conversations
+             WHERE tenant_id = $1 AND conversation_id = $2
+               AND home_epoch = $3::bigint
+             FOR UPDATE",
+        )
+        .bind(commit.actor.tenant_id.into_uuid())
+        .bind(commit.append.conversation_id.into_uuid())
+        .bind(commit.append.expected_home_epoch.get().to_string())
+        .fetch_optional(&mut *prepared.transaction_mut())
+        .await
+        .map_err(|_| dependency(correlation_id))?;
+        match lifecycle {
+            Some(2) => {}
+            Some(1) => {
+                // Another command restored it after authorization; that
+                // command's record moved the Ledger past this guard.
+                return Err(runtime_error(
+                    ErrorCode::ConversationSeqConflict,
+                    correlation_id,
+                    false,
+                    "Conversation was restored concurrently",
+                ));
+            }
+            _ => {
+                return Err(runtime_error(
+                    ErrorCode::ConversationEpochStale,
+                    correlation_id,
+                    false,
+                    "Conversation ownership epoch is stale",
+                ));
+            }
+        }
+        let updated = sqlx::query(
+            "UPDATE conversation.conversations
+             SET lifecycle = 1, archived_at_ms = NULL,
+                 updated_at_ms = GREATEST(updated_at_ms, $3)
+             WHERE tenant_id = $1 AND conversation_id = $2 AND lifecycle = 2",
+        )
+        .bind(commit.actor.tenant_id.into_uuid())
+        .bind(commit.append.conversation_id.into_uuid())
+        .bind(commit.unarchived_at.unix_millis())
+        .execute(&mut *prepared.transaction_mut())
+        .await
+        .map_err(|_| dependency(correlation_id))?;
+        if updated.rows_affected() != 1 {
+            return Err(runtime_error(
+                ErrorCode::ConversationSeqConflict,
+                correlation_id,
+                false,
+                "Conversation was restored concurrently",
+            ));
+        }
+        prepared
+            .commit(&commit.append)
+            .await
+            .map_err(|error| map_ledger(error, correlation_id))
+    }
+
     async fn archive_inner(
         &self,
         correlation_id: CorrelationId,
@@ -1887,6 +2034,26 @@ impl RuntimeApplicationStore for PostgresRuntimeApplicationStore {
         commit: ArchiveConversationCommit,
     ) -> ApplicationFuture<'_, Result<musteragent_ledger::AppendReceipt, RuntimeError>> {
         Box::pin(async move { self.archive_inner(correlation_id, commit).await })
+    }
+
+    fn authorize_unarchive_conversation(
+        &self,
+        actor: Actor,
+        conversation_id: ConversationId,
+        correlation_id: CorrelationId,
+    ) -> ApplicationFuture<'_, Result<UnarchiveConversationAuthority, RuntimeError>> {
+        Box::pin(async move {
+            self.authorize_unarchive_inner(actor, conversation_id, correlation_id)
+                .await
+        })
+    }
+
+    fn unarchive_conversation(
+        &self,
+        correlation_id: CorrelationId,
+        commit: UnarchiveConversationCommit,
+    ) -> ApplicationFuture<'_, Result<musteragent_ledger::AppendReceipt, RuntimeError>> {
+        Box::pin(async move { self.unarchive_inner(correlation_id, commit).await })
     }
 
     fn authorize_set_conversation_title(

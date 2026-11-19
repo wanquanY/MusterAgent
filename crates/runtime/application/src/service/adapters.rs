@@ -73,6 +73,13 @@ impl ConversationApplication for RuntimeApplication {
         Box::pin(async move { self.archive_conversation_inner(command).await })
     }
 
+    fn unarchive_conversation(
+        &self,
+        command: CommandEnvelope<UnarchiveConversation>,
+    ) -> ApplicationFuture<'_, Result<CommandAck, RuntimeError>> {
+        Box::pin(async move { self.unarchive_conversation_inner(command).await })
+    }
+
     fn set_conversation_title(
         &self,
         command: CommandEnvelope<SetConversationTitle>,

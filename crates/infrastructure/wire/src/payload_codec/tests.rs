@@ -72,6 +72,21 @@ fn canonical_domain_and_output_payloads_round_trip() {
             .unwrap_or_else(|error| panic!("{error}")),
         domain
     );
+    let unarchived = LedgerPayload::DomainEvent(DomainEvent::Conversation(
+        musteragent_conversation::ConversationEvent::Unarchived,
+    ));
+    let encoded = codec.encode(unarchived.clone());
+    assert_ne!(
+        encoded,
+        codec.encode(domain.clone()),
+        "unarchive must not reuse the archive encoding"
+    );
+    assert_eq!(
+        codec
+            .decode(LedgerRecordKind::DomainEvent, &encoded)
+            .unwrap_or_else(|error| panic!("{error}")),
+        unarchived
+    );
 
     let title = LedgerPayload::DomainEvent(DomainEvent::Conversation(
         musteragent_conversation::ConversationEvent::TitleChanged {

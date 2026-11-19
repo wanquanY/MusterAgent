@@ -955,6 +955,19 @@ pub trait RuntimeApplicationStore: Send + Sync {
         commit: ArchiveConversationCommit,
     ) -> ApplicationFuture<'_, Result<AppendReceipt, RuntimeError>>;
 
+    fn authorize_unarchive_conversation(
+        &self,
+        actor: Actor,
+        conversation_id: ConversationId,
+        correlation_id: musteragent_identity::CorrelationId,
+    ) -> ApplicationFuture<'_, Result<UnarchiveConversationAuthority, RuntimeError>>;
+
+    fn unarchive_conversation(
+        &self,
+        correlation_id: musteragent_identity::CorrelationId,
+        commit: UnarchiveConversationCommit,
+    ) -> ApplicationFuture<'_, Result<AppendReceipt, RuntimeError>>;
+
     fn authorize_set_conversation_title(
         &self,
         actor: Actor,

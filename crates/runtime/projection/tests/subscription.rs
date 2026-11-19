@@ -12,7 +12,7 @@ use musteragent_conversation::{
     ConversationLifecycle, ConversationPage, ConversationSummary, ConversationView,
     CreateConversation, EditAndResubmitMessage, ForkConversationContext, GetConversation,
     ListConversations, RetractMessage, SetConversationTitle, SubmitMessage,
-    SubscribeConversationCatalog,
+    SubscribeConversationCatalog, UnarchiveConversation,
 };
 use musteragent_event_envelope::{LedgerCursor, LedgerMetadata, LedgerRecordKind, Producer};
 use musteragent_identity::{
@@ -706,6 +706,13 @@ impl ConversationApplication for AuthorizedConversations {
     fn archive_conversation(
         &self,
         _command: CommandEnvelope<ArchiveConversation>,
+    ) -> ApplicationFuture<'_, Result<CommandAck, RuntimeError>> {
+        Box::pin(async { unreachable!("catalog fixture does not execute commands") })
+    }
+
+    fn unarchive_conversation(
+        &self,
+        _command: CommandEnvelope<UnarchiveConversation>,
     ) -> ApplicationFuture<'_, Result<CommandAck, RuntimeError>> {
         Box::pin(async { unreachable!("catalog fixture does not execute commands") })
     }
