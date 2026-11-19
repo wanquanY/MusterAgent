@@ -408,7 +408,7 @@ fn openai_responses(
                         "type": "function",
                         "name": tool.model_name.as_str(),
                         "description": tool.description.as_str(),
-                        "parameters": openai_schema(&tool.input_schema)?,
+                        "parameters": openai_tool_parameters(tool)?,
                     });
                     if supports_strict_tool_schema(request) {
                         definition["strict"] = Value::Bool(tool.strict);
@@ -539,7 +539,7 @@ fn anthropic(
                     let mut definition = json!({
                         "name": tool.model_name.as_str(),
                         "description": tool.description.as_str(),
-                        "input_schema": to_serde(&tool.input_schema)?,
+                        "input_schema": crate::tool_schema::provider_tool_schema(&tool.input_schema)?,
                     });
                     if tool.strict && supports_strict_tool_schema(request) {
                         definition["strict"] = Value::Bool(true);
@@ -707,7 +707,7 @@ fn bedrock_converse(
             let mut specification = json!({
                 "name": tool.model_name.as_str(),
                 "description": tool.description.as_str(),
-                "inputSchema": {"json": to_serde(&tool.input_schema)?},
+                "inputSchema": {"json": crate::tool_schema::provider_tool_schema(&tool.input_schema)?},
             });
             if tool.strict && supports_strict_tool_schema(request) {
                 specification["strict"] = Value::Bool(true);
@@ -911,7 +911,7 @@ fn openai_tool(
     let mut function = json!({
         "name": tool.model_name.as_str(),
         "description": tool.description.as_str(),
-        "parameters": openai_schema(&tool.input_schema)?,
+        "parameters": openai_tool_parameters(tool)?,
     });
     if supports_strict {
         function["strict"] = Value::Bool(tool.strict);
@@ -934,7 +934,7 @@ fn google_tool(tool: &CanonicalToolDefinition) -> Result<Value, MappingError> {
     Ok(json!({
         "name": tool.model_name.as_str(),
         "description": tool.description.as_str(),
-        "parametersJsonSchema": to_serde(&tool.input_schema)?,
+        "parametersJsonSchema": crate::tool_schema::provider_tool_schema(&tool.input_schema)?,
     }))
 }
 
@@ -1668,12 +1668,20 @@ fn join_instructions(request: &CanonicalModelRequest) -> String {
         .join("\n\n")
 }
 
+/// OpenAI strict-mode projection of the portable tool parameters.
+fn openai_tool_parameters(tool: &CanonicalToolDefinition) -> Result<Value, MappingError> {
+    crate::structured_output::openai_schema(crate::tool_schema::provider_tool_schema(
+        &tool.input_schema,
+    )?)
+    .map_err(|_| MappingError::UnsupportedJsonSchemaOutput)
+}
+
 fn openai_schema(value: &JsonValue) -> Result<Value, MappingError> {
     crate::structured_output::openai_schema(to_serde(value)?)
         .map_err(|_| MappingError::UnsupportedJsonSchemaOutput)
 }
 
-fn to_serde(value: &JsonValue) -> Result<Value, MappingError> {
+pub(crate) fn to_serde(value: &JsonValue) -> Result<Value, MappingError> {
     Ok(match value {
         JsonValue::Null => Value::Null,
         JsonValue::Bool(value) => Value::Bool(*value),

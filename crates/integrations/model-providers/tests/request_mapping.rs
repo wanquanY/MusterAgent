@@ -1780,5 +1780,48 @@ fn anthropic_requests_mark_prompt_cache_breakpoints() {
                 }
             }
         }
+
+/// Gateways translate one wire protocol into another Provider's API, so tool
+/// parameters must be portable on every format: no top-level combinators.
+#[test]
+fn every_wire_format_sends_portable_tool_parameters() {
+    let branch = |field: &str| {
+        JsonValue::Object(BTreeMap::from([(
+            "required".into(),
+            JsonValue::Array(vec![JsonValue::String(field.into())]),
+        )]))
+    };
+    let mut tool = tool_definition();
+    let JsonValue::Object(schema) = &mut tool.input_schema else {
+        panic!("object schema");
+    };
+    schema.insert(
+        "oneOf".into(),
+        JsonValue::Array(vec![branch("value"), branch("record_id")]),
+    );
+    schema.insert("allOf".into(), JsonValue::Array(vec![branch("value")]));
+    for format in [
+        ApiFormat::OpenAiChatCompletions,
+        ApiFormat::OpenAiResponses,
+        ApiFormat::AnthropicMessages,
+        ApiFormat::GoogleGenerateContent,
+        ApiFormat::BedrockConverse,
+        ApiFormat::BedrockInvokeModel,
+    ] {
+        let mut request = request(format);
+        request.tools = vec![tool.clone()];
+        let mapped = map_request(&request, &ResolvedContents::default())
+            .unwrap_or_else(|error| panic!("{format:?} mapping failed: {error}"));
+        let body = serde_json::to_string(&mapped.body).expect("mapped body JSON");
+        for combinator in ["\"oneOf\"", "\"allOf\"", "\"anyOf\""] {
+            assert!(
+                !body.contains(combinator),
+                "{format:?} sent {combinator}: {body}"
+            );
+        }
+        assert!(
+            body.contains("Provide exactly one of these argument shapes"),
+            "{format:?}"
+        );
     }
 }
