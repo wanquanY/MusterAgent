@@ -181,6 +181,7 @@ fn error_code(value: ErrorCode) -> i32 {
         ErrorCode::CursorCompacted => wire::ErrorCode::CursorCompacted,
         ErrorCode::PolicyDenied => wire::ErrorCode::PolicyDenied,
         ErrorCode::NativePermissionReduced => wire::ErrorCode::NativePermissionReduced,
+        ErrorCode::BrowserExecutionUnavailable => wire::ErrorCode::BrowserExecutionUnavailable,
         ErrorCode::QuotaExceeded => wire::ErrorCode::QuotaExceeded,
         ErrorCode::CreditsExhausted => wire::ErrorCode::CreditsExhausted,
         ErrorCode::ModelNotEntitled => wire::ErrorCode::ModelNotEntitled,

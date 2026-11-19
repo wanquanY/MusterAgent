@@ -384,11 +384,13 @@ async fn mismatched_pinned_tool_contract_cannot_choose_or_dispatch_an_executor()
 
 #[test]
 fn unavailable_executor_error_remains_visible_in_tool_failure() {
-    let outcome =
-        crate::browser_execution::gateway_failure(BrowserProviderRuntimeError::SandboxRoute(
-            SandboxRouteError::ServerUnavailable(SandboxRouteReason::NoOnlineBrowserClient),
-        ))
-        .expect("failure outcome");
+    let outcome = crate::browser_execution::gateway_failure(
+        BrowserProviderRuntimeError::SandboxRoute(SandboxRouteError::ServerUnavailable(
+            SandboxRouteReason::NoOnlineBrowserClient,
+        )),
+        &crate::BrowserUnavailableNotice::default(),
+    )
+    .expect("failure outcome");
     let musteragent_runtime_capability::CapabilityOutcome::Failed {
         error,
         retry_disposition,
@@ -412,4 +414,71 @@ fn unavailable_executor_error_remains_visible_in_tool_failure() {
         retry_disposition,
         musteragent_runtime_contract::RetryDisposition::DoNotRetry
     );
+}
+
+#[test]
+fn missing_browser_provider_is_a_retryable_host_localizable_failure() {
+    let localized =
+        crate::BrowserUnavailableNotice::new("Browser sandbox offline: reopen the page")
+            .expect("safe text");
+    for (notice, expected) in [
+        (
+            crate::BrowserUnavailableNotice::default(),
+            crate::BrowserUnavailableNotice::DEFAULT_TEXT,
+        ),
+        (
+            localized.clone(),
+            "Browser sandbox offline: reopen the page",
+        ),
+    ] {
+        for error in [
+            BrowserProviderRuntimeError::ProviderUnavailable,
+            BrowserProviderRuntimeError::SandboxRoute(SandboxRouteError::BrowserUnavailable),
+        ] {
+            let outcome =
+                crate::browser_execution::gateway_failure(error, &notice).expect("failure outcome");
+            let musteragent_runtime_capability::CapabilityOutcome::Failed {
+                error,
+                retry_disposition,
+                ..
+            } = outcome
+            else {
+                panic!("explicit failure")
+            };
+            assert_eq!(
+                error.code,
+                musteragent_runtime_contract::ErrorCode::BrowserExecutionUnavailable
+            );
+            assert_eq!(error.code.as_str(), "browser_execution_unavailable");
+            assert_eq!(error.category, error.code.category());
+            assert!(error.retryable);
+            assert_eq!(error.safe_message.as_str(), expected);
+            assert_eq!(
+                retry_disposition,
+                musteragent_runtime_contract::RetryDisposition::RetryNewAttempt
+            );
+        }
+    }
+    // A required server sandbox or a policy conflict is not fixed by reopening
+    // a page; those stay non-retryable.
+    for error in [
+        SandboxRouteError::PolicyConflict,
+        SandboxRouteError::ServerUnavailable(SandboxRouteReason::ApiSurface),
+    ] {
+        let outcome = crate::browser_execution::gateway_failure(
+            BrowserProviderRuntimeError::SandboxRoute(error),
+            &localized,
+        )
+        .expect("failure outcome");
+        let musteragent_runtime_capability::CapabilityOutcome::Failed { error, .. } = outcome
+        else {
+            panic!("explicit failure")
+        };
+        assert_eq!(
+            error.code,
+            musteragent_runtime_contract::ErrorCode::CapabilityUnavailable
+        );
+        assert!(!error.retryable);
+    }
+    assert!(crate::BrowserUnavailableNotice::new("").is_err());
 }

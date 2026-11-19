@@ -117,3 +117,40 @@ fn storage_publication_strategy_is_explicit_and_defaults_to_standard() {
         assert!(parse(line).is_err(), "{line}");
     }
 }
+
+#[test]
+fn browser_unavailable_message_is_host_configurable_with_an_english_default() {
+    let env = BTreeMap::new();
+    let default = CloudWorkerSettings::from_values(example(), &env).expect("documented config");
+    assert_eq!(
+        default
+            .browser_unavailable_notice()
+            .expect("default notice")
+            .text()
+            .as_str(),
+        musteragent_tool_executor::BrowserUnavailableNotice::DEFAULT_TEXT
+    );
+    let localized = CloudWorkerSettings::from_values(
+        &format!(
+            "browser_unavailable_message = \"Reopen the sandbox page, then retry.\"\n{}",
+            example()
+        ),
+        &env,
+    )
+    .expect("localized config");
+    assert_eq!(
+        localized
+            .browser_unavailable_notice()
+            .expect("configured notice")
+            .text()
+            .as_str(),
+        "Reopen the sandbox page, then retry."
+    );
+    assert!(
+        CloudWorkerSettings::from_values(
+            &format!("browser_unavailable_message = \"\"\n{}", example()),
+            &env
+        )
+        .is_err()
+    );
+}

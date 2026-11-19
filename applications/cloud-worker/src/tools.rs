@@ -24,6 +24,8 @@ pub struct ToolServices {
     pub model: Arc<dyn musteragent_runtime_model::ModelProvider>,
     pub metering: Arc<dyn musteragent_runtime_model::MeteringPublicationEncoder>,
     pub releases: Vec<musteragent_identity::ProductReleaseRef>,
+    /// Text for the retryable `browser_execution_unavailable` tool failure.
+    pub browser_unavailable_notice: musteragent_tool_executor::BrowserUnavailableNotice,
 }
 
 /// Compose default Task behavior per invocation's verified actor, not process identity.
@@ -102,6 +104,7 @@ fn product_dispatcher(
         model,
         metering,
         releases: _,
+        browser_unavailable_notice,
     } = services;
     let codec = Arc::new(ProtobufLedgerPayloadCodec);
     let clock = Arc::new(SystemRuntimeClock);
@@ -417,22 +420,28 @@ fn product_dispatcher(
                 content.clone(),
                 queries.clone(),
             ))),
-            Kind::BrowserEnvironment => Some(Arc::new(BrowserEnvironmentCapabilityHandler::new(
-                manifest,
-                browser.clone(),
-                content.clone(),
-                clock.clone(),
-            ))),
-            Kind::BrowserPython if entry.definition.key.as_str() == "data.python.run@11" => {
-                Some(Arc::new(BrowserWorkspaceCapabilityHandler::new(
+            Kind::BrowserEnvironment => Some(Arc::new(
+                BrowserEnvironmentCapabilityHandler::new(
                     manifest,
-                    resource_store.clone(),
-                    content.clone(),
                     browser.clone(),
-                    resource_commit.clone(),
+                    content.clone(),
                     clock.clone(),
-                    queries.clone(),
-                )))
+                )
+                .with_unavailable_notice(browser_unavailable_notice.clone()),
+            )),
+            Kind::BrowserPython if entry.definition.key.as_str() == "data.python.run@11" => {
+                Some(Arc::new(
+                    BrowserWorkspaceCapabilityHandler::new(
+                        manifest,
+                        resource_store.clone(),
+                        content.clone(),
+                        browser.clone(),
+                        resource_commit.clone(),
+                        clock.clone(),
+                        queries.clone(),
+                    )
+                    .with_unavailable_notice(browser_unavailable_notice.clone()),
+                ))
             }
             Kind::BrowserPython => Some(Arc::new(
                 BrowserPythonCapabilityHandler::new(
@@ -445,7 +454,8 @@ fn product_dispatcher(
                     artifact_commit.clone(),
                     clock.clone(),
                 )
-                .with_file_queries(queries.clone()),
+                .with_file_queries(queries.clone())
+                .with_unavailable_notice(browser_unavailable_notice.clone()),
             )),
             Kind::SkillPreview => Some(Arc::new(SkillPreviewCapabilityHandler::new(
                 manifest,

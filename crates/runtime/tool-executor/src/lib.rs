@@ -16,6 +16,7 @@ mod artifact;
 mod browser_environment;
 pub use browser_environment::BrowserEnvironmentCapabilityHandler;
 mod browser_execution;
+pub use browser_execution::BrowserUnavailableNotice;
 mod browser_python;
 pub use browser_python::BrowserPythonCapabilityHandler;
 mod browser_workspace;

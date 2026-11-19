@@ -37,6 +37,7 @@ pub struct BrowserWorkspaceCapabilityHandler<C: FencedResourceToolCommitter> {
     browser: Arc<dyn BrowserGatewayStore>,
     committer: Arc<C>,
     clock: Arc<dyn RuntimeClock>,
+    unavailable_notice: crate::BrowserUnavailableNotice,
 }
 
 #[derive(Debug, Deserialize)]
@@ -98,7 +99,16 @@ impl<C: FencedResourceToolCommitter> BrowserWorkspaceCapabilityHandler<C> {
             committer,
             clock,
             file_queries,
+            unavailable_notice: crate::BrowserUnavailableNotice::default(),
         }
+    }
+
+    /// Host-configured text for a retryable `browser_execution_unavailable`
+    /// failure; defaults to [`crate::BrowserUnavailableNotice::DEFAULT_TEXT`].
+    #[must_use]
+    pub fn with_unavailable_notice(mut self, notice: crate::BrowserUnavailableNotice) -> Self {
+        self.unavailable_notice = notice;
+        self
     }
     async fn read(&self, invocation: &CapabilityInvocation) -> Result<ExecuteInput, LoopPortError> {
         if invocation.capability_key.as_str() != "data.python.run@11" {
@@ -557,6 +567,7 @@ where
             invocation,
             prepare: Box::pin(async move { self.prepare(attempt, material, &preparing).await }),
             gateway_failure: crate::browser_execution::gateway_failure,
+            unavailable_notice: &self.unavailable_notice,
         }
         .operation(binding)
     }

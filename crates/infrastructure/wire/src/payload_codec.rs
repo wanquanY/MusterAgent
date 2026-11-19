@@ -557,6 +557,7 @@ closed_enum!(error_code, wire::ErrorCode, ErrorCode, {
     CursorCompacted => ErrorCode::CursorCompacted,
     PolicyDenied => ErrorCode::PolicyDenied,
     NativePermissionReduced => ErrorCode::NativePermissionReduced,
+    BrowserExecutionUnavailable => ErrorCode::BrowserExecutionUnavailable,
     QuotaExceeded => ErrorCode::QuotaExceeded,
     CreditsExhausted => ErrorCode::CreditsExhausted,
     ModelNotEntitled => ErrorCode::ModelNotEntitled,
