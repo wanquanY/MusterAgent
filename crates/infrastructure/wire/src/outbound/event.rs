@@ -149,6 +149,9 @@ fn conversation_event(value: ConversationEvent) -> wire::domain_event::Event {
         ConversationEvent::Archived => {
             wire::domain_event::Event::ConversationArchived(wire::ConversationArchived {})
         }
+        ConversationEvent::Unarchived => {
+            wire::domain_event::Event::ConversationUnarchived(wire::ConversationUnarchived {})
+        }
         ConversationEvent::TitleChanged {
             title,
             origin,

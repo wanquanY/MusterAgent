@@ -45,6 +45,8 @@ enum CancelReason {
 
 message ConversationArchived {}
 
+message ConversationUnarchived {}
+
 message ConversationCreated {
   ConversationKind kind = 1;
   RuntimeHome control_home = 2;

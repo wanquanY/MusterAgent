@@ -12,7 +12,7 @@ use musteragent_conversation::{
     ConversationApplication, ConversationEvent, ConversationLifecycle, ConversationTitleOrigin,
     EditAndResubmitMessage, ForkConversationContext, GetConversation, MessageRole, Participant,
     ParticipantDisplaySnapshot, ParticipantIdentity, ParticipantKind, RetractMessage,
-    SetConversationTitle, SubmitMessage, first_user_message_title,
+    SetConversationTitle, SubmitMessage, UnarchiveConversation, first_user_message_title,
 };
 use musteragent_execution_grant::{
     EncodedExecutionGrantProof, ExecutionGrant, ExecutionGrantProofEncoder,
@@ -56,7 +56,7 @@ use musteragent_runtime_session::{
     AdmissionCommit, AdmissionDenialCommit, AdmissionDenialQuery, ArchiveConversationCommit,
     CreateConversationCommit, EditAndResubmitCommit, ForkContextCommit, RetractMessageCommit,
     RunControlCommit, RuntimeApplicationStore, RuntimeInteractionApplicationStore,
-    SetConversationTitleCommit,
+    SetConversationTitleCommit, UnarchiveConversationCommit,
 };
 
 mod admission;

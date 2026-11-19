@@ -81,6 +81,10 @@ message ArchiveConversationCommand {
   ActiveRunArchivePolicy active_run_policy = 2;
 }
 
+message UnarchiveConversationCommand {
+  CommandMetadata metadata = 1;
+}
+
 message ArtifactImportProvenance {
   string legacy_artifact_id = 1;
   string legacy_created_by_run_id = 2;
@@ -1320,6 +1324,7 @@ service RuntimeService {
   rpc CancelInteraction(CancelInteractionCommand) returns (CommandAck);
   rpc SetConversationTitle(SetConversationTitleCommand) returns (CommandAck);
   rpc ArchiveConversation(ArchiveConversationCommand) returns (CommandAck);
+  rpc UnarchiveConversation(UnarchiveConversationCommand) returns (CommandAck);
   rpc GetConversation(GetConversationRequest) returns (GetConversationResponse);
   rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
   rpc ListWorkspaceCatalogActivity(ListWorkspaceCatalogActivityRequest) returns (ListWorkspaceCatalogActivityResponse);

@@ -33,6 +33,25 @@ pub struct ArchiveConversationCommit {
     pub append: AppendRequest,
 }
 
+/// Authority to return an archived Conversation to the active catalog. Same
+/// tenant and participant authorization as archive.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct UnarchiveConversationAuthority {
+    pub tenant_id: TenantId,
+    pub conversation_id: ConversationId,
+    pub home_epoch: HomeEpoch,
+    pub current_offset: LedgerOffset,
+    pub lifecycle: ConversationLifecycle,
+    pub requested_by_participant_id: ParticipantId,
+}
+
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct UnarchiveConversationCommit {
+    pub actor: Actor,
+    pub unarchived_at: UtcTimestamp,
+    pub append: AppendRequest,
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct SetConversationTitleAuthority {
     pub tenant_id: TenantId,

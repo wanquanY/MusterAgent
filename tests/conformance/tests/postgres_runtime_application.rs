@@ -9,7 +9,7 @@ use musteragent_conversation::{
     ActivateConversationContextBranch, ArchiveConversation, ContextBranchOrigin,
     ConversationApplication, ConversationKind, ConversationLifecycle, CreateConversation,
     EditAndResubmitMessage, ForkConversationContext, GetConversation, ParticipantKind,
-    RetractMessage, SubmitMessage,
+    RetractMessage, SubmitMessage, UnarchiveConversation,
 };
 use musteragent_event_envelope::{ExecutionScope, LedgerCursor, RuntimeHome};
 use musteragent_execution_grant::{
@@ -1812,6 +1812,124 @@ async fn application_create_and_submit_are_atomic_authorized_and_idempotent() {
             .state
             .status(),
         RunStatus::Cancelled
+    );
+
+    // Unarchive: guarded like archive, idempotent, and reversible again.
+    let guarded_metadata =
+        |idempotency: &str, view: &musteragent_conversation::ConversationView| {
+            metadata(
+                CommandId::generate(),
+                actor,
+                idempotency,
+                now,
+                Some(ConversationGuard {
+                    conversation_id,
+                    expected_home_epoch: view.conversation.home_epoch,
+                    expected_conversation_seq: Some(
+                        ConversationSeq::new(
+                            view.conversation
+                                .next_conversation_seq
+                                .get()
+                                .saturating_sub(1),
+                        )
+                        .expect("current sequence"),
+                    ),
+                }),
+            )
+        };
+    let current = || async {
+        application
+            .get_conversation(GetConversation {
+                actor,
+                conversation_id,
+            })
+            .await
+            .expect("current Conversation")
+    };
+    let archived = current().await;
+    let stranger = Actor {
+        tenant_id,
+        principal_id: PrincipalId::generate(),
+        principal_kind: PrincipalKind::User,
+    };
+    let mut stranger_metadata = guarded_metadata("unarchive-stranger", &archived);
+    stranger_metadata.actor = stranger;
+    let denied = application
+        .unarchive_conversation(
+            CommandEnvelope::new(stranger_metadata, UnarchiveConversation {})
+                .expect("stranger unarchive command"),
+        )
+        .await
+        .expect_err("a non-participant cannot unarchive");
+    assert_eq!(denied.code, ErrorCode::ConversationNotFound);
+    assert_eq!(
+        current().await.conversation.lifecycle,
+        ConversationLifecycle::Archived
+    );
+
+    let unarchive = CommandEnvelope::new(
+        guarded_metadata("unarchive-restore", &archived),
+        UnarchiveConversation {},
+    )
+    .expect("unarchive command");
+    let restored = application
+        .unarchive_conversation(unarchive.clone())
+        .await
+        .expect("unarchive archived Conversation");
+    assert_eq!(restored.disposition, CommandDisposition::Committed);
+    assert_eq!(
+        restored.first_conversation_seq,
+        restored.last_conversation_seq
+    );
+    let replayed = application
+        .unarchive_conversation(unarchive)
+        .await
+        .expect("replayed unarchive");
+    assert_eq!(replayed.disposition, CommandDisposition::Duplicate);
+    assert_eq!(
+        replayed.last_conversation_seq,
+        restored.last_conversation_seq
+    );
+    let active = current().await;
+    assert_eq!(active.conversation.lifecycle, ConversationLifecycle::Active);
+
+    // A fresh unarchive of an already active Conversation records nothing.
+    let already_active = application
+        .unarchive_conversation(
+            CommandEnvelope::new(
+                guarded_metadata("unarchive-already-active", &active),
+                UnarchiveConversation {},
+            )
+            .expect("unarchive active command"),
+        )
+        .await
+        .expect("unarchive of an active Conversation");
+    assert_eq!(already_active.disposition, CommandDisposition::Duplicate);
+    assert_eq!(
+        current().await.conversation.next_conversation_seq,
+        active.conversation.next_conversation_seq
+    );
+
+    // The restored Conversation can be archived again.
+    assert_eq!(
+        application
+            .archive_conversation(
+                CommandEnvelope::new(
+                    guarded_metadata("archive-after-unarchive", &active),
+                    ArchiveConversation {
+                        active_run_policy: ActiveRunArchivePolicy::Reject,
+                    },
+                )
+                .expect("re-archive command"),
+            )
+            .await
+            .expect("archive after unarchive")
+            .disposition,
+        CommandDisposition::Committed
+    );
+    assert_eq!(
+        current().await.conversation.lifecycle,
+        ConversationLifecycle::Archived
     );
 }
 

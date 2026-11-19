@@ -721,6 +721,7 @@ pub fn ledger_record_reaches_product_content(
             ConversationEvent::WorkspaceAssigned { .. }
             | ConversationEvent::Created { .. }
             | ConversationEvent::Archived
+            | ConversationEvent::Unarchived
             | ConversationEvent::TitleChanged { .. }
             | ConversationEvent::ParticipantJoined { .. }
             | ConversationEvent::ParticipantLeft
