@@ -80,6 +80,7 @@ pub fn legacy_snapshot(
             executor_participant_id: Some(fixture.executor_id),
             parent_run_id: None,
             delegation_id: None,
+            input_message_id: None,
             retry_source_message_id: None,
             retry_source_attempt_number: None,
             terminal_failure: None,

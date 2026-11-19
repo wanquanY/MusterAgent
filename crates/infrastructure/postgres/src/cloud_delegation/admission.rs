@@ -114,6 +114,7 @@ pub(super) fn batch(
                 execution_home: RuntimeHome::Cloud,
                 parent_run_id: Some(command.run_context.run_id),
                 delegation_id: Some(delegation_id),
+                input_message_id: None,
                 retry_source_message_id: None,
                 retry_source_attempt_number: None,
             }),

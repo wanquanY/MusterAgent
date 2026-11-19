@@ -7,6 +7,7 @@ mod conversation_catalog_api;
 mod conversation_catalog_application;
 mod conversation_catalog_projector;
 mod failure_backfill;
+mod input_backfill;
 mod outbox;
 mod product_reducer;
 mod product_snapshot;
@@ -52,6 +53,10 @@ pub use conversation_catalog_projector::{
 pub use failure_backfill::{
     PROJECTION_FAILURE_BACKFILL_PAGE_SIZE, ProjectionRunFailureQuery, ProjectionRunFailureSource,
     RetainedProjectionRunEvent, backfill_projection_run_failures,
+};
+pub use input_backfill::{
+    ProjectionRunInputQuery, ProjectionRunInputSource, RetainedProjectionRunInput,
+    backfill_projection_run_inputs,
 };
 pub use outbox::{
     DurableProjector, LocalProjectionSignal, OutboxLease, ProjectionDisposition, ProjectionError,

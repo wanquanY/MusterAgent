@@ -390,6 +390,7 @@ pub(crate) fn run_event(value: RunEvent) -> wire::domain_event::Event {
             execution_home,
             parent_run_id: parent,
             delegation_id: delegation,
+            input_message_id,
             retry_source_message_id,
             retry_source_attempt_number,
         } => wire::domain_event::Event::RunAdmitted(wire::RunAdmitted {
@@ -397,6 +398,7 @@ pub(crate) fn run_event(value: RunEvent) -> wire::domain_event::Event {
             execution_home: Some(runtime_home(execution_home)),
             parent_run_id: parent.map(run_id),
             delegation_id: delegation.map(delegation_id),
+            input_message_id: input_message_id.map(message_id),
             retry_source_message_id: retry_source_message_id.map(message_id),
             retry_source_attempt_number: retry_source_attempt_number
                 .map_or(0, musteragent_identity::AttemptNumber::get),

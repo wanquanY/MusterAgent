@@ -394,6 +394,7 @@ impl RuntimeApplication {
                     execution_home,
                     parent_run_id: Some(command.payload.source_run_id),
                     delegation_id: None,
+                    input_message_id: Some(command.payload.source_message_id),
                     retry_source_message_id: Some(command.payload.source_message_id),
                     retry_source_attempt_number: Some(command.payload.expected_attempt_number),
                 }),

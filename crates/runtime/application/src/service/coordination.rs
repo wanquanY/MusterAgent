@@ -644,6 +644,7 @@ fn coordination_batch(
                 execution_home: preparation.control_home,
                 parent_run_id: None,
                 delegation_id: None,
+                input_message_id: None,
                 retry_source_message_id: None,
                 retry_source_attempt_number: None,
             }),

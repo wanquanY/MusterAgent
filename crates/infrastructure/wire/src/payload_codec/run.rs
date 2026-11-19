@@ -9,6 +9,7 @@ pub(super) fn decode(value: wire::domain_event::Event) -> Result<DomainEvent, Su
             execution_home: runtime_home(value.execution_home)?,
             parent_run_id: optional_id(value.parent_run_id.map(|value| value.value))?,
             delegation_id: optional_id(value.delegation_id.map(|value| value.value))?,
+            input_message_id: optional_id(value.input_message_id.map(|value| value.value))?,
             retry_source_message_id: optional_id(
                 value.retry_source_message_id.map(|value| value.value),
             )?,

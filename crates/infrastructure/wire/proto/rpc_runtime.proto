@@ -982,6 +982,7 @@ message ProjectedRun {
   
   ProjectedRunFailure retry_failure = 21;
   ErrorCode recovery_error_code = 22;
+  MessageId input_message_id = 23;
 }
 
 message ProjectedRunFailure {
@@ -1291,6 +1292,7 @@ message RunView {
   ActivityId wait_child_activity_id = 26;
   DelegationGroupId wait_delegation_group_id = 27;
   ErrorCode recovery_error_code = 28;
+  MessageId input_message_id = 29;
 }
 
 service RuntimeContentService {

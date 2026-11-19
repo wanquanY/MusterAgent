@@ -476,6 +476,7 @@ impl RuntimeApplication {
                     execution_home,
                     parent_run_id: run.context.parent_run_id,
                     delegation_id: run.context.delegation_id,
+                    input_message_id: Some(command.payload.message_id),
                     retry_source_message_id: None,
                     retry_source_attempt_number: None,
                 }),

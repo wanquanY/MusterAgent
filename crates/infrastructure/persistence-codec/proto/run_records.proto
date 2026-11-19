@@ -118,6 +118,7 @@ message RunAdmitted {
   // causal provenance, not a Context branch or a second user Message.
   MessageId retry_source_message_id = 5;
   uint32 retry_source_attempt_number = 6;
+  MessageId input_message_id = 7;
 }
 
 message RunBudgetAmended {

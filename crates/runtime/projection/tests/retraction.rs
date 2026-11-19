@@ -236,6 +236,130 @@ fn snapshot_tail_retraction_removes_the_entire_derived_run() {
     assert_eq!(snapshot.content_manifest, vec![retained_content]);
 }
 
+#[test]
+fn retraction_follows_run_input_message_links_across_retries_and_surviving_turns() {
+    let tenant_id = TenantId::generate();
+    let conversation_id = ConversationId::generate();
+    let now = UtcTimestamp::from_unix_millis(1_800_000_000_000);
+    let retracted_message_id = MessageId::generate();
+    let surviving_message_id = MessageId::generate();
+    let retracted_run_id = RunId::generate();
+    let retry_run_id = RunId::generate();
+    let surviving_run_id = RunId::generate();
+    let retracted_activity_id = ActivityId::generate();
+    let retry_activity_id = ActivityId::generate();
+    let surviving_activity_id = ActivityId::generate();
+    let shared_content = content_ref("identical user prompt");
+
+    let mut retracted_user = projected_message(
+        retracted_message_id,
+        retracted_run_id,
+        shared_content.clone(),
+        now,
+    );
+    // Even if an unupgraded message had source_run_id = None, ProjectedRun.input_message_id
+    // links both the original and retried runs to the retracted message.
+    retracted_user.source_run_id = None;
+    let surviving_user = projected_message(
+        surviving_message_id,
+        surviving_run_id,
+        shared_content.clone(),
+        now,
+    );
+
+    let mut original_run = projected_run(
+        retracted_run_id,
+        retracted_activity_id,
+        None,
+        None,
+        RunStatus::Failed,
+        now,
+    );
+    original_run.input_message_id = Some(retracted_message_id);
+    let mut retry_run = projected_run(
+        retry_run_id,
+        retry_activity_id,
+        Some(retracted_run_id),
+        None,
+        RunStatus::Completed,
+        now,
+    );
+    retry_run.input_message_id = Some(retracted_message_id);
+    retry_run.retry_source_message_id = Some(retracted_message_id);
+    let mut surviving_run = projected_run(
+        surviving_run_id,
+        surviving_activity_id,
+        None,
+        None,
+        RunStatus::Completed,
+        now,
+    );
+    surviving_run.input_message_id = Some(surviving_message_id);
+
+    let mut snapshot = ConversationProjectionSnapshot {
+        schema_version: PROJECTION_SNAPSHOT_SCHEMA_VERSION.to_owned(),
+        snapshot_id: ProjectionSnapshotId::generate(),
+        tenant_id,
+        conversation_id,
+        home_epoch: HomeEpoch::new(1).expect("home epoch"),
+        through_conversation_seq: ConversationSeq::new(12).expect("sequence").into(),
+        messages: vec![retracted_user, surviving_user],
+        tool_timeline: Vec::new(),
+        context_compactions: Vec::new(),
+        pending_interactions: Vec::new(),
+        activities: vec![
+            projected_activity(
+                retracted_activity_id,
+                ActivityKind::Chat,
+                ActivityStatus::Failed,
+                None,
+                retracted_activity_id,
+                now,
+            ),
+            projected_activity(
+                retry_activity_id,
+                ActivityKind::Chat,
+                ActivityStatus::Completed,
+                None,
+                retry_activity_id,
+                now,
+            ),
+            projected_activity(
+                surviving_activity_id,
+                ActivityKind::Chat,
+                ActivityStatus::Completed,
+                None,
+                surviving_activity_id,
+                now,
+            ),
+        ],
+        runs: vec![original_run, retry_run, surviving_run],
+        active_runs: Vec::new(),
+        artifacts: Vec::new(),
+        stream_outputs: Vec::new(),
+        content_manifest: vec![shared_content.clone()],
+        checksum: Sha256::digest(b"before-retraction"),
+        created_at: now,
+    };
+
+    ProjectionRetraction::new(retracted_message_id, None)
+        .apply_to_snapshot(&mut snapshot)
+        .expect("retraction must succeed");
+
+    assert_eq!(snapshot.messages.len(), 1);
+    assert_eq!(snapshot.messages[0].message_id, surviving_message_id);
+    assert_eq!(snapshot.messages[0].source_run_id, Some(surviving_run_id));
+    assert_eq!(snapshot.runs.len(), 1);
+    assert_eq!(snapshot.runs[0].run_id, surviving_run_id);
+    assert_eq!(
+        snapshot.runs[0].input_message_id,
+        Some(surviving_message_id)
+    );
+    assert_eq!(snapshot.activities.len(), 1);
+    assert_eq!(snapshot.activities[0].activity_id, surviving_activity_id);
+    assert_eq!(snapshot.content_manifest, vec![shared_content]);
+}
+
 fn projected_activity(
     activity_id: ActivityId,
     kind: ActivityKind,
@@ -273,6 +397,7 @@ fn projected_run(
         executor_participant_id: Some(ParticipantId::generate()),
         parent_run_id,
         delegation_id,
+        input_message_id: None,
         retry_source_message_id: None,
         retry_source_attempt_number: None,
         terminal_failure: None,

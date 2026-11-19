@@ -924,6 +924,9 @@ fn projected_run(value: &ProjectedRun) -> wire::ProjectedRun {
         attempt_number: value.attempt_number.map_or(0, AttemptNumber::get),
         next_attempt_number: value.next_attempt_number.map_or(0, AttemptNumber::get),
         retry_not_before: value.retry_not_before.map(timestamp),
+        input_message_id: value.input_message_id.map(|item| wire::MessageId {
+            value: item.to_string(),
+        }),
         retry_source_message_id: value.retry_source_message_id.map(|item| wire::MessageId {
             value: item.to_string(),
         }),
@@ -972,6 +975,10 @@ fn decode_projected_run(
             .transpose()?,
         delegation_id: value
             .delegation_id
+            .map(|item| parse_id(Some(item.value)))
+            .transpose()?,
+        input_message_id: value
+            .input_message_id
             .map(|item| parse_id(Some(item.value)))
             .transpose()?,
         retry_source_message_id: value

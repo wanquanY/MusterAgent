@@ -405,3 +405,115 @@ fn pre_f1_usage_remains_replayable_without_becoming_canonical_usage() {
             .is_err()
     );
 }
+
+#[test]
+fn run_admitted_round_trips_input_message_and_decodes_legacy_records_without_it() {
+    use musteragent_event_envelope::RuntimeHome;
+    use musteragent_identity::{AttemptNumber, DelegationId, RunId, RuntimeSnapshotId};
+    use musteragent_run::RunEvent;
+
+    let codec = ProtobufLedgerPayloadCodec;
+    let snapshot_id = RuntimeSnapshotId::generate();
+    let input_message_id = MessageId::generate();
+    let parent_run_id = RunId::generate();
+    let delegation_id = DelegationId::generate();
+    let attempt_one = AttemptNumber::new(1).expect("attempt one");
+
+    for event in [
+        RunEvent::Admitted {
+            runtime_snapshot_id: snapshot_id,
+            execution_home: RuntimeHome::Cloud,
+            parent_run_id: None,
+            delegation_id: None,
+            input_message_id: Some(input_message_id),
+            retry_source_message_id: None,
+            retry_source_attempt_number: None,
+        },
+        RunEvent::Admitted {
+            runtime_snapshot_id: snapshot_id,
+            execution_home: RuntimeHome::Cloud,
+            parent_run_id: Some(parent_run_id),
+            delegation_id: None,
+            input_message_id: Some(input_message_id),
+            retry_source_message_id: Some(input_message_id),
+            retry_source_attempt_number: Some(attempt_one),
+        },
+        RunEvent::Admitted {
+            runtime_snapshot_id: snapshot_id,
+            execution_home: RuntimeHome::Cloud,
+            parent_run_id: Some(parent_run_id),
+            delegation_id: Some(delegation_id),
+            input_message_id: None,
+            retry_source_message_id: None,
+            retry_source_attempt_number: None,
+        },
+    ] {
+        let payload = LedgerPayload::DomainEvent(DomainEvent::Run(event));
+        let encoded = codec.encode(payload.clone());
+        assert_eq!(
+            codec
+                .decode(LedgerRecordKind::DomainEvent, &encoded)
+                .expect("decode RunAdmitted"),
+            payload
+        );
+        assert_eq!(
+            crate::ledger_content_references(LedgerRecordKind::DomainEvent, &encoded)
+                .expect("RunAdmitted content references"),
+            Vec::new()
+        );
+    }
+
+    let legacy_wire = wire::DomainEvent {
+        event: Some(wire::domain_event::Event::RunAdmitted(wire::RunAdmitted {
+            runtime_snapshot_id: Some(wire::RuntimeSnapshotId {
+                value: snapshot_id.to_string(),
+            }),
+            execution_home: Some(wire::RuntimeHome {
+                home: Some(wire::runtime_home::Home::Cloud(wire::CloudHome {})),
+            }),
+            parent_run_id: None,
+            delegation_id: None,
+            retry_source_message_id: None,
+            retry_source_attempt_number: 0,
+            input_message_id: None,
+        })),
+    };
+    let decoded_legacy = codec
+        .decode(LedgerRecordKind::DomainEvent, &legacy_wire.encode_to_vec())
+        .expect("legacy RunAdmitted without input_message_id must remain decodable");
+    assert_eq!(
+        decoded_legacy,
+        LedgerPayload::DomainEvent(DomainEvent::Run(RunEvent::Admitted {
+            runtime_snapshot_id: snapshot_id,
+            execution_home: RuntimeHome::Cloud,
+            parent_run_id: None,
+            delegation_id: None,
+            input_message_id: None,
+            retry_source_message_id: None,
+            retry_source_attempt_number: None,
+        }))
+    );
+
+    let invalid_wire = wire::DomainEvent {
+        event: Some(wire::domain_event::Event::RunAdmitted(wire::RunAdmitted {
+            runtime_snapshot_id: Some(wire::RuntimeSnapshotId {
+                value: snapshot_id.to_string(),
+            }),
+            execution_home: Some(wire::RuntimeHome {
+                home: Some(wire::runtime_home::Home::Cloud(wire::CloudHome {})),
+            }),
+            parent_run_id: None,
+            delegation_id: None,
+            retry_source_message_id: None,
+            retry_source_attempt_number: 0,
+            input_message_id: Some(wire::MessageId {
+                value: "not-a-uuid".to_owned(),
+            }),
+        })),
+    };
+    assert!(
+        codec
+            .decode(LedgerRecordKind::DomainEvent, &invalid_wire.encode_to_vec())
+            .is_err()
+    );
+}

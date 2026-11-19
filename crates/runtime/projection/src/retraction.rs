@@ -78,6 +78,11 @@ impl ProjectionRetraction {
                     .or_default()
                     .push(run.run_id);
             }
+            if run.input_message_id == Some(self.message_id)
+                || run.retry_source_message_id == Some(self.message_id)
+            {
+                self.retracted_run_ids.insert(run.run_id);
+            }
         }
         let mut child_activities = BTreeMap::<ActivityId, Vec<ActivityId>>::new();
         for activity in activities {
