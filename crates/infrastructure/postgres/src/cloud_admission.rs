@@ -24,10 +24,14 @@ pub(super) struct Source {
     pub snapshot: RuntimeSnapshotContent,
     pub snapshot_hash: Sha256,
     pub trace: TraceContext,
+    /// The host bound the source Run to `SandboxRoutingPolicy::BrowserOnly`:
+    /// it operates no server sandbox, so browser-executed tools can only run
+    /// while a user's page holds a browser lease.
+    pub browser_only_sandbox: bool,
 }
 
 pub(super) async fn source(tx: &mut sqlx::PgConnection, run: RunId) -> Result<Source, Error> {
-    let row=sqlx::query("SELECT r.tenant_id,r.conversation_id,r.workspace_id,r.traceparent,r.tracestate,c.created_by,s.encoded_snapshot,s.content_hash FROM runtime.runs r JOIN conversation.conversations c ON c.conversation_id=r.conversation_id AND c.tenant_id=r.tenant_id JOIN capability.runtime_snapshots s ON s.runtime_snapshot_id=r.runtime_snapshot_id WHERE r.run_id=$1 AND r.execution_home_kind=1 AND r.control_home_kind=1 AND r.execution_scope_kind IN (1,2) AND c.lifecycle=1")
+    let row=sqlx::query("SELECT r.tenant_id,r.conversation_id,r.workspace_id,r.traceparent,r.tracestate,c.created_by,s.encoded_snapshot,s.content_hash,rc.policy AS sandbox_policy FROM runtime.runs r JOIN conversation.conversations c ON c.conversation_id=r.conversation_id AND c.tenant_id=r.tenant_id JOIN capability.runtime_snapshots s ON s.runtime_snapshot_id=r.runtime_snapshot_id LEFT JOIN runtime.sandbox_routing_contexts rc ON rc.run_id=r.run_id AND rc.tenant_id=r.tenant_id WHERE r.run_id=$1 AND r.execution_home_kind=1 AND r.control_home_kind=1 AND r.execution_scope_kind IN (1,2) AND c.lifecycle=1")
         .bind(run.into_uuid()).fetch_optional(&mut *tx).await.map_err(db)?.ok_or(Error::NotFound)?;
     let bytes: Vec<u8> = row.try_get("encoded_snapshot").map_err(db)?;
     let hash = Sha256::digest(&bytes);
@@ -74,6 +78,12 @@ pub(super) async fn source(tx: &mut sqlx::PgConnection, run: RunId) -> Result<So
             .map_err(|_| Error::Corrupt)?,
         snapshot,
         snapshot_hash: hash,
+        browser_only_sandbox: row
+            .try_get::<Option<i16>, _>("sandbox_policy")
+            .map_err(db)?
+            == Some(crate::sandbox_routing::policy_code(
+                musteragent_sandbox::SandboxRoutingPolicy::BrowserOnly,
+            )),
         trace: TraceContext {
             traceparent: musteragent_runtime_contract::TraceParent::new(
                 row.try_get::<String, _>("traceparent").map_err(db)?,
