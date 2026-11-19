@@ -37,6 +37,9 @@ lease_ms = 30000
 heartbeat_ms = 5000
 drain_ms = 30000
 tool_releases = []
+# Optional: localized text for the retryable `browser_execution_unavailable`
+# tool failure (no open Web page runs the browser sandbox). English default.
+# browser_unavailable_message = "No browser execution environment is available. Keep the Web page that runs the browser sandbox open, then retry."
 
 [object_store]
 endpoint = "https://s3.example.test"

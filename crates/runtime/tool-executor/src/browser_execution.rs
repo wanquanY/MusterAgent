@@ -29,8 +29,72 @@ pub(crate) struct PreparedBrowserJob {
     pub request: BrowserJobRequest,
 }
 pub(crate) type BrowserPreparation = Result<PreparedBrowserJob, CapabilityOutcome>;
-pub(crate) type GatewayFailure =
-    fn(BrowserProviderRuntimeError) -> Result<CapabilityOutcome, LoopPortError>;
+pub(crate) type GatewayFailure = fn(
+    BrowserProviderRuntimeError,
+    &BrowserUnavailableNotice,
+) -> Result<CapabilityOutcome, LoopPortError>;
+
+/// User-facing text for [`ErrorCode::BrowserExecutionUnavailable`]: no browser
+/// execution provider (an open Web page running the browser sandbox) can take
+/// the routed work. The machine code is stable; hosts localize by code or by
+/// configuring this text. The failure is retryable, so the same call can run
+/// once the user reopens the page.
+#[derive(Debug, Clone, Eq, PartialEq)]
+pub struct BrowserUnavailableNotice(SafeDisplayText);
+
+impl BrowserUnavailableNotice {
+    /// English default used when the host configures no text.
+    pub const DEFAULT_TEXT: &'static str = "No browser execution environment is available. \
+         Keep the Web page that runs the browser sandbox open, then retry.";
+
+    /// Host-configured text; it must be safe display text.
+    pub fn new(
+        text: impl Into<String>,
+    ) -> Result<Self, musteragent_runtime_contract::TextContractError> {
+        SafeDisplayText::new(text).map(Self)
+    }
+
+    #[must_use]
+    pub fn text(&self) -> &SafeDisplayText {
+        &self.0
+    }
+
+    /// The retryable tool failure carrying this notice.
+    #[must_use]
+    pub fn failure(&self) -> CapabilityOutcome {
+        let code = ErrorCode::BrowserExecutionUnavailable;
+        CapabilityOutcome::Failed {
+            error: ErrorInfo {
+                code,
+                category: code.category(),
+                safe_message: self.0.clone(),
+                retryable: true,
+                dependency_ref: None,
+                diagnostic_ref: None,
+            },
+            retry_disposition: RetryDisposition::RetryNewAttempt,
+            diagnostic_result: None,
+        }
+    }
+}
+
+impl Default for BrowserUnavailableNotice {
+    fn default() -> Self {
+        Self(SafeDisplayText::new(Self::DEFAULT_TEXT).expect("valid default notice"))
+    }
+}
+
+/// Whether the gateway reported that no browser execution provider can take
+/// the work (as opposed to a server sandbox or an integrity failure).
+pub(crate) fn browser_unavailable(error: &BrowserProviderRuntimeError) -> bool {
+    matches!(
+        error,
+        BrowserProviderRuntimeError::ProviderUnavailable
+            | BrowserProviderRuntimeError::SandboxRoute(
+                musteragent_sandbox::SandboxRouteError::BrowserUnavailable
+            )
+    )
+}
 
 pub(crate) struct BrowserExecution<'a> {
     pub handler: &'a dyn AtomicCapabilityHandler,
@@ -42,6 +106,7 @@ pub(crate) struct BrowserExecution<'a> {
     pub invocation: CapabilityInvocation,
     pub prepare: ApplicationFuture<'a, Result<BrowserPreparation, LoopPortError>>,
     pub gateway_failure: GatewayFailure,
+    pub unavailable_notice: &'a BrowserUnavailableNotice,
 }
 
 impl<'a> BrowserExecution<'a> {
@@ -203,7 +268,8 @@ impl<'a> BrowserExecution<'a> {
             }
             Ok(Err(error)) => {
                 context.quiescent();
-                return (self.gateway_failure)(error).map(DispatchedCapabilityOutcome::Provider);
+                return (self.gateway_failure)(error, self.unavailable_notice)
+                    .map(DispatchedCapabilityOutcome::Provider);
             }
         };
         let receipt = BrowserJobObserver {
@@ -574,7 +640,11 @@ pub(crate) async fn retained_result(
 
 pub(crate) fn gateway_failure(
     error: BrowserProviderRuntimeError,
+    unavailable: &BrowserUnavailableNotice,
 ) -> Result<CapabilityOutcome, LoopPortError> {
+    if browser_unavailable(&error) {
+        return Ok(unavailable.failure());
+    }
     if matches!(
         &error,
         BrowserProviderRuntimeError::SandboxRoute(_)
@@ -594,8 +664,7 @@ pub(crate) fn gateway_failure(
         });
     }
     let (code, message, retryable) = match error {
-        BrowserProviderRuntimeError::ProviderUnavailable
-        | BrowserProviderRuntimeError::CapabilityNotAuthorized
+        BrowserProviderRuntimeError::CapabilityNotAuthorized
         | BrowserProviderRuntimeError::RuntimeReleaseMismatch => (
             ErrorCode::AgentNotAvailable,
             "The selected sandbox executor is unavailable; the original route was retained",

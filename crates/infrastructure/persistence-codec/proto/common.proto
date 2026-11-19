@@ -174,6 +174,8 @@ enum ErrorCode {
   ERROR_CODE_PUBLIC_DELIVERY_MISSING = 54;
   // The current device permission is narrower than this still-admitted Run.
   ERROR_CODE_NATIVE_PERMISSION_REDUCED = 55;
+  // No browser execution provider is available for the routed work; retryable.
+  ERROR_CODE_BROWSER_EXECUTION_UNAVAILABLE = 56;
 }
 
 message ErrorInfo {

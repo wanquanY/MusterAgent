@@ -70,6 +70,7 @@ where
     files: BuiltinFileTools<A>,
     committer: Arc<C>,
     clock: Arc<dyn RuntimeClock>,
+    unavailable_notice: crate::BrowserUnavailableNotice,
 }
 
 impl<A, C> BrowserPythonCapabilityHandler<A, C>
@@ -122,7 +123,16 @@ where
             files,
             committer,
             clock,
+            unavailable_notice: crate::BrowserUnavailableNotice::default(),
         }
+    }
+
+    /// Host-configured text for a retryable `browser_execution_unavailable`
+    /// failure; defaults to [`crate::BrowserUnavailableNotice::DEFAULT_TEXT`].
+    #[must_use]
+    pub fn with_unavailable_notice(mut self, notice: crate::BrowserUnavailableNotice) -> Self {
+        self.unavailable_notice = notice;
+        self
     }
 
     /// The same source/version authority serves file discovery and execution inputs.
@@ -586,6 +596,7 @@ where
                     .await
             }),
             gateway_failure: crate::browser_execution::gateway_failure,
+            unavailable_notice: &self.unavailable_notice,
         }
         .operation(binding)
     }
@@ -657,7 +668,7 @@ where
                     }),
                 ),
                 Err(error) => Ok(DispatchedCapabilityOutcome::Provider(
-                    crate::browser_execution::gateway_failure(error)?,
+                    crate::browser_execution::gateway_failure(error, &self.unavailable_notice)?,
                 )),
             }
         })

@@ -125,6 +125,7 @@ pub async fn run_worker(
         model: model.clone(),
         metering: metering.clone(),
         releases,
+        browser_unavailable_notice: settings.browser_unavailable_notice()?,
     })?;
     let composition = CloudWorkerComposition::build(
         WorkerHost {
