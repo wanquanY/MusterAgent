@@ -53,11 +53,16 @@ fn derive_with_retry(
         ))
         .map_err(|_| Error::Invalid)?;
     }
-    // A scheduled execution never acquires physical device capabilities from
-    // the originating foreground conversation.
+    // A derived execution never acquires physical device capabilities from
+    // the originating foreground conversation. An unattended (scheduled)
+    // execution also has no open page holding a browser lease, so tools that
+    // only a browser execution provider can run are dropped instead of
+    // failing at call time. Delegated children keep them: their parent's
+    // browser binding is still live.
+    let unattended = retry.is_some();
     content
         .capabilities
-        .retain(|c| c.location != musteragent_capability::CapabilityLocation::Device);
+        .retain(|c| derived_capability_retained(c.location, c.key.as_str(), unattended));
     content.tools.retain(|tool| {
         content
             .capabilities
@@ -184,4 +189,58 @@ fn derive_with_retry(
         execution_grant: grant,
         execution_grant_proof: None,
     })
+}
+
+/// Whether a derived Run keeps a capability of its source Run.
+fn derived_capability_retained(
+    location: musteragent_capability::CapabilityLocation,
+    key: &str,
+    unattended: bool,
+) -> bool {
+    location != musteragent_capability::CapabilityLocation::Device
+        && !(unattended && musteragent_tool::requires_browser_execution(key))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::derived_capability_retained;
+    use musteragent_capability::CapabilityLocation;
+
+    #[test]
+    fn unattended_runs_drop_device_and_browser_executed_capabilities() {
+        for key in [
+            "data.python.run@11",
+            "sandbox.environment.prepare@1",
+            "sandbox.environment.inspect@2",
+            "sandbox.operation.cancel@1",
+            "application.web.build@1",
+        ] {
+            assert!(
+                !derived_capability_retained(CapabilityLocation::Cloud, key, true),
+                "{key}"
+            );
+            // A delegated child still runs under its parent's live browser binding.
+            assert!(
+                derived_capability_retained(CapabilityLocation::Cloud, key, false),
+                "{key}"
+            );
+        }
+        for unattended in [true, false] {
+            assert!(!derived_capability_retained(
+                CapabilityLocation::Device,
+                "device.terminal.exec@3",
+                unattended
+            ));
+            assert!(derived_capability_retained(
+                CapabilityLocation::Cloud,
+                "web.fetch@1",
+                unattended
+            ));
+            assert!(derived_capability_retained(
+                CapabilityLocation::Cloud,
+                "workspace.file.read@1",
+                unattended
+            ));
+        }
+    }
 }
