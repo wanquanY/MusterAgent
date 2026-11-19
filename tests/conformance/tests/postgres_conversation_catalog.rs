@@ -500,6 +500,7 @@ async fn catalog_projector_attributes_unread_across_create_complete_cancel_archi
                     delegation_id: None,
                     retry_source_message_id: None,
                     retry_source_attempt_number: None,
+                    input_message_id: None,
                 }),
             ),
             domain_record(
@@ -641,6 +642,7 @@ async fn catalog_projector_attributes_unread_across_create_complete_cancel_archi
                     delegation_id: None,
                     retry_source_message_id: None,
                     retry_source_attempt_number: None,
+                    input_message_id: None,
                 }),
             ),
             domain_record(
@@ -904,6 +906,7 @@ async fn catalog_projector_attributes_unread_across_create_complete_cancel_archi
                     delegation_id: None,
                     retry_source_message_id: None,
                     retry_source_attempt_number: None,
+                    input_message_id: None,
                 }),
             ),
             domain_record(
@@ -1034,6 +1037,7 @@ async fn catalog_projector_attributes_unread_across_create_complete_cancel_archi
                     delegation_id: None,
                     retry_source_message_id: None,
                     retry_source_attempt_number: None,
+                    input_message_id: None,
                 }),
             ),
             domain_record(
