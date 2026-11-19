@@ -31,6 +31,25 @@ decision time. Decoding validates the closed values and route consistency.
 Content-reference discovery uses the same shared descriptor, including that
 new event, so routing events have complete empty reference coverage.
 
+Run admission records carry an optional `input_message_id` (`RunAdmitted` field
+7 in `run_records.proto`). Ordinary user submissions and scheduled occurrence
+admissions write their accepted `MessageId`, while `MessageAccepted` remains
+conversation-scoped without a `run_id` or `run_seq` and `RunAdmitted` stays at
+`run_seq = 1`. User retries write the retried original `MessageId` alongside
+`retry_source_message_id` and `parent_run_id`; system coordination, delegated
+child, standing-goal continuation and maintenance admissions leave
+`input_message_id` unset, and historical records without field 7 decode with
+`None`. `ProductProjectionReducer` stores `input_message_id` on `ProjectedRun`
+(`rpc_runtime.proto` field 23) and sets `ProjectedMessage.source_run_id` for
+the exact user message on original admission, without allowing retries to
+overwrite an existing message source. `RunApplication::get_run` exposes the
+same optional `input_message_id` on `RunView` (`rpc_runtime.proto` field 29).
+PostgreSQL conversation projection snapshots use generation `v19`
+(`conversation_projection.v19.root`), rebuilding uncompacted history or
+backfilling visible rows from immutable admission links when upgrading legacy
+`v18` snapshots while preserving existing snapshot checksums, cursors and
+retracted sets.
+
 Hosts can compose generated service traits, the ledger codec, the scheduler
 encoder and PostgreSQL ports. This package does not implement a server,
 cloud worker, projector process, database migrator binary or reference API.

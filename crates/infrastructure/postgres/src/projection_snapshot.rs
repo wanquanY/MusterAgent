@@ -1,4 +1,5 @@
 mod failure_backfill;
+mod input_backfill;
 
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -139,6 +140,11 @@ impl PostgresConversationProjection {
                 |branch, sequence| branch_route.includes(branch, sequence),
             )
             .await?;
+            musteragent_projection::backfill_projection_run_inputs(
+                snapshot,
+                &input_backfill::RetainedRunInputs(&self.pool),
+            )
+            .await?;
         }
 
         let output_messages = self
@@ -157,6 +163,11 @@ impl PostgresConversationProjection {
         let mut snapshot = reducer
             .finish(Arc::clone(&self.content), stream.head, now)
             .await?;
+        musteragent_projection::backfill_projection_run_inputs(
+            &mut snapshot,
+            &input_backfill::RetainedRunInputs(&self.pool),
+        )
+        .await?;
         crate::PostgresArtifactStore::recover_resource_file_projection(&self.pool, &mut snapshot)
             .await
             .map_err(|error| match error {

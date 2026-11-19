@@ -34,19 +34,19 @@ pub const PROJECTION_SNAPSHOT_SCHEMA_VERSION: &str =
 /// reducer upgrade adds a generation here only after compatibility tests pass,
 /// and removing one requires a governed storage migration first.
 pub const SUPPORTED_PROJECTION_SNAPSHOT_GENERATIONS: &[u16] =
-    &[18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7];
-pub const CURRENT_PROJECTION_SNAPSHOT_GENERATION: u16 = 18;
+    &[19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7];
+pub const CURRENT_PROJECTION_SNAPSHOT_GENERATION: u16 = 19;
 /// Persistence identity for the current root product projection implementation.
 ///
 /// This changes when reducer semantics change without changing the wire schema,
 /// forcing retained Ledger records to be rebuilt into a fresh Snapshot.
-pub const PROJECTION_SNAPSHOT_ROOT_KIND: &str = "conversation_projection.v18.root";
+pub const PROJECTION_SNAPSHOT_ROOT_KIND: &str = "conversation_projection.v19.root";
 /// Persistence identity prefix for product projections on a Context branch.
-pub const PROJECTION_SNAPSHOT_BRANCH_KIND_PREFIX: &str = "conversation_projection.v18.";
-/// Immediate predecessor accepted only as a recovery base during v18 migration.
-pub const LEGACY_PROJECTION_SNAPSHOT_ROOT_KIND: &str = "conversation_projection.v17.root";
-/// Immediate predecessor prefix accepted only as a recovery base during v18 migration.
-pub const LEGACY_PROJECTION_SNAPSHOT_BRANCH_KIND_PREFIX: &str = "conversation_projection.v17.";
+pub const PROJECTION_SNAPSHOT_BRANCH_KIND_PREFIX: &str = "conversation_projection.v19.";
+/// Immediate predecessor accepted only as a recovery base during v19 migration.
+pub const LEGACY_PROJECTION_SNAPSHOT_ROOT_KIND: &str = "conversation_projection.v18.root";
+/// Immediate predecessor prefix accepted only as a recovery base during v19 migration.
+pub const LEGACY_PROJECTION_SNAPSHOT_BRANCH_KIND_PREFIX: &str = "conversation_projection.v18.";
 
 /// Returns the persistence identity for a supported reducer generation on
 /// either the root Conversation or a Context branch.
@@ -331,6 +331,8 @@ pub struct ProjectedRun {
     /// Delegation-specific identity. Its presence requires `parent_run_id`,
     /// but a causal parent does not require a Delegation.
     pub delegation_id: Option<DelegationId>,
+    /// Input Conversation Message that started or retried this Run, when one exists.
+    pub input_message_id: Option<MessageId>,
     /// Exact immutable user turn reused by a user-requested terminal retry.
     pub retry_source_message_id: Option<MessageId>,
     /// Last physical Attempt observed on the failed source Run.
@@ -454,6 +456,19 @@ pub fn projection_window_from_snapshot(
         .iter()
         .filter_map(|message| message.source_run_id)
         .collect::<BTreeSet<_>>();
+    run_ids.extend(
+        snapshot
+            .runs
+            .iter()
+            .filter(|run| {
+                run.input_message_id
+                    .is_some_and(|message_id| selected_message_ids.contains(&message_id))
+                    || run
+                        .retry_source_message_id
+                        .is_some_and(|message_id| selected_message_ids.contains(&message_id))
+            })
+            .map(|run| run.run_id),
+    );
     run_ids.extend(snapshot.active_runs.iter().map(|run| run.run_id));
     run_ids.extend(
         snapshot

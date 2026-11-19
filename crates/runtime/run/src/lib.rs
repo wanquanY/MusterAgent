@@ -249,6 +249,8 @@ pub struct RunRetryConfiguration {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct RunView {
+    /// Input Conversation Message that started or retried this Run, when one exists.
+    pub input_message_id: Option<MessageId>,
     pub retry_configuration: Option<RunRetryConfiguration>,
     pub run: Run,
     pub active_attempt: Option<AttemptContext>,

@@ -27,6 +27,7 @@ async fn terminal_failure_preserves_answer_provenance_and_independent_child_stat
                 },
                 parent_run_id,
                 delegation_id: parent_run_id.map(|_| DelegationId::generate()),
+                input_message_id: None,
                 retry_source_message_id: None,
                 retry_source_attempt_number: None,
             }),

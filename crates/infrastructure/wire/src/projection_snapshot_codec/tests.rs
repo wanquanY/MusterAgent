@@ -115,6 +115,7 @@ fn terminal_run(
         executor_participant_id: None,
         parent_run_id,
         delegation_id,
+        input_message_id: None,
         retry_source_message_id: None,
         retry_source_attempt_number: None,
         terminal_failure: None,
@@ -681,4 +682,162 @@ fn selected_project_target_survives_snapshot_sealing_and_history_reload() {
         .decode(&codec.encode(&value).expect("valid test fixture"))
         .expect("valid test fixture");
     assert_eq!(old.messages[0].project_task_target, None);
+}
+
+#[test]
+fn snapshot_round_trips_run_input_message_and_reads_legacy_snapshots_without_it() {
+    let codec = ProtobufConversationProjectionCodec;
+    let mut value = snapshot(12);
+    let shared_ref = value.messages[0].content_ref.clone();
+    let first_message_id = MessageId::generate();
+    let second_message_id = MessageId::generate();
+    let first_activity_id = ActivityId::generate();
+    let second_activity_id = ActivityId::generate();
+    let retry_activity_id = ActivityId::generate();
+    let child_activity_id = ActivityId::generate();
+    let first_run_id = RunId::generate();
+    let second_run_id = RunId::generate();
+    let retry_run_id = RunId::generate();
+    let child_run_id = RunId::generate();
+
+    value.messages = vec![
+        ProjectedMessage {
+            project_task_target: None,
+            message_id: first_message_id,
+            participant_id: None,
+            role: MessageRole::User,
+            content_ref: shared_ref.clone(),
+            reasoning_summaries: Vec::new(),
+            status: ProjectedMessageStatus::Committed,
+            source_run_id: Some(first_run_id),
+            committed_at: UtcTimestamp::from_unix_millis(100),
+            attachment_refs: Vec::new(),
+            requested_skill_refs: Vec::new(),
+            imported_projection_ref: None,
+            assistant_output: None,
+            partial_reason: None,
+        },
+        ProjectedMessage {
+            project_task_target: None,
+            message_id: second_message_id,
+            participant_id: None,
+            role: MessageRole::User,
+            content_ref: shared_ref,
+            reasoning_summaries: Vec::new(),
+            status: ProjectedMessageStatus::Committed,
+            source_run_id: Some(second_run_id),
+            committed_at: UtcTimestamp::from_unix_millis(200),
+            attachment_refs: Vec::new(),
+            requested_skill_refs: Vec::new(),
+            imported_projection_ref: None,
+            assistant_output: None,
+            partial_reason: None,
+        },
+    ];
+    let mut child_activity = terminal_activity(
+        child_activity_id,
+        ActivityKind::Delegation,
+        ActivityStatus::Completed,
+        350,
+    );
+    child_activity.parent_activity_id = Some(second_activity_id);
+    child_activity.root_activity_id = second_activity_id;
+    value.activities = vec![
+        terminal_activity(
+            first_activity_id,
+            ActivityKind::Chat,
+            ActivityStatus::Failed,
+            100,
+        ),
+        terminal_activity(
+            second_activity_id,
+            ActivityKind::Chat,
+            ActivityStatus::Completed,
+            200,
+        ),
+        terminal_activity(
+            retry_activity_id,
+            ActivityKind::Chat,
+            ActivityStatus::Completed,
+            300,
+        ),
+        child_activity,
+    ];
+    let mut first_run = terminal_run(
+        first_run_id,
+        first_activity_id,
+        None,
+        None,
+        RunStatus::Failed,
+        110,
+    );
+    first_run.input_message_id = Some(first_message_id);
+    let mut second_run = terminal_run(
+        second_run_id,
+        second_activity_id,
+        None,
+        None,
+        RunStatus::Completed,
+        210,
+    );
+    second_run.input_message_id = Some(second_message_id);
+    let mut retry_run = terminal_run(
+        retry_run_id,
+        retry_activity_id,
+        Some(first_run_id),
+        None,
+        RunStatus::Completed,
+        310,
+    );
+    retry_run.input_message_id = Some(first_message_id);
+    retry_run.retry_source_message_id = Some(first_message_id);
+    retry_run.retry_source_attempt_number = Some(AttemptNumber::new(1).expect("attempt one"));
+    let child_run = terminal_run(
+        child_run_id,
+        child_activity_id,
+        Some(second_run_id),
+        Some(DelegationId::generate()),
+        RunStatus::Completed,
+        360,
+    );
+    value.runs = vec![first_run, second_run, retry_run, child_run];
+    value.content_manifest = canonical_content_manifest(&value).expect("manifest");
+    value.checksum = codec.checksum(&value);
+
+    let encoded = codec.encode(&value).expect("encode snapshot");
+    let decoded = codec.decode(&encoded).expect("decode snapshot");
+    assert_eq!(decoded, value);
+
+    let mut legacy_wire = conversation_projection_snapshot_message(&value);
+    for run in &mut legacy_wire.runs {
+        run.input_message_id = None;
+    }
+    legacy_wire.checksum = None;
+    let legacy_checksum = Sha256::digest(legacy_wire.encode_to_vec());
+    legacy_wire.checksum = Some(crate::wire::Sha256 {
+        value: legacy_checksum.into_bytes().to_vec(),
+    });
+    let decoded_legacy = codec
+        .decode(&legacy_wire.encode_to_vec())
+        .expect("decode legacy snapshot without input_message_id");
+    assert!(
+        decoded_legacy
+            .runs
+            .iter()
+            .all(|run| run.input_message_id.is_none())
+    );
+
+    let mut invalid_wire = conversation_projection_snapshot_message(&value);
+    invalid_wire.runs[0].input_message_id = Some(crate::wire::MessageId {
+        value: "invalid".to_owned(),
+    });
+    invalid_wire.checksum = None;
+    let invalid_checksum = Sha256::digest(invalid_wire.encode_to_vec());
+    invalid_wire.checksum = Some(crate::wire::Sha256 {
+        value: invalid_checksum.into_bytes().to_vec(),
+    });
+    assert_eq!(
+        codec.decode(&invalid_wire.encode_to_vec()),
+        Err(ProjectionSnapshotCodecError::InvalidContract)
+    );
 }

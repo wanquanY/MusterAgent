@@ -228,3 +228,6 @@ async fn outbox_claim_retry_reclaim_and_completion_are_fenced_and_idempotent() {
     assert!(quarantine_cleared);
     pool.close().await;
 }
+
+#[path = "postgres_projection/input_message.rs"]
+mod input_message;

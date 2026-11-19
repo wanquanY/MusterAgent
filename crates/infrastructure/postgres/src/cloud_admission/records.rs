@@ -107,6 +107,7 @@ pub(crate) fn schedule_batch(
                 execution_home: RuntimeHome::Cloud,
                 parent_run_id: None,
                 delegation_id: None,
+                input_message_id: Some(message.message_id),
                 retry_source_message_id: None,
                 retry_source_attempt_number: None,
             }),

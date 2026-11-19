@@ -93,6 +93,7 @@ async fn run_retry_schedule_is_preserved_in_the_product_snapshot() {
             execution_home: RuntimeHome::Cloud,
             parent_run_id: None,
             delegation_id: None,
+            input_message_id: Some(retry_source_message_id),
             retry_source_message_id: Some(retry_source_message_id),
             retry_source_attempt_number: Some(attempt_one),
         }),
@@ -189,6 +190,7 @@ async fn run_retry_schedule_is_preserved_in_the_product_snapshot() {
     assert_eq!(failure.error.code, ErrorCode::DependencyTimeout);
     assert_eq!(failure.conversation_sequence.get(), 3);
     assert!(run.terminal_failure.is_none());
+    assert_eq!(run.input_message_id, Some(retry_source_message_id));
     assert_eq!(run.retry_source_message_id, Some(retry_source_message_id));
     assert_eq!(run.retry_source_attempt_number, Some(attempt_one));
 }
@@ -1322,6 +1324,486 @@ fn reducer_cursor_is_monotonic_and_snapshot_identity_is_exact() {
     );
 }
 
+#[tokio::test]
+async fn identical_user_messages_retry_and_delegated_runs_preserve_exact_input_links() {
+    use musteragent_identity::RunSeq;
+
+    let tenant_id = TenantId::generate();
+    let conversation_id = ConversationId::generate();
+    let home_epoch = HomeEpoch::new(1).expect("epoch");
+    let user_participant = ParticipantId::generate();
+    let executor_participant = ParticipantId::generate();
+    let identical_text = typed_content_ref(b"repeat this exact prompt", "text/plain;charset=utf-8");
+    let first_message_id = MessageId::generate();
+    let second_message_id = MessageId::generate();
+    let imported_message_id = MessageId::generate();
+    let first_activity_id = ActivityId::generate();
+    let second_activity_id = ActivityId::generate();
+    let retry_activity_id = ActivityId::generate();
+    let imported_retry_activity_id = ActivityId::generate();
+    let child_activity_id = ActivityId::generate();
+    let coord_activity_id = ActivityId::generate();
+    let first_run_id = RunId::generate();
+    let second_run_id = RunId::generate();
+    let retry_run_id = RunId::generate();
+    let imported_retry_run_id = RunId::generate();
+    let child_run_id = RunId::generate();
+    let coord_run_id = RunId::generate();
+    let content: Arc<dyn ProjectionContentStore> = Arc::new(NoIoContent);
+    let mut reducer = ProductProjectionReducer::new(
+        tenant_id,
+        conversation_id,
+        home_epoch,
+        None,
+        BTreeMap::new(),
+    )
+    .expect("reducer");
+
+    let mut sequence = 0_u64;
+    for (message_id, activity_id, run_id) in [
+        (first_message_id, first_activity_id, first_run_id),
+        (second_message_id, second_activity_id, second_run_id),
+    ] {
+        sequence += 1;
+        let mut accepted = record(
+            tenant_id,
+            conversation_id,
+            home_epoch,
+            sequence,
+            None,
+            Some(user_participant),
+            DomainEvent::Conversation(ConversationEvent::MessageAccepted {
+                project_task_target: None,
+                message_id,
+                role: MessageRole::User,
+                content_ref: identical_text.clone(),
+                attachment_refs: Vec::new(),
+                requested_skill_refs: Vec::new(),
+            }),
+        );
+        accepted.metadata.activity_id = Some(activity_id);
+        assert!(accepted.metadata.run_id.is_none());
+        assert!(accepted.metadata.run_seq.is_none());
+        reducer
+            .apply(accepted, Arc::clone(&content))
+            .await
+            .expect("accept user message");
+
+        sequence += 1;
+        let mut started = record(
+            tenant_id,
+            conversation_id,
+            home_epoch,
+            sequence,
+            None,
+            Some(user_participant),
+            DomainEvent::Activity(ActivityEvent::Started {
+                kind: ActivityKind::Chat,
+                root_activity_id: activity_id,
+                parent_activity_id: None,
+                policy_snapshot_ref: VersionedKey::new("policy.chat@1").expect("policy"),
+            }),
+        );
+        started.metadata.activity_id = Some(activity_id);
+        reducer
+            .apply(started, Arc::clone(&content))
+            .await
+            .expect("start activity");
+
+        sequence += 1;
+        let mut admitted = record(
+            tenant_id,
+            conversation_id,
+            home_epoch,
+            sequence,
+            Some(run_id),
+            Some(executor_participant),
+            DomainEvent::Run(RunEvent::Admitted {
+                runtime_snapshot_id: RuntimeSnapshotId::generate(),
+                execution_home: RuntimeHome::Cloud,
+                parent_run_id: None,
+                delegation_id: None,
+                input_message_id: Some(message_id),
+                retry_source_message_id: None,
+                retry_source_attempt_number: None,
+            }),
+        );
+        admitted.metadata.activity_id = Some(activity_id);
+        admitted.metadata.run_seq = Some(RunSeq::new(1).expect("run seq 1"));
+        reducer
+            .apply(admitted, Arc::clone(&content))
+            .await
+            .expect("admit run");
+    }
+
+    // Tool requested before any assistant message must not bind to the user input message.
+    sequence += 1;
+    let tool_invocation_id = InvocationId::generate();
+    apply_tool(
+        &mut reducer,
+        Arc::clone(&content),
+        tenant_id,
+        conversation_id,
+        home_epoch,
+        second_run_id,
+        sequence,
+        ToolEvent::InvocationRequested {
+            invocation_id: tool_invocation_id,
+            tool_call_id: ToolCallId::new("call-before-assistant").expect("tool call"),
+            tool_key: ToolKey::from_versioned_key(
+                VersionedKey::new("fixture.echo@1").expect("tool key"),
+            ),
+            effect: Effect::Read,
+            request_ref: content_ref(br#"{"echo":1}"#),
+            timing: musteragent_runtime_contract::execution_liveness::InvocationExecutionTiming::LegacyFixed {
+                deadline: UtcTimestamp::from_unix_millis(20_000),
+            },
+        },
+    )
+    .await;
+
+    // Retry of first_run_id links retry_run_id -> first_message_id without overwriting first_message_id.source_run_id.
+    sequence += 1;
+    let mut retry_admitted = record(
+        tenant_id,
+        conversation_id,
+        home_epoch,
+        sequence,
+        Some(retry_run_id),
+        Some(executor_participant),
+        DomainEvent::Run(RunEvent::Admitted {
+            runtime_snapshot_id: RuntimeSnapshotId::generate(),
+            execution_home: RuntimeHome::Cloud,
+            parent_run_id: Some(first_run_id),
+            delegation_id: None,
+            input_message_id: Some(first_message_id),
+            retry_source_message_id: Some(first_message_id),
+            retry_source_attempt_number: Some(AttemptNumber::new(1).expect("attempt one")),
+        }),
+    );
+    retry_admitted.metadata.activity_id = Some(retry_activity_id);
+    retry_admitted.metadata.run_seq = Some(RunSeq::new(1).expect("run seq 1"));
+    reducer
+        .apply(retry_admitted, Arc::clone(&content))
+        .await
+        .expect("admit retry run");
+
+    // Imported message with no source_run_id must also remain None when referenced by a retry.
+    sequence += 1;
+    reducer
+        .apply(
+            record(
+                tenant_id,
+                conversation_id,
+                home_epoch,
+                sequence,
+                None,
+                Some(user_participant),
+                DomainEvent::Conversation(ConversationEvent::MessageImported {
+                    message_id: imported_message_id,
+                    role: MessageRole::User,
+                    content_ref: identical_text.clone(),
+                    projection_ref: None,
+                    attachment_refs: Vec::new(),
+                    legacy_message_id: SafeDisplayText::new("legacy-msg-1").expect("legacy id"),
+                    source_sequence: 1,
+                    source_payload_hash: identical_text.sha256,
+                }),
+            ),
+            Arc::clone(&content),
+        )
+        .await
+        .expect("import message");
+    sequence += 1;
+    let mut imported_retry = record(
+        tenant_id,
+        conversation_id,
+        home_epoch,
+        sequence,
+        Some(imported_retry_run_id),
+        Some(executor_participant),
+        DomainEvent::Run(RunEvent::Admitted {
+            runtime_snapshot_id: RuntimeSnapshotId::generate(),
+            execution_home: RuntimeHome::Cloud,
+            parent_run_id: Some(first_run_id),
+            delegation_id: None,
+            input_message_id: Some(imported_message_id),
+            retry_source_message_id: Some(imported_message_id),
+            retry_source_attempt_number: Some(AttemptNumber::new(1).expect("attempt one")),
+        }),
+    );
+    imported_retry.metadata.activity_id = Some(imported_retry_activity_id);
+    imported_retry.metadata.run_seq = Some(RunSeq::new(1).expect("run seq 1"));
+    reducer
+        .apply(imported_retry, Arc::clone(&content))
+        .await
+        .expect("admit retry on imported message");
+
+    // Delegated and coordination runs carry no input message.
+    for (activity_id, run_id, parent, delegation) in [
+        (
+            child_activity_id,
+            child_run_id,
+            Some(second_run_id),
+            Some(DelegationId::generate()),
+        ),
+        (coord_activity_id, coord_run_id, None, None),
+    ] {
+        sequence += 1;
+        let mut admitted = record(
+            tenant_id,
+            conversation_id,
+            home_epoch,
+            sequence,
+            Some(run_id),
+            Some(executor_participant),
+            DomainEvent::Run(RunEvent::Admitted {
+                runtime_snapshot_id: RuntimeSnapshotId::generate(),
+                execution_home: RuntimeHome::Cloud,
+                parent_run_id: parent,
+                delegation_id: delegation,
+                input_message_id: None,
+                retry_source_message_id: None,
+                retry_source_attempt_number: None,
+            }),
+        );
+        admitted.metadata.activity_id = Some(activity_id);
+        admitted.metadata.run_seq = Some(RunSeq::new(1).expect("run seq 1"));
+        reducer
+            .apply(admitted, Arc::clone(&content))
+            .await
+            .expect("admit non-user run");
+    }
+
+    let snapshot = reducer
+        .finish(
+            content,
+            LedgerOffset::new(sequence),
+            UtcTimestamp::from_unix_millis(50_000),
+        )
+        .await
+        .expect("snapshot");
+
+    let by_message = snapshot
+        .messages
+        .iter()
+        .map(|message| (message.message_id, message.source_run_id))
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(by_message[&first_message_id], Some(first_run_id));
+    assert_eq!(by_message[&second_message_id], Some(second_run_id));
+    assert_eq!(by_message[&imported_message_id], None);
+
+    let by_run = snapshot
+        .runs
+        .iter()
+        .map(|run| (run.run_id, run))
+        .collect::<BTreeMap<_, _>>();
+    assert_eq!(
+        by_run[&first_run_id].input_message_id,
+        Some(first_message_id)
+    );
+    assert_eq!(by_run[&first_run_id].retry_source_message_id, None);
+    assert_eq!(
+        by_run[&second_run_id].input_message_id,
+        Some(second_message_id)
+    );
+    assert_eq!(
+        by_run[&retry_run_id].input_message_id,
+        Some(first_message_id)
+    );
+    assert_eq!(
+        by_run[&retry_run_id].retry_source_message_id,
+        Some(first_message_id)
+    );
+    assert_eq!(by_run[&retry_run_id].parent_run_id, Some(first_run_id));
+    assert_eq!(
+        by_run[&imported_retry_run_id].input_message_id,
+        Some(imported_message_id)
+    );
+    assert_eq!(by_run[&child_run_id].input_message_id, None);
+    assert_eq!(by_run[&coord_run_id].input_message_id, None);
+    assert_eq!(snapshot.tool_timeline[0].message_id, None);
+}
+
+#[tokio::test]
+async fn cold_start_from_legacy_events_and_replay_after_retraction_preserve_run_inputs() {
+    let tenant_id = TenantId::generate();
+    let conversation_id = ConversationId::generate();
+    let home_epoch = HomeEpoch::new(1).expect("epoch");
+    let user_participant = ParticipantId::generate();
+    let executor_participant = ParticipantId::generate();
+    let content_one = typed_content_ref(b"legacy turn one", "text/plain;charset=utf-8");
+    let content_two = typed_content_ref(b"legacy turn two", "text/plain;charset=utf-8");
+    let first_message_id = MessageId::generate();
+    let second_message_id = MessageId::generate();
+    let first_activity_id = ActivityId::generate();
+    let retry_activity_id = ActivityId::generate();
+    let second_activity_id = ActivityId::generate();
+    let first_run_id = RunId::generate();
+    let retry_run_id = RunId::generate();
+    let second_run_id = RunId::generate();
+    let content: Arc<dyn ProjectionContentStore> = Arc::new(NoIoContent);
+    let mut reducer = ProductProjectionReducer::new(
+        tenant_id,
+        conversation_id,
+        home_epoch,
+        None,
+        BTreeMap::new(),
+    )
+    .expect("reducer");
+
+    // Legacy events without RunAdmitted.input_message_id:
+    let mut accepted_one = record(
+        tenant_id,
+        conversation_id,
+        home_epoch,
+        1,
+        None,
+        Some(user_participant),
+        DomainEvent::Conversation(ConversationEvent::MessageAccepted {
+            project_task_target: None,
+            message_id: first_message_id,
+            role: MessageRole::User,
+            content_ref: content_one,
+            attachment_refs: Vec::new(),
+            requested_skill_refs: Vec::new(),
+        }),
+    );
+    accepted_one.metadata.activity_id = Some(first_activity_id);
+    reducer
+        .apply(accepted_one, Arc::clone(&content))
+        .await
+        .expect("legacy accept 1");
+
+    let mut admitted_one = record(
+        tenant_id,
+        conversation_id,
+        home_epoch,
+        2,
+        Some(first_run_id),
+        Some(executor_participant),
+        DomainEvent::Run(RunEvent::Admitted {
+            runtime_snapshot_id: RuntimeSnapshotId::generate(),
+            execution_home: RuntimeHome::Cloud,
+            parent_run_id: None,
+            delegation_id: None,
+            input_message_id: None,
+            retry_source_message_id: None,
+            retry_source_attempt_number: None,
+        }),
+    );
+    admitted_one.metadata.activity_id = Some(first_activity_id);
+    reducer
+        .apply(admitted_one, Arc::clone(&content))
+        .await
+        .expect("legacy admit 1");
+
+    let mut legacy_retry = record(
+        tenant_id,
+        conversation_id,
+        home_epoch,
+        3,
+        Some(retry_run_id),
+        Some(executor_participant),
+        DomainEvent::Run(RunEvent::Admitted {
+            runtime_snapshot_id: RuntimeSnapshotId::generate(),
+            execution_home: RuntimeHome::Cloud,
+            parent_run_id: Some(first_run_id),
+            delegation_id: None,
+            input_message_id: None,
+            retry_source_message_id: Some(first_message_id),
+            retry_source_attempt_number: Some(AttemptNumber::new(1).expect("attempt one")),
+        }),
+    );
+    legacy_retry.metadata.activity_id = Some(retry_activity_id);
+    reducer
+        .apply(legacy_retry, Arc::clone(&content))
+        .await
+        .expect("legacy retry");
+
+    // Retract turn one without explicit source_run_id, then replay a fresh turn.
+    reducer
+        .apply(
+            record(
+                tenant_id,
+                conversation_id,
+                home_epoch,
+                4,
+                None,
+                Some(user_participant),
+                DomainEvent::Conversation(ConversationEvent::MessageRetracted {
+                    message_id: first_message_id,
+                    reason: SafeDisplayText::new("retract legacy turn").expect("reason"),
+                    source_run_id: None,
+                }),
+            ),
+            Arc::clone(&content),
+        )
+        .await
+        .expect("retract turn 1");
+
+    let mut accepted_two = record(
+        tenant_id,
+        conversation_id,
+        home_epoch,
+        5,
+        None,
+        Some(user_participant),
+        DomainEvent::Conversation(ConversationEvent::MessageAccepted {
+            project_task_target: None,
+            message_id: second_message_id,
+            role: MessageRole::User,
+            content_ref: content_two,
+            attachment_refs: Vec::new(),
+            requested_skill_refs: Vec::new(),
+        }),
+    );
+    accepted_two.metadata.activity_id = Some(second_activity_id);
+    reducer
+        .apply(accepted_two, Arc::clone(&content))
+        .await
+        .expect("accept turn 2");
+
+    let mut admitted_two = record(
+        tenant_id,
+        conversation_id,
+        home_epoch,
+        6,
+        Some(second_run_id),
+        Some(executor_participant),
+        DomainEvent::Run(RunEvent::Admitted {
+            runtime_snapshot_id: RuntimeSnapshotId::generate(),
+            execution_home: RuntimeHome::Cloud,
+            parent_run_id: None,
+            delegation_id: None,
+            input_message_id: None,
+            retry_source_message_id: None,
+            retry_source_attempt_number: None,
+        }),
+    );
+    admitted_two.metadata.activity_id = Some(second_activity_id);
+    reducer
+        .apply(admitted_two, Arc::clone(&content))
+        .await
+        .expect("legacy admit 2");
+
+    let snapshot = reducer
+        .finish(
+            content,
+            LedgerOffset::new(6),
+            UtcTimestamp::from_unix_millis(10_000),
+        )
+        .await
+        .expect("snapshot");
+
+    assert_eq!(snapshot.messages.len(), 1);
+    assert_eq!(snapshot.messages[0].message_id, second_message_id);
+    assert_eq!(snapshot.messages[0].source_run_id, Some(second_run_id));
+    assert_eq!(snapshot.runs.len(), 1);
+    assert_eq!(snapshot.runs[0].run_id, second_run_id);
+    assert_eq!(snapshot.runs[0].input_message_id, Some(second_message_id));
+}
+
 #[allow(clippy::too_many_arguments)]
 fn record(
     tenant_id: TenantId,
@@ -1420,6 +1902,7 @@ fn projected_test_run(
         executor_participant_id: Some(ParticipantId::generate()),
         parent_run_id,
         delegation_id,
+        input_message_id: None,
         retry_source_message_id: None,
         retry_source_attempt_number: None,
         terminal_failure: None,

@@ -26,6 +26,8 @@ pub enum RunEvent {
         execution_home: RuntimeHome,
         parent_run_id: Option<RunId>,
         delegation_id: Option<DelegationId>,
+        /// Input Conversation Message that started or retried this Run, when one exists.
+        input_message_id: Option<MessageId>,
         retry_source_message_id: Option<MessageId>,
         retry_source_attempt_number: Option<AttemptNumber>,
     },

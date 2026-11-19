@@ -57,10 +57,10 @@ pass it as `?after=...`. UUID keyset order is stable.
 | --- | --- |
 | `POST /v1/runs` | `{command_id, conversation_id?, message, agent, model_route, placement:"cloud"}` → `{conversation_id, run_id, duplicate}` |
 | `GET /v1/conversations` | Authorized conversation IDs/titles |
-| `GET /v1/conversations/{id}/runs` | Run IDs, parent IDs, current statuses |
-| `GET /v1/runs/{id}` | Current status, pending interaction IDs, conversation cursor |
+| `GET /v1/conversations/{id}/runs` | Run IDs, parent IDs, input message IDs, current statuses |
+| `GET /v1/runs/{id}` | Current status, input message ID, pending interaction IDs, conversation cursor |
 | `POST /v1/runs/{id}/stop` | `{command_id}` → durable cancellation request; all live descendants cascade |
-| `GET /v1/conversations/{id}/projection` | Current kernel-reduced messages, runs, tools, pending interactions and cursor |
+| `GET /v1/conversations/{id}/projection` | Current kernel-reduced messages (with `source_run_id`), runs (with `input_message_id`), tools, pending interactions and cursor |
 | `GET /v1/conversations/{id}/events` | Resumable SSE projection input, described below |
 | `POST /v1/conversations/{id}/interactions/{interaction}/response` | `{command_id, answer:<schema-conforming JSON>}` or `{command_id, approval:true/false}` |
 
