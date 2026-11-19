@@ -282,7 +282,7 @@ async fn admission_records_exact_input_message_across_identical_sends_retries_an
         .expect("get_run authorized read");
         assert_eq!(
             view.input_message_id, expected_input,
-            "RunView.input_message_id mismatch for {run_id}"
+            "RunView.input_message_id mismatch"
         );
     }
 

@@ -484,7 +484,7 @@ impl InputMessageHarness {
             .await
             .expect("claim queued run")
         else {
-            panic!("expected queued Run {expected_run_id} to be claimable");
+            panic!("expected the queued Run to be claimable");
         };
         assert_eq!(claimed.fence.run_id, expected_run_id);
         AttemptContext {
