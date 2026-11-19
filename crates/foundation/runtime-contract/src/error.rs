@@ -51,6 +51,10 @@ pub enum ErrorCode {
     ModelRequestRejected,
     ToolNotExposed,
     CapabilityUnavailable,
+    /// No browser execution provider (an open Web page running the browser
+    /// sandbox) is available for the routed work. Retryable: the work can run
+    /// once a browser client reconnects. Hosts localize this code.
+    BrowserExecutionUnavailable,
     RunNotFound,
     RunTerminal,
     RunTransitionInvalid,
@@ -111,6 +115,7 @@ impl ErrorCode {
             Self::ModelRequestRejected => "model_request_rejected",
             Self::ToolNotExposed => "tool_not_exposed",
             Self::CapabilityUnavailable => "capability_unavailable",
+            Self::BrowserExecutionUnavailable => "browser_execution_unavailable",
             Self::RunNotFound => "run_not_found",
             Self::RunTerminal => "run_terminal",
             Self::RunTransitionInvalid => "run_transition_invalid",
@@ -170,6 +175,7 @@ impl ErrorCode {
             Self::ModelRequestRejected,
             Self::ToolNotExposed,
             Self::CapabilityUnavailable,
+            Self::BrowserExecutionUnavailable,
             Self::RunNotFound,
             Self::RunTerminal,
             Self::RunTransitionInvalid,
@@ -259,6 +265,7 @@ impl ErrorCode {
             | Self::PublicDeliveryMissing
             | Self::ModelRequestRejected
             | Self::CapabilityUnavailable
+            | Self::BrowserExecutionUnavailable
             | Self::DependencyUnavailable
             | Self::CredentialRefreshRequired
             | Self::ContentUnavailable => ErrorCategory::Dependency,
@@ -292,6 +299,7 @@ mod tests {
             ErrorCode::ModelRequestRejected,
             ErrorCode::ToolNotExposed,
             ErrorCode::CapabilityUnavailable,
+            ErrorCode::BrowserExecutionUnavailable,
             ErrorCode::RunNotFound,
             ErrorCode::RunTerminal,
             ErrorCode::RunTransitionInvalid,

@@ -25,6 +25,11 @@ pub struct CloudWorkerSettings {
     /// Publish raw usage through the host outbox; no price calculation or charge.
     #[serde(default)]
     pub publish_raw_usage: bool,
+    /// User-facing text for the retryable `browser_execution_unavailable`
+    /// tool failure (no open Web page runs the browser sandbox). The machine
+    /// code is stable; set this to localize the text. Defaults to English.
+    #[serde(default)]
+    pub browser_unavailable_message: Option<String>,
     /// Public workspace release bundle, relative to the settings file.
     pub workspace_releases_file: Option<std::path::PathBuf>,
     /// Trusted immutable tool publications installed before execution.
@@ -82,7 +87,19 @@ impl CloudWorkerSettings {
         if settings.models.is_empty() {
             return Err("at least one host model endpoint is required".into());
         }
+        settings.browser_unavailable_notice()?;
         Ok(settings)
+    }
+    /// Text of the retryable `browser_execution_unavailable` tool failure:
+    /// the configured message, or the English default.
+    pub fn browser_unavailable_notice(
+        &self,
+    ) -> Result<musteragent_tool_executor::BrowserUnavailableNotice, BuildError> {
+        match &self.browser_unavailable_message {
+            Some(text) => musteragent_tool_executor::BrowserUnavailableNotice::new(text.clone())
+                .map_err(|_| "browser_unavailable_message is not safe display text".into()),
+            None => Ok(Default::default()),
+        }
     }
     /// Validate bounded claims, lease renewal cadence and graceful drain limits.
     pub fn policy(&self) -> Result<WorkerPolicy, BuildError> {

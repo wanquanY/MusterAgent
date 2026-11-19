@@ -35,6 +35,7 @@ pub struct BrowserEnvironmentCapabilityHandler {
     browser: Arc<dyn BrowserGatewayStore>,
     content: Arc<dyn ContentStore>,
     clock: Arc<dyn musteragent_runtime_capability::RuntimeClock>,
+    unavailable_notice: crate::BrowserUnavailableNotice,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -148,7 +149,16 @@ impl BrowserEnvironmentCapabilityHandler {
             browser,
             content,
             clock,
+            unavailable_notice: crate::BrowserUnavailableNotice::default(),
         }
+    }
+
+    /// Host-configured text for a retryable `browser_execution_unavailable`
+    /// failure; defaults to [`crate::BrowserUnavailableNotice::DEFAULT_TEXT`].
+    #[must_use]
+    pub fn with_unavailable_notice(mut self, notice: crate::BrowserUnavailableNotice) -> Self {
+        self.unavailable_notice = notice;
+        self
     }
     async fn store(
         &self,
@@ -329,14 +339,14 @@ impl BrowserEnvironmentCapabilityHandler {
                             return Err(port(ErrorCode::ContentIntegrityFailed));
                         }
                     }
+                    Err(error) if crate::browser_execution::browser_unavailable(&error) => {
+                        return Err(port(ErrorCode::BrowserExecutionUnavailable));
+                    }
                     Err(
                         BrowserProviderRuntimeError::SandboxRoute(_)
                         | BrowserProviderRuntimeError::SandboxRoutingUnavailable,
                     ) => {
                         return Err(port(ErrorCode::CapabilityUnavailable));
-                    }
-                    Err(BrowserProviderRuntimeError::ProviderUnavailable) => {
-                        return Err(port(ErrorCode::AgentNotAvailable));
                     }
                     Err(_) => return Err(port(ErrorCode::DependencyUnavailable)),
                 }
@@ -467,6 +477,9 @@ impl AtomicCapabilityHandler for BrowserEnvironmentCapabilityHandler {
                         },
                     ))
                 }
+                Err(error) if error.code == ErrorCode::BrowserExecutionUnavailable => Ok(
+                    DispatchedCapabilityOutcome::Provider(self.unavailable_notice.failure()),
+                ),
                 Err(error) => Ok(DispatchedCapabilityOutcome::Provider(
                     CapabilityOutcome::Failed {
                         error: ErrorInfo {

@@ -335,6 +335,7 @@ impl ErrorClass {
             | ErrorCode::PublicDeliveryMissing
             | ErrorCode::ModelRequestRejected
             | ErrorCode::CapabilityUnavailable
+            | ErrorCode::BrowserExecutionUnavailable
             | ErrorCode::DependencyUnavailable
             | ErrorCode::CredentialRefreshRequired
             | ErrorCode::ContentUnavailable => Self::Dependency,

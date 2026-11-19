@@ -208,13 +208,16 @@ async fn worker_persists_server_routes_and_browser_only_fails_without_fallback()
                     _ => None,
                 })
                 .expect("typed sandbox failure event");
+            // No online browser client is retryable once the page reopens,
+            // and carries a stable code plus the host-configurable text.
             assert_eq!(
                 failure.code(),
-                musteragent_wire::wire::ErrorCode::CapabilityUnavailable
+                musteragent_wire::wire::ErrorCode::BrowserExecutionUnavailable
             );
+            assert!(failure.retryable);
             assert_eq!(
                 failure.safe_message,
-                SandboxRouteError::BrowserUnavailable.to_string()
+                musteragent_tool_executor::BrowserUnavailableNotice::DEFAULT_TEXT
             );
         } else {
             smoke.assert_tool_completion(fixture).await;
