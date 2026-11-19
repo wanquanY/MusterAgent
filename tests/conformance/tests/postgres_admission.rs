@@ -2,6 +2,8 @@
 
 #[path = "postgres_admission/dispatch_latency.rs"]
 mod dispatch_latency;
+#[path = "postgres_admission/input_message.rs"]
+mod input_message;
 #[path = "postgres_admission/physical_failover.rs"]
 mod physical_failover;
 #[path = "postgres_admission/plan_history.rs"]

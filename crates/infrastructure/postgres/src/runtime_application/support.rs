@@ -685,6 +685,7 @@ pub(super) fn decode_run_view(
         correlation_id,
     )?);
     Ok(RunView {
+        input_message_id: None,
         retry_configuration: None,
         run,
         active_attempt,

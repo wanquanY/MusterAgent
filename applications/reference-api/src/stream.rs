@@ -188,7 +188,8 @@ pub(crate) async fn snapshot_json(api: &Api, s: &ConversationProjectionSnapshot)
             json!({
                 "run_id": r.run_id.to_string(),
                 "status": format!("{:?}", r.status),
-                "parent_run_id": r.parent_run_id.map(|i| i.to_string())
+                "parent_run_id": r.parent_run_id.map(|i| i.to_string()),
+                "input_message_id": r.input_message_id.map(|i| i.to_string())
             })
         })
         .collect::<Vec<_>>();

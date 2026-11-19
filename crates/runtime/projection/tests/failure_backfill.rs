@@ -124,6 +124,7 @@ fn run() -> ProjectedRun {
         executor_participant_id: None,
         parent_run_id: None,
         delegation_id: None,
+        input_message_id: None,
         retry_source_message_id: None,
         retry_source_attempt_number: None,
         terminal_failure: None,

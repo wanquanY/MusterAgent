@@ -717,6 +717,48 @@ impl PostgresRuntimeApplicationStore {
         .map_err(|_| dependency(correlation_id))?
         .ok_or_else(|| not_found(ErrorCode::RunNotFound, correlation_id))?;
         let mut view = decode_run_view(row, correlation_id).map_err(RuntimeError::from)?;
+        view.input_message_id = sqlx::query_scalar::<_, uuid::Uuid>(
+            "WITH RECURSIVE retry_lineage(run_id, parent_run_id, activity_kind, delegation_id, admitted_sequence) AS (
+                 SELECT run.run_id, run.parent_run_id, run.activity_kind, run.delegation_id, run.admitted_sequence
+                 FROM runtime.runs AS run
+                 WHERE run.tenant_id = $1 AND run.conversation_id = $2 AND run.run_id = $3
+                 UNION
+                 SELECT parent.run_id, parent.parent_run_id, parent.activity_kind, parent.delegation_id, parent.admitted_sequence
+                 FROM runtime.runs AS parent
+                 JOIN retry_lineage AS child
+                   ON parent.run_id = child.parent_run_id
+                 WHERE parent.tenant_id = $1
+                   AND parent.conversation_id = $2
+                   AND child.activity_kind = 1
+                   AND child.delegation_id IS NULL
+                   AND parent.activity_kind = 1
+                   AND parent.delegation_id IS NULL
+             )
+             SELECT message.message_id
+             FROM retry_lineage AS lineage
+             JOIN conversation.messages AS message
+               ON message.tenant_id = $1
+              AND message.conversation_id = $2
+              AND message.run_id = lineage.run_id
+              AND message.committed_sequence = lineage.admitted_sequence
+             WHERE lineage.delegation_id IS NULL
+               AND message.role = 1
+               AND NOT EXISTS (
+                   SELECT 1
+                   FROM runtime.loop_controls AS control
+                   WHERE control.tenant_id = message.tenant_id
+                     AND control.message_id = message.message_id
+               )
+             LIMIT 1",
+        )
+        .bind(actor.tenant_id.into_uuid())
+        .bind(view.run.context.conversation_id.into_uuid())
+        .bind(run_id.into_uuid())
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|_| dependency(correlation_id))?
+        .map(|value| id(value, correlation_id))
+        .transpose()?;
         view.pending_interaction_ids = sqlx::query_scalar::<_, uuid::Uuid>(
             "SELECT interaction_id
              FROM approval.interactions

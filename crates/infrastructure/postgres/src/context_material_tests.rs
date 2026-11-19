@@ -67,6 +67,7 @@ fn retry_context_uses_only_target_runs_durable_source_message_binding() {
                     execution_home: musteragent_event_envelope::RuntimeHome::Cloud,
                     parent_run_id: Some(RunId::generate()),
                     delegation_id: None,
+                    input_message_id: source,
                     retry_source_message_id: source,
                     retry_source_attempt_number: Some(
                         musteragent_identity::AttemptNumber::new(1)

@@ -110,6 +110,7 @@ fn fixture() -> (Arc<State>, FileQueryAccess, CurrentFileQueryAuthority) {
         context_branches: vec![],
     };
     let run = RunView {
+        input_message_id: None,
         retry_configuration: None,
         run: Run {
             context,

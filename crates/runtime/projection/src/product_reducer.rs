@@ -67,6 +67,7 @@ pub struct ProductProjectionReducer {
         BTreeMap<musteragent_identity::ActivityId, ProjectedDelegationOrigin>,
     pending_coordination_origins:
         BTreeMap<musteragent_identity::ActivityId, ProjectedCoordinationOrigin>,
+    pending_activity_inputs: BTreeMap<musteragent_identity::ActivityId, MessageId>,
     runs: BTreeMap<RunId, ProjectedRun>,
     artifacts: BTreeMap<ArtifactId, ProjectedArtifact>,
     pending_artifacts: BTreeMap<ArtifactId, PendingArtifact>,
@@ -122,6 +123,7 @@ impl ProductProjectionReducer {
             activities: BTreeMap::new(),
             pending_delegation_origins: BTreeMap::new(),
             pending_coordination_origins: BTreeMap::new(),
+            pending_activity_inputs: BTreeMap::new(),
             runs: BTreeMap::new(),
             artifacts: BTreeMap::new(),
             pending_artifacts: BTreeMap::new(),
@@ -597,6 +599,12 @@ impl ProductProjectionReducer {
                 attachment_refs,
                 requested_skill_refs,
             } => {
+                if role == MessageRole::User
+                    && record.metadata.run_id.is_none()
+                    && let Some(activity_id) = record.metadata.activity_id
+                {
+                    self.pending_activity_inputs.insert(activity_id, message_id);
+                }
                 self.upsert_message(
                     record,
                     message_id,
@@ -717,6 +725,11 @@ impl ProductProjectionReducer {
             .retain(|activity_id, _| !scope.retracts_activity(*activity_id));
         self.pending_coordination_origins
             .retain(|activity_id, _| !scope.retracts_activity(*activity_id));
+        self.pending_activity_inputs
+            .retain(|activity_id, message_id| {
+                !scope.retracts_activity(*activity_id)
+                    && !retracted_message_ids.contains(message_id)
+            });
         self.artifacts.retain(|_, artifact| {
             !scope.retracts_artifact(artifact.created_by_run_id, artifact.activity_id)
         });
@@ -808,6 +821,7 @@ impl ProductProjectionReducer {
             RunEvent::Admitted {
                 parent_run_id,
                 delegation_id,
+                input_message_id,
                 retry_source_message_id,
                 retry_source_attempt_number,
                 ..
@@ -815,6 +829,23 @@ impl ProductProjectionReducer {
                 let Some(activity_id) = record.metadata.activity_id else {
                     return;
                 };
+                let activity_input_message_id = self.pending_activity_inputs.remove(&activity_id);
+                let resolved_input_message_id =
+                    input_message_id.or(retry_source_message_id).or_else(|| {
+                        (retry_source_message_id.is_none()
+                            && parent_run_id.is_none()
+                            && delegation_id.is_none())
+                        .then_some(activity_input_message_id)
+                        .flatten()
+                    });
+                if retry_source_message_id.is_none()
+                    && let Some(message_id) = resolved_input_message_id
+                    && let Some(message) = self.messages.get_mut(&message_id)
+                    && message.role == MessageRole::User
+                    && message.source_run_id.is_none()
+                {
+                    message.source_run_id = Some(run_id);
+                }
                 self.runs.insert(
                     run_id,
                     ProjectedRun {
@@ -823,6 +854,7 @@ impl ProductProjectionReducer {
                         executor_participant_id: record.metadata.participant_id,
                         parent_run_id,
                         delegation_id,
+                        input_message_id: resolved_input_message_id,
                         retry_source_message_id,
                         retry_source_attempt_number,
                         terminal_failure: None,
@@ -1254,7 +1286,9 @@ impl ProductProjectionReducer {
     fn latest_message_for_run(&self, run_id: RunId) -> Option<MessageId> {
         self.messages
             .values()
-            .filter(|message| message.source_run_id == Some(run_id))
+            .filter(|message| {
+                message.role == MessageRole::Assistant && message.source_run_id == Some(run_id)
+            })
             .max_by_key(|message| message.committed_at)
             .map(|message| message.message_id)
     }

@@ -301,6 +301,7 @@ async fn run(
             "conversation_id": v.run.context.conversation_id.to_string(),
             "status": format!("{:?}", v.run.state.status()),
             "parent_run_id": v.run.context.parent_run_id.map(|i| i.to_string()),
+            "input_message_id": v.input_message_id.map(|i| i.to_string()),
             "pending_interactions": v.pending_interaction_ids.iter().map(ToString::to_string).collect::<Vec<_>>(),
             "cursor": crate::stream::cursor(v.latest_cursor)
         }))
@@ -401,6 +402,7 @@ async fn runs(
             runs.push(json!({
                 "run_id": id,
                 "parent_run_id": v.run.context.parent_run_id.map(|r| r.to_string()),
+                "input_message_id": v.input_message_id.map(|r| r.to_string()),
                 "status": format!("{:?}", v.run.state.status())
             }));
         }

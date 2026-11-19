@@ -115,6 +115,7 @@ pub(super) async fn append_admission(f: &Fixture, fence: &AttemptFence) {
             execution_home: run.execution_home,
             parent_run_id: None,
             delegation_id: None,
+            input_message_id: None,
             retry_source_message_id: None,
             retry_source_attempt_number: None,
         },
