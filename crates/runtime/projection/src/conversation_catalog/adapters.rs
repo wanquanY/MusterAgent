@@ -189,11 +189,26 @@ pub fn adapt_conversation_event(
             };
             context.draft(CatalogSourceIdentity::Message(*message_id), 2, kind)?
         }
-        ConversationEvent::MessagePartiallyCommitted { message_id, .. } => context.draft(
-            CatalogSourceIdentity::Message(*message_id),
-            1,
-            CatalogFactKind::VisibleOutput,
-        )?,
+        ConversationEvent::MessagePartiallyCommitted {
+            message_id, reason, ..
+        } => {
+            let partial_context = match reason {
+                musteragent_conversation::PartialMessageReason::Cancelled => context,
+                musteragent_conversation::PartialMessageReason::Interrupted
+                | musteragent_conversation::PartialMessageReason::ProviderFailure
+                | musteragent_conversation::PartialMessageReason::ToolFailure => {
+                    CatalogEventContext {
+                        audience: CatalogAttentionAudience::AllParticipants,
+                        ..context
+                    }
+                }
+            };
+            partial_context.draft(
+                CatalogSourceIdentity::Message(*message_id),
+                1,
+                CatalogFactKind::VisibleOutput,
+            )?
+        }
         ConversationEvent::ParticipantJoined { .. }
         | ConversationEvent::ParticipantLeft
         | ConversationEvent::MessageAccepted { .. }
@@ -207,7 +222,11 @@ pub fn adapt_run_event(
     event: &RunEvent,
 ) -> Result<Vec<CatalogFactDraft>, CatalogAdapterError> {
     let identity = context.execution_identity()?;
-    let event_context = context.event;
+    let requested_context = context.event;
+    let event_context = CatalogEventContext {
+        audience: CatalogAttentionAudience::AllParticipants,
+        ..requested_context
+    };
     let mut drafts = Vec::with_capacity(2);
     match event {
         RunEvent::Admitted {
@@ -326,14 +345,26 @@ pub fn adapt_run_event(
                 Some(outcome),
             )?);
         }
-        RunEvent::Cancelled { .. } => {
+        RunEvent::Cancelled { reason, .. } => {
             let outcome = ExecutionOutcome {
                 kind: ExecutionOutcomeKind::Cancelled,
                 error_class: None,
                 recoverability: None,
             };
+            let cancelled_context = match reason {
+                musteragent_runtime_contract::CancelReason::UserRequested
+                | musteragent_runtime_contract::CancelReason::ConversationArchived => {
+                    requested_context
+                }
+                musteragent_runtime_contract::CancelReason::ParentCancelled
+                | musteragent_runtime_contract::CancelReason::PolicyRevoked
+                | musteragent_runtime_contract::CancelReason::SystemShutdown
+                | musteragent_runtime_contract::CancelReason::CoordinationInterrupted => {
+                    event_context
+                }
+            };
             drafts.push(execution_state_draft(
-                event_context,
+                cancelled_context,
                 identity,
                 CatalogExecutionStatus::Cancelled,
                 Some(outcome),

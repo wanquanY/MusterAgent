@@ -2,14 +2,15 @@
 
 use std::sync::Arc;
 
-use musteragent_conversation::{ConversationEvent, MessageRole};
+use musteragent_conversation::{ConversationEvent, MessageRole, PartialMessageReason};
 use musteragent_event_envelope::{LedgerCursor, LedgerMetadata, RuntimeHome};
 use musteragent_goal::{GoalEvaluation, GoalPursuit, StandingGoal};
 use musteragent_identity::{
-    Actor, ConversationId, HomeEpoch, LedgerOffset, ParticipantId, RunId, TenantId, UtcTimestamp,
+    Actor, ConversationId, HomeEpoch, LedgerOffset, ParticipantId, PrincipalId, RunId, TenantId,
+    UtcTimestamp,
 };
 use musteragent_ledger::DomainEvent;
-use musteragent_runtime_contract::ApplicationFuture;
+use musteragent_runtime_contract::{ApplicationFuture, CancelReason};
 
 use crate::{
     CatalogAttentionAudience, CatalogEventContext, CatalogFactDraft,
@@ -28,11 +29,18 @@ pub struct CatalogProjectionAuthority {
 }
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
+pub struct CatalogRunCancellationAuthority {
+    pub reason: CancelReason,
+    pub requested_by: PrincipalId,
+}
+
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct CatalogRunAuthority {
     pub parent_run_id: Option<RunId>,
     pub delegation_id: Option<musteragent_identity::DelegationId>,
     pub pursuit_id: Option<musteragent_identity::GoalPursuitId>,
     pub requested_by_participant_id: ParticipantId,
+    pub cancellation: Option<CatalogRunCancellationAuthority>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -334,11 +342,23 @@ impl ConversationCatalogLedgerProjector {
                 tenant_id: metadata.tenant_id,
                 conversation_id: metadata.conversation_id,
                 record_id: metadata.record_id,
-                audience: audience(&event, metadata.participant_id),
+                audience: audience(
+                    &event,
+                    metadata.participant_id,
+                    authority.actor.principal_id,
+                ),
                 occurred_at: metadata.occurred_at,
                 committed_at: metadata.committed_at,
             };
-            let drafts = self.adapt(event_context, metadata.run_id, event).await?;
+            let drafts = self
+                .adapt(
+                    event_context,
+                    metadata.run_id,
+                    metadata.participant_id,
+                    authority.actor.principal_id,
+                    event,
+                )
+                .await?;
             for mut draft in drafts {
                 // Only this validated canonical-record boundary supplies the
                 // provenance. Goal snapshot adapters use semantic identities.
@@ -367,10 +387,40 @@ impl ConversationCatalogLedgerProjector {
         &self,
         context: CatalogEventContext,
         run_id: Option<RunId>,
+        participant_id: Option<ParticipantId>,
+        actor_principal_id: PrincipalId,
         event: DomainEvent,
     ) -> Result<Vec<CatalogFactDraft>, ConversationCatalogProjectorError> {
         let result = match event {
-            DomainEvent::Conversation(event) => adapt_conversation_event(context, &event),
+            DomainEvent::Conversation(event) => {
+                let context = if matches!(
+                    event,
+                    ConversationEvent::MessagePartiallyCommitted {
+                        reason: PartialMessageReason::Cancelled,
+                        ..
+                    }
+                ) {
+                    let audience = if let Some(run_id) = run_id {
+                        let run = self
+                            .catalog
+                            .resolve_run_authority(context.tenant_id, run_id)
+                            .await?;
+                        cancellation_audience(None, participant_id, &run)
+                    } else {
+                        participant_id.map_or(
+                            CatalogAttentionAudience::AllExceptPrincipal(actor_principal_id),
+                            CatalogAttentionAudience::AllExceptParticipant,
+                        )
+                    };
+                    CatalogEventContext {
+                        audience,
+                        ..context
+                    }
+                } else {
+                    context
+                };
+                adapt_conversation_event(context, &event)
+            }
             DomainEvent::Activity(event) => adapt_activity_event(context, &event),
             DomainEvent::Artifact(event) => adapt_artifact_event(context, &event),
             DomainEvent::Interaction(event) => {
@@ -403,10 +453,16 @@ impl ConversationCatalogLedgerProjector {
                     .catalog
                     .resolve_run_authority(context.tenant_id, run_id)
                     .await?;
+                let audience = match &event {
+                    musteragent_run::RunEvent::Cancelled { reason, .. } => {
+                        cancellation_audience(Some(*reason), participant_id, &run)
+                    }
+                    _ => CatalogAttentionAudience::AllParticipants,
+                };
                 adapt_run_event(
                     CatalogRunProjectionContext {
                         event: CatalogEventContext {
-                            audience: CatalogAttentionAudience::AllParticipants,
+                            audience,
                             ..context
                         },
                         run_id,
@@ -450,8 +506,13 @@ fn goal_context(
 fn audience(
     event: &DomainEvent,
     participant_id: Option<ParticipantId>,
+    actor_principal_id: PrincipalId,
 ) -> CatalogAttentionAudience {
     match event {
+        DomainEvent::Conversation(ConversationEvent::Created { .. }) => participant_id.map_or(
+            CatalogAttentionAudience::AllExceptPrincipal(actor_principal_id),
+            CatalogAttentionAudience::AllExceptParticipant,
+        ),
         DomainEvent::Conversation(
             ConversationEvent::MessageCommitted {
                 role: MessageRole::User,
@@ -460,14 +521,40 @@ fn audience(
             | ConversationEvent::MessageImported {
                 role: MessageRole::User,
                 ..
-            }
-            | ConversationEvent::Created { .. },
+            },
         ) => participant_id.map_or(
             CatalogAttentionAudience::AllParticipants,
             CatalogAttentionAudience::AllExceptParticipant,
         ),
         _ => CatalogAttentionAudience::AllParticipants,
     }
+}
+
+fn is_actor_initiated_cancel(reason: CancelReason) -> bool {
+    matches!(
+        reason,
+        CancelReason::UserRequested | CancelReason::ConversationArchived
+    )
+}
+
+fn cancellation_audience(
+    event_reason: Option<CancelReason>,
+    participant_id: Option<ParticipantId>,
+    run: &CatalogRunAuthority,
+) -> CatalogAttentionAudience {
+    if let Some(cancellation) = run.cancellation {
+        if is_actor_initiated_cancel(cancellation.reason) {
+            return CatalogAttentionAudience::AllExceptPrincipal(cancellation.requested_by);
+        }
+        return CatalogAttentionAudience::AllParticipants;
+    }
+    if event_reason.is_none_or(is_actor_initiated_cancel) {
+        return participant_id.map_or(
+            CatalogAttentionAudience::AllExceptParticipant(run.requested_by_participant_id),
+            CatalogAttentionAudience::AllExceptParticipant,
+        );
+    }
+    CatalogAttentionAudience::AllParticipants
 }
 
 fn map_record_error(error: SubscriptionError) -> ConversationCatalogProjectorError {
@@ -707,5 +794,367 @@ mod tests {
             *catalog.advanced.lock().expect("advanced lock"),
             vec![healthy]
         );
+    }
+
+    struct StaticRecords(Vec<CatalogProjectionRecord>);
+
+    impl ConversationCatalogRecordSource for StaticRecords {
+        fn list_catalog_projection_records(
+            &self,
+            _actor: Actor,
+            _cursor: LedgerCursor,
+            _limit: usize,
+        ) -> ApplicationFuture<'_, Result<CatalogProjectionRecordPage, SubscriptionError>> {
+            let records = self.0.clone();
+            let through = records.last().map_or(LedgerOffset::ZERO, |item| {
+                LedgerOffset::from(item.metadata.conversation_seq)
+            });
+            Box::pin(async move { Ok(CatalogProjectionRecordPage { records, through }) })
+        }
+    }
+
+    struct CapturingCatalog {
+        authorities: Vec<CatalogProjectionAuthority>,
+        run_authority: Option<CatalogRunAuthority>,
+        drafts: Mutex<Vec<CatalogFactDraft>>,
+    }
+
+    impl ConversationCatalogProjectionPort for CapturingCatalog {
+        fn list_projection_authorities(
+            &self,
+            _limit: u16,
+        ) -> ApplicationFuture<
+            '_,
+            Result<Vec<CatalogProjectionAuthority>, ConversationCatalogProjectorError>,
+        > {
+            let authorities = self.authorities.clone();
+            Box::pin(async move { Ok(authorities) })
+        }
+
+        fn resolve_run_authority(
+            &self,
+            _tenant_id: TenantId,
+            _run_id: RunId,
+        ) -> ApplicationFuture<'_, Result<CatalogRunAuthority, ConversationCatalogProjectorError>>
+        {
+            let result = self
+                .run_authority
+                .ok_or(ConversationCatalogProjectorError::Corrupt);
+            Box::pin(async move { result })
+        }
+
+        fn list_goal_projection_snapshots(
+            &self,
+            _limit: u16,
+        ) -> ApplicationFuture<
+            '_,
+            Result<Vec<CatalogGoalProjectionSnapshot>, ConversationCatalogProjectorError>,
+        > {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn list_goal_evaluation_projection_snapshots(
+            &self,
+            _limit: u16,
+        ) -> ApplicationFuture<
+            '_,
+            Result<Vec<CatalogGoalEvaluationProjectionSnapshot>, ConversationCatalogProjectorError>,
+        > {
+            Box::pin(async { Ok(Vec::new()) })
+        }
+
+        fn apply_catalog_fact(
+            &self,
+            draft: CatalogFactDraft,
+        ) -> ApplicationFuture<
+            '_,
+            Result<CatalogProjectionApplyDisposition, ConversationCatalogProjectorError>,
+        > {
+            self.drafts.lock().expect("drafts lock").push(draft);
+            Box::pin(async { Ok(CatalogProjectionApplyDisposition::Applied) })
+        }
+
+        fn advance_projection_checkpoint(
+            &self,
+            _authority: CatalogProjectionAuthority,
+            _through: LedgerOffset,
+            _projected_at: UtcTimestamp,
+        ) -> ApplicationFuture<'_, Result<(), ConversationCatalogProjectorError>> {
+            Box::pin(async { Ok(()) })
+        }
+
+        fn finalize_bootstrap_receipts(
+            &self,
+            _limit: u16,
+            _finalized_at: UtcTimestamp,
+        ) -> ApplicationFuture<'_, Result<usize, ConversationCatalogProjectorError>> {
+            Box::pin(async { Ok(0) })
+        }
+    }
+
+    fn record_fixture(
+        tenant_id: TenantId,
+        conversation_id: ConversationId,
+        home_epoch: HomeEpoch,
+        seq: u64,
+        run_id: Option<RunId>,
+        participant_id: Option<ParticipantId>,
+        event: DomainEvent,
+    ) -> CatalogProjectionRecord {
+        CatalogProjectionRecord {
+            metadata: LedgerMetadata {
+                schema_version: DottedKey::new("musteragent.runtime.record.v1")
+                    .expect("record schema"),
+                record_id: LedgerRecordId::generate(),
+                record_kind: LedgerRecordKind::DomainEvent,
+                tenant_id,
+                conversation_id,
+                conversation_seq: ConversationSeq::new(seq).expect("seq"),
+                activity_id: None,
+                run_id,
+                run_seq: run_id.map(|_| musteragent_identity::RunSeq::new(seq).expect("run seq")),
+                attempt_id: None,
+                participant_id,
+                home_epoch,
+                producer: Producer::RuntimeApi,
+                occurred_at: UtcTimestamp::from_unix_millis(1_000 + seq as i64),
+                committed_at: UtcTimestamp::from_unix_millis(1_010 + seq as i64),
+                causation_id: None,
+                correlation_id: CorrelationId::generate(),
+                idempotency_key: IdempotencyKey::new(format!("rec-{seq}"))
+                    .expect("idempotency key"),
+                payload_hash: Sha256::digest(format!("rec-{seq}").as_bytes()),
+            },
+            event: Some(event),
+        }
+    }
+
+    #[tokio::test]
+    async fn created_without_envelope_participant_falls_back_to_actor_principal() {
+        let tenant_id = TenantId::generate();
+        let creator = PrincipalId::generate();
+        let conversation_id = ConversationId::generate();
+        let home_epoch = HomeEpoch::new(1).expect("home epoch");
+        let authority = CatalogProjectionAuthority {
+            actor: Actor {
+                tenant_id,
+                principal_id: creator,
+                principal_kind: PrincipalKind::User,
+            },
+            conversation_id,
+            control_home: RuntimeHome::Cloud,
+            home_epoch,
+            after: LedgerOffset::ZERO,
+        };
+        let source = Arc::new(StaticRecords(vec![record_fixture(
+            tenant_id,
+            conversation_id,
+            home_epoch,
+            1,
+            None,
+            None,
+            DomainEvent::Conversation(ConversationEvent::Created {
+                kind: ConversationKind::Direct,
+                control_home: RuntimeHome::Cloud,
+                workspace_id: None,
+            }),
+        )]));
+        let catalog = Arc::new(CapturingCatalog {
+            authorities: vec![authority],
+            run_authority: None,
+            drafts: Mutex::new(Vec::new()),
+        });
+        let projector =
+            ConversationCatalogLedgerProjector::new(10, 10, source, catalog.clone()).unwrap();
+        projector
+            .run_pass(UtcTimestamp::from_unix_millis(2_000))
+            .await
+            .expect("run pass");
+
+        let drafts = catalog.drafts.lock().expect("drafts");
+        assert_eq!(drafts.len(), 1);
+        assert_eq!(drafts[0].kind, crate::CatalogFactKind::ConversationCreated);
+        assert_eq!(
+            drafts[0].audience,
+            CatalogAttentionAudience::AllExceptPrincipal(creator)
+        );
+    }
+
+    #[tokio::test]
+    async fn user_and_archive_cancellations_exclude_requester_while_other_reasons_broadcast() {
+        let tenant_id = TenantId::generate();
+        let actor_principal = PrincipalId::generate();
+        let cancelling_principal = PrincipalId::generate();
+        let run_requester_participant = ParticipantId::generate();
+        let conversation_id = ConversationId::generate();
+        let run_id = RunId::generate();
+        let home_epoch = HomeEpoch::new(1).expect("home epoch");
+        let content_ref = musteragent_content_ref::ContentRef {
+            content_id: musteragent_identity::ContentId::generate(),
+            media_type: musteragent_content_ref::MediaType::new("text/plain").expect("media"),
+            byte_length: 5,
+            sha256: Sha256::digest(b"hello"),
+        };
+        let authority = CatalogProjectionAuthority {
+            actor: Actor {
+                tenant_id,
+                principal_id: actor_principal,
+                principal_kind: PrincipalKind::User,
+            },
+            conversation_id,
+            control_home: RuntimeHome::Cloud,
+            home_epoch,
+            after: LedgerOffset::ZERO,
+        };
+
+        for reason in [
+            CancelReason::UserRequested,
+            CancelReason::ConversationArchived,
+        ] {
+            let source = Arc::new(StaticRecords(vec![
+                record_fixture(
+                    tenant_id,
+                    conversation_id,
+                    home_epoch,
+                    1,
+                    Some(run_id),
+                    None,
+                    DomainEvent::Conversation(ConversationEvent::MessagePartiallyCommitted {
+                        message_id: musteragent_identity::MessageId::generate(),
+                        content_ref: content_ref.clone(),
+                        content_hash: content_ref.sha256,
+                        content_bytes: content_ref.byte_length,
+                        reason: PartialMessageReason::Cancelled,
+                    }),
+                ),
+                record_fixture(
+                    tenant_id,
+                    conversation_id,
+                    home_epoch,
+                    2,
+                    Some(run_id),
+                    None,
+                    DomainEvent::Run(musteragent_run::RunEvent::Cancelled {
+                        reason,
+                        last_attempt_id: None,
+                    }),
+                ),
+            ]));
+            let catalog = Arc::new(CapturingCatalog {
+                authorities: vec![authority],
+                run_authority: Some(CatalogRunAuthority {
+                    parent_run_id: None,
+                    delegation_id: None,
+                    pursuit_id: None,
+                    requested_by_participant_id: run_requester_participant,
+                    cancellation: Some(CatalogRunCancellationAuthority {
+                        reason,
+                        requested_by: cancelling_principal,
+                    }),
+                }),
+                drafts: Mutex::new(Vec::new()),
+            });
+            let projector =
+                ConversationCatalogLedgerProjector::new(10, 10, source, catalog.clone()).unwrap();
+            projector
+                .run_pass(UtcTimestamp::from_unix_millis(3_000))
+                .await
+                .expect("run pass");
+
+            let drafts = catalog.drafts.lock().expect("drafts");
+            assert_eq!(drafts.len(), 3);
+            assert_eq!(drafts[0].kind, crate::CatalogFactKind::VisibleOutput);
+            assert_eq!(
+                drafts[0].audience,
+                CatalogAttentionAudience::AllExceptPrincipal(cancelling_principal)
+            );
+            assert!(matches!(
+                drafts[1].kind,
+                crate::CatalogFactKind::ExecutionStateChanged {
+                    status: crate::CatalogExecutionStatus::Cancelled,
+                    visible_outcome: Some(crate::ExecutionOutcome {
+                        kind: crate::ExecutionOutcomeKind::Cancelled,
+                        ..
+                    }),
+                    ..
+                }
+            ));
+            assert_eq!(
+                drafts[1].audience,
+                CatalogAttentionAudience::AllExceptPrincipal(cancelling_principal)
+            );
+            assert!(matches!(
+                drafts[2].kind,
+                crate::CatalogFactKind::ActionClosed { .. }
+            ));
+        }
+
+        // Non-actor cancellation reasons and interrupted partial messages remain broadcast.
+        for reason in [
+            CancelReason::ParentCancelled,
+            CancelReason::PolicyRevoked,
+            CancelReason::SystemShutdown,
+            CancelReason::CoordinationInterrupted,
+        ] {
+            let source = Arc::new(StaticRecords(vec![
+                record_fixture(
+                    tenant_id,
+                    conversation_id,
+                    home_epoch,
+                    1,
+                    Some(run_id),
+                    None,
+                    DomainEvent::Conversation(ConversationEvent::MessagePartiallyCommitted {
+                        message_id: musteragent_identity::MessageId::generate(),
+                        content_ref: content_ref.clone(),
+                        content_hash: content_ref.sha256,
+                        content_bytes: content_ref.byte_length,
+                        reason: PartialMessageReason::Interrupted,
+                    }),
+                ),
+                record_fixture(
+                    tenant_id,
+                    conversation_id,
+                    home_epoch,
+                    2,
+                    Some(run_id),
+                    None,
+                    DomainEvent::Run(musteragent_run::RunEvent::Cancelled {
+                        reason,
+                        last_attempt_id: None,
+                    }),
+                ),
+            ]));
+            let catalog = Arc::new(CapturingCatalog {
+                authorities: vec![authority],
+                run_authority: Some(CatalogRunAuthority {
+                    parent_run_id: None,
+                    delegation_id: None,
+                    pursuit_id: None,
+                    requested_by_participant_id: run_requester_participant,
+                    cancellation: Some(CatalogRunCancellationAuthority {
+                        reason,
+                        requested_by: cancelling_principal,
+                    }),
+                }),
+                drafts: Mutex::new(Vec::new()),
+            });
+            let projector =
+                ConversationCatalogLedgerProjector::new(10, 10, source, catalog.clone()).unwrap();
+            projector
+                .run_pass(UtcTimestamp::from_unix_millis(3_000))
+                .await
+                .expect("run pass");
+
+            let drafts = catalog.drafts.lock().expect("drafts");
+            assert_eq!(
+                drafts[0].audience,
+                CatalogAttentionAudience::AllParticipants
+            );
+            assert_eq!(
+                drafts[1].audience,
+                CatalogAttentionAudience::AllParticipants
+            );
+        }
     }
 }

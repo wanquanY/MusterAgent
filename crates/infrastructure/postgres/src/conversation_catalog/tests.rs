@@ -199,21 +199,21 @@ async fn bootstrap_receipt_releases_complete_history_as_read() {
             .await
             .expect("project historical fact");
     }
-    let query = ListConversationCatalogV2 {
-        actor: Actor {
+    let query = ListConversationCatalogV2::from_workspace_id(
+        Actor {
             tenant_id,
             principal_id,
             principal_kind: PrincipalKind::User,
         },
-        conversation_id: None,
-        workspace_id: None,
-        lifecycle: ConversationLifecycle::Active,
-        page_size: 20,
-        after: None,
-    };
+        None,
+        None,
+        ConversationLifecycle::Active,
+        20,
+        None,
+    );
     assert!(
         store
-            .list_catalog(query)
+            .list_catalog(query.clone())
             .await
             .expect("list fenced Catalog")
             .conversations
@@ -348,18 +348,18 @@ async fn cloud_claim_reduce_delivery_and_receipt_are_transactional() {
         CatalogProjectionApplyDisposition::Duplicate
     );
     let page = store
-        .list_catalog(ListConversationCatalogV2 {
-            actor: Actor {
+        .list_catalog(ListConversationCatalogV2::from_workspace_id(
+            Actor {
                 tenant_id,
                 principal_id,
                 principal_kind: PrincipalKind::User,
             },
-            conversation_id: None,
-            workspace_id: None,
-            lifecycle: ConversationLifecycle::Active,
-            page_size: 20,
-            after: None,
-        })
+            None,
+            None,
+            ConversationLifecycle::Active,
+            20,
+            None,
+        ))
         .await
         .expect("list catalog");
     assert_eq!(page.snapshot_position, CatalogActivityPosition::new(1));
@@ -430,18 +430,18 @@ async fn cloud_claim_reduce_delivery_and_receipt_are_transactional() {
     assert_eq!(row.get::<i64, _>("last_user_visible_activity_at_ms"), 2_000);
     assert_eq!(row.get::<String, _>("seen_through_revision"), "1");
     let continued = store
-        .list_catalog(ListConversationCatalogV2 {
-            actor: Actor {
+        .list_catalog(ListConversationCatalogV2::from_workspace_id(
+            Actor {
                 tenant_id,
                 principal_id,
                 principal_kind: PrincipalKind::User,
             },
-            conversation_id: None,
-            workspace_id: None,
-            lifecycle: ConversationLifecycle::Active,
-            page_size: 20,
-            after: Some(continuation),
-        })
+            None,
+            None,
+            ConversationLifecycle::Active,
+            20,
+            Some(continuation),
+        ))
         .await
         .expect("continue pagination after receipt change");
     assert_eq!(continued.snapshot_position, CatalogActivityPosition::new(2));
@@ -464,4 +464,256 @@ async fn cloud_claim_reduce_delivery_and_receipt_are_transactional() {
     .expect("stale receipt response");
     assert!(!stale_ack.changed);
     assert_eq!(stale_ack.seen_through, AttentionRevision::new(1));
+}
+
+async fn collect_paged_ids(
+    store: &PostgresConversationCatalogStore,
+    base: ListConversationCatalogV2,
+    page_size: u16,
+) -> Vec<ConversationId> {
+    let mut after = None;
+    let mut out = Vec::new();
+    let mut previous_key: Option<(i64, Uuid)> = None;
+    loop {
+        let page = store
+            .list_catalog(
+                base.clone()
+                    .with_after(after)
+                    .validate()
+                    .map(|mut q| {
+                        q.page_size = page_size;
+                        q
+                    })
+                    .expect("valid paged query"),
+            )
+            .await
+            .expect("list catalog page");
+        assert!(page.conversations.len() <= usize::from(page_size));
+        for summary in &page.conversations {
+            let key = (
+                summary.last_user_visible_activity_at.unix_millis(),
+                summary.conversation_id.into_uuid(),
+            );
+            if let Some(prev) = previous_key {
+                assert!(
+                    key < prev,
+                    "keyset order must be strictly decreasing across pages: {key:?} < {prev:?}"
+                );
+            }
+            previous_key = Some(key);
+            out.push(summary.conversation_id);
+        }
+        match page.next_cursor {
+            Some(cursor) => after = Some(cursor),
+            None => break,
+        }
+    }
+    out
+}
+
+#[tokio::test]
+async fn workspace_and_title_filters_paginate_stably_and_escape_like_wildcards() {
+    let postgres = IsolatedPostgres::start_with_pgvector()
+        .await
+        .expect("start PostgreSQL");
+    let pool = postgres.pool().await.expect("connect PostgreSQL");
+    migrate(&pool).await.expect("migrate");
+    let store = PostgresConversationCatalogStore::new(pool.clone());
+
+    let tenant_id = TenantId::generate();
+    let principal_id = PrincipalId::generate();
+    let actor = Actor {
+        tenant_id,
+        principal_id,
+        principal_kind: PrincipalKind::User,
+    };
+    let workspace_a = musteragent_identity::WorkspaceId::generate();
+    let workspace_b = musteragent_identity::WorkspaceId::generate();
+    let epoch = HomeEpoch::new(1).expect("home epoch");
+
+    // Seed conversations across Unassigned, Workspace A, and Workspace B,
+    // including NULL titles, case variations, SQL LIKE wildcards ('%', '_', '\'),
+    // wildcard-decoy titles, and identical activity timestamps for tie-breaking.
+    let specs: Vec<(Option<musteragent_identity::WorkspaceId>, Option<&str>, i64)> = vec![
+        (None, Some("Alpha General Roadmap"), 5_000),
+        (None, Some("alpha budget 100% ready"), 4_000),
+        (None, Some("alpha budget 1000 ready"), 4_000), // same timestamp tie + '%' decoy
+        (None, None, 3_500),                            // untitled unassigned
+        (Some(workspace_a), Some("ALPHA_STEP_1 review"), 4_000), // 3-way timestamp tie
+        (Some(workspace_a), Some("ALPHAISTEPX1 review"), 3_000), // '_' decoy
+        (Some(workspace_a), Some(r"Alpha path\to\spec"), 2_500),
+        (Some(workspace_a), Some("Alpha pathtospec"), 2_500), // '\' decoy + timestamp tie
+        (Some(workspace_b), Some("Beta Workspace Notes"), 4_500),
+        (Some(workspace_b), Some("aLpHa cross-team sync"), 2_000),
+    ];
+
+    let mut seeded = Vec::with_capacity(specs.len());
+    for (workspace_id, title, activity_ms) in specs {
+        let conversation_id = ConversationId::generate();
+        let participant_id = ParticipantId::generate();
+        let mut fixture = pool.begin().await.expect("begin fixture");
+        sqlx::query("SET CONSTRAINTS ALL DEFERRED")
+            .execute(&mut *fixture)
+            .await
+            .expect("defer constraints");
+        sqlx::query(
+            "INSERT INTO conversation.conversations(
+                 conversation_id, tenant_id, kind, title, control_home_kind,
+                 control_device_id, home_epoch, lifecycle, created_by,
+                 created_at_ms, updated_at_ms, archived_at_ms, workspace_id,
+                 execution_owner_participant_id
+             ) VALUES($1, $2, 1, $3, 1, NULL, 1, 1, $4, 1000, 1000, NULL, $5, $6)",
+        )
+        .bind(conversation_id.into_uuid())
+        .bind(tenant_id.into_uuid())
+        .bind(title)
+        .bind(principal_id.into_uuid())
+        .bind(workspace_id.map(|id| id.into_uuid()))
+        .bind(participant_id.into_uuid())
+        .execute(&mut *fixture)
+        .await
+        .expect("insert Conversation");
+        sqlx::query(
+            "INSERT INTO conversation.participants(
+                 participant_id, tenant_id, conversation_id, kind, principal_ref,
+                 agent_ref, service_ref, display_name, avatar_content_id,
+                 joined_at_ms, left_at_ms
+             ) VALUES($1, $2, $3, 1, $4, NULL, NULL, 'User', NULL, 1000, NULL)",
+        )
+        .bind(participant_id.into_uuid())
+        .bind(tenant_id.into_uuid())
+        .bind(conversation_id.into_uuid())
+        .bind(principal_id.into_uuid())
+        .execute(&mut *fixture)
+        .await
+        .expect("insert participant");
+        fixture.commit().await.expect("commit Conversation");
+
+        store
+            .apply_fact(CatalogFactDraft {
+                control_home: RuntimeHome::Cloud,
+                tenant_id,
+                conversation_id,
+                home_epoch: epoch,
+                source_record_id: None,
+                source_key: CatalogSourceKey::new(
+                    CatalogSourceKind::ConversationCreated,
+                    CatalogSourceIdentity::Conversation(conversation_id),
+                    1,
+                )
+                .expect("created source"),
+                audience: CatalogAttentionAudience::AllExceptPrincipal(principal_id),
+                occurred_at: UtcTimestamp::from_unix_millis(activity_ms - 10),
+                committed_at: UtcTimestamp::from_unix_millis(activity_ms),
+                kind: CatalogFactKind::ConversationCreated,
+            })
+            .await
+            .expect("project ConversationCreated");
+        seeded.push((conversation_id, workspace_id, title, activity_ms));
+    }
+
+    let expected_ids = |workspace_filter: CatalogWorkspaceFilter, title_query: Option<&str>| {
+        let needle = title_query.map(|q| q.trim().to_ascii_lowercase());
+        let mut items: Vec<_> = seeded
+            .iter()
+            .copied()
+            .filter(|(_, ws, title, _)| {
+                let ws_ok = match workspace_filter {
+                    CatalogWorkspaceFilter::All => true,
+                    CatalogWorkspaceFilter::Unassigned => ws.is_none(),
+                    CatalogWorkspaceFilter::Assigned(target) => *ws == Some(target),
+                };
+                let title_ok = match needle.as_deref() {
+                    None => true,
+                    Some(q) => title.is_some_and(|t| t.to_ascii_lowercase().contains(q)),
+                };
+                ws_ok && title_ok
+            })
+            .collect();
+        items.sort_by(|left, right| {
+            right
+                .3
+                .cmp(&left.3)
+                .then_with(|| right.0.into_uuid().cmp(&left.0.into_uuid()))
+        });
+        items.into_iter().map(|item| item.0).collect::<Vec<_>>()
+    };
+
+    // Matrix of workspace filters x optional case-insensitive trimmed title query,
+    // verified both single-page and across page_size=1 and page_size=2 keyset pages.
+    let filter_cases = [
+        (CatalogWorkspaceFilter::All, None),
+        (CatalogWorkspaceFilter::Unassigned, None),
+        (CatalogWorkspaceFilter::Assigned(workspace_a), None),
+        (CatalogWorkspaceFilter::Assigned(workspace_b), None),
+        (CatalogWorkspaceFilter::All, Some("  aLpHa  ")),
+        (CatalogWorkspaceFilter::Unassigned, Some("  ALPHA  ")),
+        (
+            CatalogWorkspaceFilter::Assigned(workspace_a),
+            Some("  alpha  "),
+        ),
+        (
+            CatalogWorkspaceFilter::Assigned(workspace_b),
+            Some("  alpha  "),
+        ),
+    ];
+
+    for (workspace_filter, title_query) in filter_cases {
+        let expected = expected_ids(workspace_filter, title_query);
+        assert!(!expected.is_empty());
+        let base = ListConversationCatalogV2::new(actor, ConversationLifecycle::Active, 50)
+            .with_workspace_filter(workspace_filter)
+            .with_title_query(title_query);
+        let single_page = store
+            .list_catalog(base.clone())
+            .await
+            .expect("single page")
+            .conversations
+            .into_iter()
+            .map(|c| c.conversation_id)
+            .collect::<Vec<_>>();
+        assert_eq!(single_page, expected);
+        assert_eq!(collect_paged_ids(&store, base.clone(), 1).await, expected);
+        assert_eq!(collect_paged_ids(&store, base, 2).await, expected);
+    }
+
+    // Wildcard literal escaping ('%', '_', '\'): decoys must never match.
+    for (wildcard_query, expected_title) in [
+        ("  100%  ", "alpha budget 100% ready"),
+        ("step_1", "ALPHA_STEP_1 review"),
+        (r"path\to", r"Alpha path\to\spec"),
+        ("%", "alpha budget 100% ready"),
+        ("_", "ALPHA_STEP_1 review"),
+        (r"\", r"Alpha path\to\spec"),
+    ] {
+        let matched = store
+            .list_catalog(
+                ListConversationCatalogV2::new(actor, ConversationLifecycle::Active, 20)
+                    .with_title_query(Some(wildcard_query)),
+            )
+            .await
+            .expect("wildcard query")
+            .conversations;
+        assert_eq!(
+            matched.len(),
+            1,
+            "wildcard query {wildcard_query:?} must match only the literal title"
+        );
+        assert_eq!(
+            matched[0].title.as_ref().map(DisplayText::as_str),
+            Some(expected_title)
+        );
+    }
+
+    // Empty, whitespace-only, oversized and control-char title queries are rejected.
+    for invalid in ["", "   \t\n  ", &"q".repeat(101), "bad\0query"] {
+        let err = ConversationCatalogV2Source::list(
+            &store,
+            ListConversationCatalogV2::new(actor, ConversationLifecycle::Active, 20)
+                .with_title_query(Some(invalid)),
+        )
+        .await
+        .expect_err("invalid title query must fail");
+        assert_eq!(err, ConversationCatalogSourceError::InvalidQuery);
+    }
 }

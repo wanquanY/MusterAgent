@@ -12,9 +12,10 @@ use musteragent_projection::{
     CatalogAttentionRecord, CatalogExecutionIdentity, CatalogExecutionStatus, CatalogFactDraft,
     CatalogGoalEvaluationProjectionSnapshot, CatalogGoalProjectionSnapshot,
     CatalogGoalPursuitStatus, CatalogProjectionApplyDisposition, CatalogProjectionAuthority,
-    CatalogProjectionError, CatalogRecoverability, CatalogRunAuthority, CatalogRunWaitReason,
-    CatalogSourceClaim, CatalogSourceIdentity, CatalogSourceKey, CatalogSourceKind,
-    CatalogStandingGoalStatus, ConversationActionSummaryV2, ConversationCatalogCursorV2,
+    CatalogProjectionError, CatalogRecoverability, CatalogRunAuthority,
+    CatalogRunCancellationAuthority, CatalogRunWaitReason, CatalogSourceClaim,
+    CatalogSourceIdentity, CatalogSourceKey, CatalogSourceKind, CatalogStandingGoalStatus,
+    CatalogWorkspaceFilter, ConversationActionSummaryV2, ConversationCatalogCursorV2,
     ConversationCatalogInvalidationBatchV2, ConversationCatalogInvalidationV2,
     ConversationCatalogPageV2, ConversationCatalogProjection, ConversationCatalogProjectionPort,
     ConversationCatalogProjectorError, ConversationCatalogSourceError,
@@ -24,6 +25,7 @@ use musteragent_projection::{
 };
 use musteragent_runtime_automation::StandingGoalProductStore;
 use musteragent_runtime_contract::{ApplicationFuture, DisplayText};
+use prost::Message as _;
 use sqlx::{PgConnection, PgPool, Postgres, Row as _};
 use thiserror::Error;
 use uuid::Uuid;
@@ -97,6 +99,8 @@ impl PostgresConversationCatalogStore {
         .fetch_one(transaction.as_mut())
         .await?;
         let snapshot_position = CatalogActivityPosition::new(parse_u64(snapshot)?);
+        let (workspace_mode, workspace_id) = encode_workspace_filter(query.workspace_filter);
+        let title_pattern = query.title_query.as_deref().map(title_like_pattern);
         let after_at = query
             .after
             .map(|value| value.after_activity_at.unix_millis());
@@ -124,13 +128,18 @@ impl PostgresConversationCatalogStore {
                          AND bootstrap.conversation_id = catalog.conversation_id
                    )
                    AND ($4::uuid IS NULL OR catalog.conversation_id = $4)
-                   AND ($5::uuid IS NULL OR conversation.workspace_id = $5)
-                   AND ($6::bigint IS NULL OR catalog.last_user_visible_activity_at_ms < $6
-                        OR (catalog.last_user_visible_activity_at_ms = $6
-                            AND catalog.conversation_id < $7))
+                   AND (
+                       $5::smallint = 0
+                       OR ($5::smallint = 1 AND conversation.workspace_id IS NULL)
+                       OR ($5::smallint = 2 AND conversation.workspace_id = $6::uuid)
+                   )
+                   AND ($7::text IS NULL OR conversation.title ILIKE $7 ESCAPE '\\')
+                   AND ($8::bigint IS NULL OR catalog.last_user_visible_activity_at_ms < $8
+                        OR (catalog.last_user_visible_activity_at_ms = $8
+                            AND catalog.conversation_id < $9))
                  ORDER BY catalog.last_user_visible_activity_at_ms DESC,
                           catalog.conversation_id DESC
-                 LIMIT $8
+                 LIMIT $10
              )
              SELECT page.*,
                     page.home_epoch::text AS home_epoch_text,
@@ -222,7 +231,9 @@ impl PostgresConversationCatalogStore {
         .bind(query.actor.principal_id.into_uuid())
         .bind(encode_lifecycle(query.lifecycle))
         .bind(query.conversation_id.map(|value| value.into_uuid()))
-        .bind(query.workspace_id.map(|value| value.into_uuid()))
+        .bind(workspace_mode)
+        .bind(workspace_id)
+        .bind(title_pattern)
         .bind(after_at)
         .bind(after_id)
         .bind(i64::from(query.page_size) + 1)
@@ -835,7 +846,11 @@ impl ConversationCatalogProjectionPort for PostgresConversationCatalogStore {
             let rows = sqlx::query(
                 "SELECT conversation.tenant_id, conversation.conversation_id,
                         conversation.home_epoch::text AS home_epoch,
-                        MIN(viewer.principal_ref::text) AS principal_ref,
+                        COALESCE(
+                            MIN(viewer.principal_ref::text)
+                                FILTER (WHERE viewer.principal_ref = conversation.created_by),
+                            MIN(viewer.principal_ref::text)
+                        ) AS principal_ref,
                         checkpoint.through_conversation_seq::text AS through_conversation_seq
                  FROM conversation.conversations AS conversation
                  JOIN event_store.ledger_streams AS stream
@@ -854,7 +869,8 @@ impl ConversationCatalogProjectionPort for PostgresConversationCatalogStore {
                    AND (checkpoint.through_conversation_seq IS NULL
                      OR checkpoint.through_conversation_seq < stream.last_sequence)
                  GROUP BY conversation.tenant_id, conversation.conversation_id,
-                          conversation.home_epoch, checkpoint.through_conversation_seq
+                          conversation.home_epoch, conversation.created_by,
+                          checkpoint.through_conversation_seq
                  ORDER BY conversation.tenant_id, conversation.conversation_id
                  LIMIT $1",
             )
@@ -908,7 +924,8 @@ impl ConversationCatalogProjectionPort for PostgresConversationCatalogStore {
         Box::pin(async move {
             let row = sqlx::query(
                 "SELECT run.parent_run_id, run.delegation_id,
-                        run.requested_by_participant_id, binding.pursuit_id
+                        run.requested_by_participant_id, binding.pursuit_id,
+                        (run.cancel_requested_at_ms IS NOT NULL OR run.status = 7) AS may_have_cancellation
                  FROM runtime.runs AS run
                  LEFT JOIN projection.conversation_catalog_pursuit_runs AS binding
                    ON binding.tenant_id = run.tenant_id AND binding.run_id = run.run_id
@@ -920,6 +937,12 @@ impl ConversationCatalogProjectionPort for PostgresConversationCatalogStore {
             .await
             .map_err(|_| ConversationCatalogProjectorError::Unavailable)?
             .ok_or(ConversationCatalogProjectorError::Corrupt)?;
+            let may_have_cancellation: bool = projector_pg_column(&row, "may_have_cancellation")?;
+            let cancellation = if may_have_cancellation {
+                resolve_run_cancellation(&self.pool, tenant_id, run_id).await?
+            } else {
+                None
+            };
             Ok(CatalogRunAuthority {
                 parent_run_id: projector_pg_optional_id(&row, "parent_run_id")?,
                 delegation_id: projector_pg_optional_id(&row, "delegation_id")?,
@@ -928,6 +951,7 @@ impl ConversationCatalogProjectionPort for PostgresConversationCatalogStore {
                     projector_pg_column(&row, "requested_by_participant_id")?,
                 )
                 .map_err(|_| ConversationCatalogProjectorError::Corrupt)?,
+                cancellation,
             })
         })
     }
@@ -1002,6 +1026,90 @@ impl ConversationCatalogProjectionPort for PostgresConversationCatalogStore {
                 .await
                 .map_err(map_projector_error)
         })
+    }
+}
+
+fn encode_workspace_filter(filter: CatalogWorkspaceFilter) -> (i16, Option<Uuid>) {
+    match filter {
+        CatalogWorkspaceFilter::All => (0, None),
+        CatalogWorkspaceFilter::Unassigned => (1, None),
+        CatalogWorkspaceFilter::Assigned(workspace_id) => (2, Some(workspace_id.into_uuid())),
+    }
+}
+
+fn title_like_pattern(trimmed: &str) -> String {
+    let mut escaped = String::with_capacity(trimmed.len() + 2);
+    escaped.push('%');
+    for ch in trimmed.chars() {
+        if matches!(ch, '\\' | '%' | '_') {
+            escaped.push('\\');
+        }
+        escaped.push(ch);
+    }
+    escaped.push('%');
+    escaped
+}
+
+async fn resolve_run_cancellation(
+    pool: &PgPool,
+    tenant_id: TenantId,
+    run_id: musteragent_identity::RunId,
+) -> Result<Option<CatalogRunCancellationAuthority>, ConversationCatalogProjectorError> {
+    let rows = sqlx::query(
+        "SELECT record.payload_hash, event.encoded_event
+         FROM event_store.ledger_records AS record
+         JOIN event_store.domain_events AS event USING (record_id)
+         WHERE record.tenant_id = $1 AND record.run_id = $2
+           AND record.record_kind = 1 AND record.attempt_id IS NULL
+           AND event.encoded_event IS NOT NULL
+         ORDER BY record.run_seq ASC",
+    )
+    .bind(tenant_id.into_uuid())
+    .bind(run_id.into_uuid())
+    .fetch_all(pool)
+    .await
+    .map_err(|_| ConversationCatalogProjectorError::Unavailable)?;
+    for row in rows {
+        let bytes: Vec<u8> = projector_pg_column(&row, "encoded_event")?;
+        let hash: Vec<u8> = projector_pg_column(&row, "payload_hash")?;
+        if hash != musteragent_content_ref::Sha256::digest(&bytes).into_bytes() {
+            return Err(ConversationCatalogProjectorError::Corrupt);
+        }
+        let decoded = musteragent_persistence_codec::wire::DomainEvent::decode(bytes.as_slice())
+            .map_err(|_| ConversationCatalogProjectorError::Corrupt)?;
+        if let Some(musteragent_persistence_codec::wire::domain_event::Event::RunCancelRequested(
+            request,
+        )) = decoded.event
+        {
+            let reason = decode_cancel_reason(request.reason)?;
+            let requested_by = request
+                .requested_by
+                .ok_or(ConversationCatalogProjectorError::Corrupt)?
+                .value
+                .parse()
+                .map_err(|_| ConversationCatalogProjectorError::Corrupt)?;
+            return Ok(Some(CatalogRunCancellationAuthority {
+                reason,
+                requested_by,
+            }));
+        }
+    }
+    Ok(None)
+}
+
+fn decode_cancel_reason(
+    value: i32,
+) -> Result<musteragent_runtime_contract::CancelReason, ConversationCatalogProjectorError> {
+    use musteragent_persistence_codec::wire::CancelReason as WireCancelReason;
+    use musteragent_runtime_contract::CancelReason;
+    match WireCancelReason::try_from(value) {
+        Ok(WireCancelReason::UserRequested) => Ok(CancelReason::UserRequested),
+        Ok(WireCancelReason::ConversationArchived) => Ok(CancelReason::ConversationArchived),
+        Ok(WireCancelReason::ParentCancelled) => Ok(CancelReason::ParentCancelled),
+        Ok(WireCancelReason::PolicyRevoked) => Ok(CancelReason::PolicyRevoked),
+        Ok(WireCancelReason::SystemShutdown) => Ok(CancelReason::SystemShutdown),
+        Ok(WireCancelReason::CoordinationInterrupted) => Ok(CancelReason::CoordinationInterrupted),
+        _ => Err(ConversationCatalogProjectorError::Corrupt),
     }
 }
 
