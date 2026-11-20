@@ -454,6 +454,23 @@ impl PostgresRuntimeApplicationStore {
         )
         .await
         .map_err(|error| map_admission(error, correlation_id))?;
+        // The replacement Run's route authority becomes durable with it, under
+        // the same surface rule as a submit.
+        if let Some(routing) = crate::admission::admission_sandbox_routing(
+            commit.surface == musteragent_scheduler::AdmissionSurface::Api,
+            commit.sandbox_routing,
+        )
+        .map_err(|error| map_admission(error, correlation_id))?
+        {
+            crate::sandbox_routing::insert_run_context(
+                prepared.transaction_mut(),
+                commit.admission.run.context.run_id,
+                commit.actor,
+                routing,
+            )
+            .await
+            .map_err(|error| map_admission(error.into(), correlation_id))?;
+        }
         let mut staged = prepared
             .stage_with_context_branch_from(&commit.append, Some((3, commit.replacement_branch_id)))
             .await

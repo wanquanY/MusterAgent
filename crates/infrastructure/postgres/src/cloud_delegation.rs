@@ -321,18 +321,26 @@ impl PostgresCloudDelegation {
             .bind(source.snapshot_hash.into_bytes().as_slice()).bind(batch.runtime_snapshot.content_hash.into_bytes().as_slice()).execute(staged.transaction_mut()).await.map_err(db)?;
         // A delegated child serves its parent's turn: it inherits the parent's
         // routing context (for example a browser-only host with an attended
-        // page). A parent without one keeps the unattended server default.
-        let inherited = crate::sandbox_routing::inherit_run_context(
+        // page) within the tenant, whichever principal started the parent. Only
+        // a parent without a context gets the unattended server default; a
+        // context from another tenant fails closed instead of being relaxed.
+        match crate::sandbox_routing::inherit_run_context(
             staged.transaction_mut(),
             child.run_id,
             attempt.run_id,
             command.actor,
         )
         .await
-        .map_err(db)?;
-        if !inherited {
-            sqlx::query("INSERT INTO runtime.sandbox_routing_contexts(run_id,tenant_id,principal_id,surface,trigger,policy) VALUES($1,$2,$3,4,2,3)")
-                .bind(child.run_id.into_uuid()).bind(state.tenant_id.into_uuid()).bind(command.actor.principal_id.into_uuid()).execute(staged.transaction_mut()).await.map_err(db)?;
+        .map_err(db)?
+        {
+            crate::sandbox_routing::InheritedRunContext::Copied => {}
+            crate::sandbox_routing::InheritedRunContext::SourceHasNone => {
+                sqlx::query("INSERT INTO runtime.sandbox_routing_contexts(run_id,tenant_id,principal_id,surface,trigger,policy) VALUES($1,$2,$3,4,2,3)")
+                    .bind(child.run_id.into_uuid()).bind(state.tenant_id.into_uuid()).bind(command.actor.principal_id.into_uuid()).execute(staged.transaction_mut()).await.map_err(db)?;
+            }
+            crate::sandbox_routing::InheritedRunContext::TenantMismatch => {
+                return Err(Error::PermissionDenied);
+            }
         }
         let response = serde_json::json!({"handle":batch.delegation_id.to_string(),"run_id":child.run_id.to_string(),"parent_run_id":attempt.run_id.to_string(),"status":"queued"});
         event_raw(

@@ -152,6 +152,12 @@ pub struct EditAndResubmitCommit {
     pub created_at: UtcTimestamp,
     pub admission: AdmissionBatch,
     pub append: AppendRequest,
+    /// Admission surface of the replacement Run. API admissions always route
+    /// as the API surface, exactly as on submit.
+    pub surface: musteragent_scheduler::AdmissionSurface,
+    /// Trusted host routing context persisted with the replacement Run in the
+    /// edit transaction. Validated exactly like a submit context.
+    pub sandbox_routing: Option<musteragent_sandbox::SandboxRoutingContext>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

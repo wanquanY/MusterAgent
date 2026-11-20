@@ -496,9 +496,21 @@ impl PostgresAdmissionStore {
             &decoded,
         )
         .await?;
-        // The routing context references the Run row persisted above.
+        // The routing context references the Run row persisted above. A retry
+        // of an API Run is itself an API admission: an explicit context gets
+        // exactly the validation a submit context gets.
+        let source_is_api = crate::sandbox_routing::run_context_surface(
+            prepared.transaction_mut(),
+            batch.source_run_id,
+        )
+        .await?
+            == Some(crate::sandbox_routing::surface_code(
+                musteragent_sandbox::SandboxClientSurface::Api,
+            ));
         match batch.sandbox_routing {
             Some(routing) => {
+                let routing = admission_sandbox_routing(source_is_api, Some(routing))?
+                    .ok_or(PostgresAdmissionError::SandboxRoutingMismatch)?;
                 crate::sandbox_routing::insert_run_context(
                     prepared.transaction_mut(),
                     batch.run.context.run_id,
@@ -508,13 +520,20 @@ impl PostgresAdmissionStore {
                 .await?;
             }
             None => {
-                crate::sandbox_routing::inherit_run_context(
+                match crate::sandbox_routing::inherit_run_context(
                     prepared.transaction_mut(),
                     batch.run.context.run_id,
                     batch.source_run_id,
                     batch.actor,
                 )
-                .await?;
+                .await?
+                {
+                    crate::sandbox_routing::InheritedRunContext::Copied
+                    | crate::sandbox_routing::InheritedRunContext::SourceHasNone => {}
+                    crate::sandbox_routing::InheritedRunContext::TenantMismatch => {
+                        return Err(PostgresAdmissionError::SandboxRoutingMismatch);
+                    }
+                }
             }
         }
         let mut staged = prepared.stage(&batch.append).await?;
@@ -533,7 +552,7 @@ impl PostgresAdmissionStore {
 
 /// API admissions always route as the API surface. A host may tighten the
 /// policy or trigger, but cannot claim an attended browser surface for them.
-fn admission_sandbox_routing(
+pub(crate) fn admission_sandbox_routing(
     api_routing: bool,
     supplied: Option<musteragent_sandbox::SandboxRoutingContext>,
 ) -> Result<Option<musteragent_sandbox::SandboxRoutingContext>, PostgresAdmissionError> {

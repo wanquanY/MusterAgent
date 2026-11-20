@@ -314,9 +314,23 @@ A method rename creates a different release digest.
 
 ## Sandbox and process lifecycle
 
-Host admission calls `PostgresSandboxRoutingStore::bind_run_context` with the
-original actor, surface, trigger and policy. This immutable context is never
-inferred from model arguments. Tenant Skill sandbox declarations are published
+Hosts bind the original surface, trigger and policy of a Run by passing a
+`SandboxRoutingContext` in `AdmissionSelection::with_sandbox_routing` with the
+submit, edit-and-resubmit or retry command. It is persisted in the admission
+transaction, so a worker never observes the Run without its route authority.
+`PostgresSandboxRoutingStore::bind_run_context` remains for hosts that bind
+later. This immutable context is never inferred from model arguments.
+
+- API admissions (and retries of API Runs) always route as the API surface;
+  a context naming another surface is rejected.
+- A retry without a context inherits the source Run's context.
+- A delegated child inherits its parent's context within the tenant, whichever
+  principal started the parent; a context from another tenant fails closed.
+  Only a parent without a context gives its child the unattended default
+  (API surface, background trigger, `ServerOnly`).
+- Children of API Runs therefore inherit the API context: they still run on
+  the server, but the recorded route reason is `api_surface` rather than
+  `policy_server_only`. Tenant Skill sandbox declarations are published
 through `publish_skill_compatibility` after host manifest validation.
 
 The worker's Python/environment handlers call the shared router through the

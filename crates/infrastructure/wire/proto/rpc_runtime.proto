@@ -51,8 +51,6 @@ enum ActiveRunArchivePolicy {
 message AdmissionSelection {
   AdmissionSurface surface = 1;
   repeated string requested_skill_refs = 2;
-  // Trusted host routing context persisted with the admitted Run.
-  optional SandboxRoutingContext sandbox_routing = 3;
 }
 
 enum AdmissionSurface {
@@ -1355,34 +1353,6 @@ service RuntimeService {
   rpc SubscribeConversationRecords(SubscribeConversationRecordsRequest) returns (stream LedgerRecord);
   rpc SubscribeConversationCatalog(SubscribeConversationCatalogRequest) returns (stream ConversationCatalogChange);
   rpc SubscribeConversationCatalogV2(SubscribeConversationCatalogV2Request) returns (stream ConversationCatalogChangeV2);
-}
-
-enum SandboxClientSurface {
-  SANDBOX_CLIENT_SURFACE_UNSPECIFIED = 0;
-  SANDBOX_CLIENT_SURFACE_WEB = 1;
-  SANDBOX_CLIENT_SURFACE_DESKTOP = 2;
-  SANDBOX_CLIENT_SURFACE_MOBILE = 3;
-  SANDBOX_CLIENT_SURFACE_API = 4;
-}
-
-message SandboxRoutingContext {
-  SandboxClientSurface surface = 1;
-  SandboxTrigger trigger = 2;
-  SandboxRoutingPolicy policy = 3;
-}
-
-enum SandboxRoutingPolicy {
-  SANDBOX_ROUTING_POLICY_UNSPECIFIED = 0;
-  SANDBOX_ROUTING_POLICY_PREFER_BROWSER = 1;
-  SANDBOX_ROUTING_POLICY_BROWSER_ONLY = 2;
-  SANDBOX_ROUTING_POLICY_SERVER_ONLY = 3;
-}
-
-enum SandboxTrigger {
-  SANDBOX_TRIGGER_UNSPECIFIED = 0;
-  SANDBOX_TRIGGER_INTERACTIVE = 1;
-  SANDBOX_TRIGGER_BACKGROUND = 2;
-  SANDBOX_TRIGGER_SCHEDULED = 3;
 }
 
 message SetConversationTitleCommand {

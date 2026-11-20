@@ -325,6 +325,8 @@ impl RuntimeApplication {
                 created_at: now,
                 admission,
                 append,
+                surface: selection.surface,
+                sandbox_routing: selection.sandbox_routing,
             },
         };
         let result = self
