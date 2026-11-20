@@ -65,6 +65,36 @@ pub(crate) fn create_command_outbox_id<T>(
     .ok()
 }
 
+/// Deterministic identities of one standing-Goal continuation or judge Run.
+/// The target command identity is chosen by the supervisor, so a retried
+/// admission always names the same Run, Activity and records.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct StandingGoalIdentities {
+    pub command_id: CommandId,
+    pub correlation_id: CorrelationId,
+    pub synthetic_message_id: MessageId,
+    pub admission: AdmissionIdentities,
+}
+
+impl StandingGoalIdentities {
+    pub(crate) fn derive(command_id: CommandId) -> Option<Self> {
+        Some(Self {
+            command_id,
+            correlation_id: CorrelationId::from_uuid(derive(
+                command_id,
+                b"standing-goal-correlation",
+            ))
+            .ok()?,
+            synthetic_message_id: MessageId::from_uuid(derive(
+                command_id,
+                b"standing-goal-snapshot-input",
+            ))
+            .ok()?,
+            admission: AdmissionIdentities::derive(command_id)?,
+        })
+    }
+}
+
 /// Derive the stable Run identity shared by hosts and admission persistence.
 pub fn derive_admission_run_id(
     command_id: CommandId,
