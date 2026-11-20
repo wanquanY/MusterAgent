@@ -24,10 +24,10 @@ pub(super) struct Source {
     pub snapshot: RuntimeSnapshotContent,
     pub snapshot_hash: Sha256,
     pub trace: TraceContext,
-    /// The host bound the source Run to `SandboxRoutingPolicy::BrowserOnly`:
-    /// it operates no server sandbox, so browser-executed tools can only run
-    /// while a user's page holds a browser lease.
-    pub browser_only_sandbox: bool,
+    /// The sandbox routing policy the host bound to the source Run, or `None`
+    /// when the source Run has no routing context (bound before routing
+    /// contexts existed, or by a host that never binds one).
+    pub sandbox_policy: Option<musteragent_sandbox::SandboxRoutingPolicy>,
 }
 
 pub(super) async fn source(tx: &mut sqlx::PgConnection, run: RunId) -> Result<Source, Error> {
@@ -78,12 +78,11 @@ pub(super) async fn source(tx: &mut sqlx::PgConnection, run: RunId) -> Result<So
             .map_err(|_| Error::Corrupt)?,
         snapshot,
         snapshot_hash: hash,
-        browser_only_sandbox: row
+        sandbox_policy: row
             .try_get::<Option<i16>, _>("sandbox_policy")
             .map_err(db)?
-            == Some(crate::sandbox_routing::policy_code(
-                musteragent_sandbox::SandboxRoutingPolicy::BrowserOnly,
-            )),
+            .map(|code| crate::sandbox_routing::policy_from_code(code).ok_or(Error::Corrupt))
+            .transpose()?,
         trace: TraceContext {
             traceparent: musteragent_runtime_contract::TraceParent::new(
                 row.try_get::<String, _>("traceparent").map_err(db)?,
