@@ -41,6 +41,24 @@ pub trait RuntimeSnapshotResolver: Send + Sync {
         })
     }
 
+    /// Resolve the bounded Run of an owner-scoped standing Goal against its
+    /// verified private context. The sealed Snapshot must carry the source's
+    /// `owner_goal_authority`; hosts without owner-scoped Goals fail explicitly.
+    fn resolve_owner_goal(
+        &self,
+        request: SnapshotResolutionRequest,
+        _source: musteragent_runtime_session::OwnerGoalExecutionPreparation,
+    ) -> ApplicationFuture<'_, Result<RuntimeSnapshotResolution, RuntimeError>> {
+        Box::pin(async move {
+            Err(crate::runtime_error(
+                ErrorCode::PolicyDenied,
+                request.command.metadata.correlation_id,
+                false,
+                "Host does not resolve owner-scoped Goal snapshots",
+            ))
+        })
+    }
+
     /// Re-seals one already authenticated source Snapshot for a fresh retry
     /// Run identity. The shared admission service has applied any supported
     /// explicit recovery-policy transition. Implementations must not resolve

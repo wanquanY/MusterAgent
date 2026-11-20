@@ -75,6 +75,8 @@ mod retraction;
 mod retry_run;
 mod run_context;
 mod run_control;
+mod standing_goal;
+pub use standing_goal::StandingGoalPreparation;
 
 mod submission;
 mod submission_lookup;

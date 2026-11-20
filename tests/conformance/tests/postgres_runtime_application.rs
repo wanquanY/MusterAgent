@@ -1823,3 +1823,6 @@ mod private_execution;
 
 #[path = "postgres_runtime_application/shared_admission.rs"]
 mod shared_admission;
+
+#[path = "postgres_runtime_application/standing_goal_admission.rs"]
+mod standing_goal_admission;
