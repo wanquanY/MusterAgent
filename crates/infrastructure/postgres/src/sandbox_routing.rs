@@ -205,12 +205,8 @@ impl PostgresSandboxRoutingStore {
             3 => SandboxTrigger::Scheduled,
             _ => return Err(Error::CorruptDurableState),
         };
-        let policy = match row.try_get::<i16, _>("policy").map_err(db)? {
-            1 => SandboxRoutingPolicy::PreferBrowser,
-            2 => SandboxRoutingPolicy::BrowserOnly,
-            3 => SandboxRoutingPolicy::ServerOnly,
-            _ => return Err(Error::CorruptDurableState),
-        };
+        let policy = policy_from_code(row.try_get::<i16, _>("policy").map_err(db)?)
+            .ok_or(Error::CorruptDurableState)?;
         tx.commit()
             .await
             .map_err(|_| Error::DurabilityUnavailable)?;
@@ -367,6 +363,15 @@ pub(crate) fn trigger_code(s: SandboxTrigger) -> i16 {
         SandboxTrigger::Interactive => 1,
         SandboxTrigger::Background => 2,
         SandboxTrigger::Scheduled => 3,
+    }
+}
+/// Inverse of [`policy_code`]; `None` for a code this build does not know.
+pub(crate) fn policy_from_code(code: i16) -> Option<SandboxRoutingPolicy> {
+    match code {
+        1 => Some(SandboxRoutingPolicy::PreferBrowser),
+        2 => Some(SandboxRoutingPolicy::BrowserOnly),
+        3 => Some(SandboxRoutingPolicy::ServerOnly),
+        _ => None,
     }
 }
 pub(crate) fn policy_code(s: SandboxRoutingPolicy) -> i16 {

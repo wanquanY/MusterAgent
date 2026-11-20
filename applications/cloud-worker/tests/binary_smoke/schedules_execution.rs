@@ -241,3 +241,83 @@ async fn real_schedule_executes_its_sandbox_job_on_the_server() -> Result<(), Bu
     provider.shutdown().await?;
     Ok(())
 }
+
+/// Fires one occurrence of a schedule created from `source` and returns the
+/// tool keys sealed into the admitted occurrence Run.
+async fn scheduled_tool_keys(
+    smoke: &Smoke,
+    source: running_loop::Fixture,
+) -> Result<Vec<String>, BuildError> {
+    let now = running_loop::database_now(&smoke.pool).await;
+    let create = command(source, now);
+    let schedule = create.schedule_id;
+    PostgresScheduleService::new(smoke.pool.clone())
+        .change(create)
+        .await?;
+    let dispatcher = PostgresScheduleDispatcher::new(
+        smoke.pool.clone(),
+        smoke.content.clone(),
+        Arc::new(ProtobufLedgerPayloadCodec),
+    );
+    let fired = dispatcher
+        .fire(
+            schedule,
+            ScheduleTriggerOwner::Cloud,
+            1,
+            UtcTimestamp::from_unix_millis(now.unix_millis() + 500),
+        )
+        .await?;
+    assert!(fired.is_some(), "occurrence was not admitted");
+    let bytes: Vec<u8> = sqlx::query_scalar("SELECT s.encoded_snapshot FROM agent.owner_schedule_occurrences o JOIN runtime.runs r ON r.run_id=o.run_id JOIN capability.runtime_snapshots s ON s.runtime_snapshot_id=r.runtime_snapshot_id WHERE o.schedule_id=$1")
+        .bind(schedule)
+        .fetch_one(&smoke.pool)
+        .await?;
+    let snapshot = musteragent_wire::ProtobufSnapshotCodec.decode_content(&bytes)?;
+    let mut keys: Vec<String> = snapshot
+        .tools
+        .iter()
+        .map(|tool| tool.manifest.key.as_str().to_owned())
+        .collect();
+    keys.sort();
+    Ok(keys)
+}
+
+#[tokio::test]
+async fn schedule_from_a_browser_only_source_omits_browser_executed_tools() -> Result<(), BuildError>
+{
+    let smoke = Smoke::start_for("p10").await?;
+    let model = model()?;
+    let tools = ["data.python.run", "system.time.current"];
+    let input = b"[e2e:time] Read the current time and report it.";
+
+    // The host operates no server sandbox: the source Run is bound BrowserOnly.
+    let browser_only = smoke.seed_tools(&model, false, &tools, input).await;
+    sqlx::query("INSERT INTO runtime.sandbox_routing_contexts(run_id,tenant_id,principal_id,surface,trigger,policy) VALUES($1,$2,$3,1,1,2)")
+        .bind(browser_only.run_id.into_uuid())
+        .bind(browser_only.tenant_id.into_uuid())
+        .bind(browser_only.principal_id.into_uuid())
+        .execute(&smoke.pool)
+        .await?;
+    let keys = scheduled_tool_keys(&smoke, browser_only).await?;
+    assert!(
+        keys.iter()
+            .any(|key| key.starts_with("system.time.current@")),
+        "{keys:?}"
+    );
+    assert!(
+        !keys
+            .iter()
+            .any(|key| musteragent_tool::requires_browser_execution(key)),
+        "an unattended BrowserOnly occurrence kept a browser tool: {keys:?}"
+    );
+
+    // Without a routing context the occurrence keeps them; its own routing
+    // decides where each call runs.
+    let unbound = smoke.seed_tools(&model, false, &tools, input).await;
+    let keys = scheduled_tool_keys(&smoke, unbound).await?;
+    assert!(
+        keys.iter().any(|key| key.starts_with("data.python.run@")),
+        "{keys:?}"
+    );
+    Ok(())
+}
