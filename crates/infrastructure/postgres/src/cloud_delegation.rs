@@ -356,7 +356,9 @@ impl PostgresCloudDelegation {
         if input.placement != DelegationPlacement::Cloud {
             return Err(Error::PlacementUnavailable);
         }
-        let (depth,stopped):(i64,bool) = sqlx::query_as("WITH RECURSIVE a AS (SELECT run_id,parent_run_id,status,cancel_requested_at_ms FROM runtime.runs WHERE run_id=$1 UNION ALL SELECT r.run_id,r.parent_run_id,r.status,r.cancel_requested_at_ms FROM runtime.runs r JOIN a ON r.run_id=a.parent_run_id) SELECT count(*),bool_or(status IN (5,6,7,8) OR cancel_requested_at_ms IS NOT NULL OR EXISTS(SELECT 1 FROM runtime.delegation_stop_requests s WHERE s.run_id=a.run_id)) FROM a")
+        // Depth and stop authority follow delegation edges only; a retry or
+        // automation Run's terminal source is lineage, not a stopped parent.
+        let (depth,stopped):(i64,bool) = sqlx::query_as("WITH RECURSIVE a AS (SELECT run_id,parent_run_id,delegation_id,status,cancel_requested_at_ms FROM runtime.runs WHERE run_id=$1 UNION ALL SELECT r.run_id,r.parent_run_id,r.delegation_id,r.status,r.cancel_requested_at_ms FROM runtime.runs r JOIN a ON r.run_id=a.parent_run_id AND a.delegation_id IS NOT NULL) SELECT count(*),bool_or(status IN (5,6,7,8) OR cancel_requested_at_ms IS NOT NULL OR EXISTS(SELECT 1 FROM runtime.delegation_stop_requests s WHERE s.run_id=a.run_id)) FROM a")
             .bind(attempt.run_id.into_uuid()).fetch_one(&mut *tx).await.map_err(db)?;
         if stopped {
             return Err(Error::ParentStopped);

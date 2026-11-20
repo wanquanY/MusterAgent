@@ -11,9 +11,12 @@ pub(crate) async fn descendants<'e, E>(
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
+    // Only delegated children inherit a cancellation; retry and automation
+    // lineage also uses `parent_run_id` but is not a supervision edge.
     sqlx::query_scalar("WITH RECURSIVE descendants AS (
-        SELECT run_id,1 AS depth FROM runtime.runs WHERE parent_run_id=$3
-        UNION ALL SELECT r.run_id,d.depth+1 FROM runtime.runs r JOIN descendants d ON r.parent_run_id=d.run_id
+        SELECT run_id,1 AS depth FROM runtime.runs WHERE parent_run_id=$3 AND delegation_id IS NOT NULL
+        UNION ALL SELECT r.run_id,d.depth+1 FROM runtime.runs r JOIN descendants d
+          ON r.parent_run_id=d.run_id AND r.delegation_id IS NOT NULL
     ) SELECT r.run_id FROM runtime.runs r JOIN descendants d USING(run_id)
     WHERE r.tenant_id=$1 AND r.conversation_id=$2 AND r.status IN(1,2,3) AND r.cancel_requested_at_ms IS NULL
     ORDER BY d.depth,r.admitted_at_ms,r.run_id")

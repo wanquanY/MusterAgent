@@ -582,6 +582,16 @@ impl InputMessageHarness {
         retry_run_id
     }
 
+    pub fn cloud_delegation(&self) -> PostgresCloudDelegation {
+        PostgresCloudDelegation::new(
+            self.pool.clone(),
+            Arc::clone(&self.content),
+            Arc::new(ProtobufLedgerPayloadCodec),
+            Arc::clone(&self.keys),
+            Arc::new(SystemLivenessHomeClock::default()),
+        )
+    }
+
     pub async fn spawn_delegated_child(
         &self,
         parent_attempt: &AttemptContext,
@@ -665,13 +675,7 @@ impl InputMessageHarness {
             .await
             .expect("start delegation tool invocation");
 
-        let delegation = PostgresCloudDelegation::new(
-            self.pool.clone(),
-            Arc::clone(&self.content),
-            Arc::new(ProtobufLedgerPayloadCodec),
-            Arc::clone(&self.keys),
-            Arc::new(SystemLivenessHomeClock::default()),
-        );
+        let delegation = self.cloud_delegation();
         let schema_bytes = br#"{"type":"object"}"#;
         let result = delegation
             .invoke(

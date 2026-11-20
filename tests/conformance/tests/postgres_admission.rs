@@ -8,6 +8,8 @@ mod input_message;
 mod physical_failover;
 #[path = "postgres_admission/plan_history.rs"]
 mod plan_history;
+#[path = "postgres_admission/retry_lineage.rs"]
+mod retry_lineage;
 #[path = "postgres_admission/source_selection.rs"]
 mod source_selection;
 #[path = "postgres_admission/worker_compatibility.rs"]

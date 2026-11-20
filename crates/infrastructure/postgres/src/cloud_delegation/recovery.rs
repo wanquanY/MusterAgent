@@ -17,13 +17,17 @@ impl PostgresCloudDelegation {
     async fn cascade_stops(&self, now: UtcTimestamp) -> Result<(), Error> {
         // Walk upward only from live work. Historical terminal Runs must not
         // become an ever-growing recursive scan on every reconciliation tick.
+        // Only delegation edges carry stop authority: `parent_run_id` also
+        // records retry and automation lineage, whose source is terminal by
+        // construction and must not cancel the Run derived from it.
         let rows = sqlx::query(
             "WITH RECURSIVE ancestry AS (
-            SELECT run_id AS target,run_id,parent_run_id,status,cancel_requested_at_ms
+            SELECT run_id AS target,run_id,parent_run_id,delegation_id,status,cancel_requested_at_ms
               FROM runtime.runs WHERE status IN (1,2,3,4) AND cancel_requested_at_ms IS NULL
             UNION ALL
-            SELECT a.target,r.run_id,r.parent_run_id,r.status,r.cancel_requested_at_ms
-              FROM runtime.runs r JOIN ancestry a ON r.run_id=a.parent_run_id
+            SELECT a.target,r.run_id,r.parent_run_id,r.delegation_id,r.status,r.cancel_requested_at_ms
+              FROM runtime.runs r JOIN ancestry a
+                ON r.run_id=a.parent_run_id AND a.delegation_id IS NOT NULL
         ), stopped AS (
             SELECT DISTINCT target FROM ancestry a WHERE a.cancel_requested_at_ms IS NOT NULL
               OR a.status IN (6,7,8)
