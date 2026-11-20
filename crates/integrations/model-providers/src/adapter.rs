@@ -647,6 +647,7 @@ fn provider_reasoning_replay_is_consumed(
         request.route.api_format,
         message.role == musteragent_runtime_model::CanonicalRole::Assistant,
         !message.tool_calls.is_empty(),
+        message.reasoning.is_some(),
         request.route.capabilities.iter().any(|capability| {
             matches!(
                 capability.as_str(),
@@ -656,10 +657,16 @@ fn provider_reasoning_replay_is_consumed(
     )
 }
 
+/// Whether the mapper will read this message's stored reasoning, so the
+/// adapter must resolve its content first. OpenAI Chat echoes
+/// `reasoning_content` on every assistant message with reasoning or tool
+/// calls, including a reasoning-only message before an output-limit
+/// continuation; it must be loaded for both.
 const fn consumes_provider_reasoning_replay(
     api_format: ApiFormat,
     assistant: bool,
     has_tool_calls: bool,
+    has_reasoning: bool,
     chat_reasoning_echo: bool,
 ) -> bool {
     if !assistant {
@@ -672,7 +679,9 @@ const fn consumes_provider_reasoning_replay(
         | ApiFormat::BedrockInvokeModel
         | ApiFormat::GoogleGenerateContent
         | ApiFormat::GoogleInteractions => true,
-        ApiFormat::OpenAiChatCompletions => has_tool_calls && chat_reasoning_echo,
+        ApiFormat::OpenAiChatCompletions => {
+            chat_reasoning_echo && (has_tool_calls || has_reasoning)
+        }
         ApiFormat::TypeSafeSystemOne | ApiFormat::OpenRouterDecisions => false,
     }
 }
@@ -955,25 +964,29 @@ mod tests {
             ApiFormat::GoogleInteractions,
         ] {
             assert!(consumes_provider_reasoning_replay(
-                format, true, false, false
+                format, true, false, true, false
             ));
         }
+        let chat = ApiFormat::OpenAiChatCompletions;
         assert!(consumes_provider_reasoning_replay(
-            ApiFormat::OpenAiChatCompletions,
-            true,
-            true,
-            true
+            chat, true, true, true, true
+        ));
+        // A reasoning-only assistant message (output-limit continuation) is
+        // echoed too, so its stored reasoning must be resolved.
+        assert!(consumes_provider_reasoning_replay(
+            chat, true, false, true, true
         ));
         assert!(!consumes_provider_reasoning_replay(
-            ApiFormat::OpenAiChatCompletions,
-            true,
-            false,
-            true
+            chat, true, false, false, true
+        ));
+        assert!(!consumes_provider_reasoning_replay(
+            chat, true, true, true, false
         ));
         assert!(!consumes_provider_reasoning_replay(
             ApiFormat::OpenAiResponses,
             false,
             false,
+            true,
             false
         ));
     }
