@@ -64,9 +64,9 @@ impl ProviderNormalizer {
                             // carrying the thought signature. It has no public output delta.
                         } else if part.get("text").and_then(Value::as_str) == Some("") {
                             // Google emits an empty final text Part after tool calls.
-                        } else {
-                            return Err(NormalizeError::UnknownContentBlock);
                         }
+                        // Other Parts (inlineData, executableCode,
+                        // codeExecutionResult) carry nothing consumed here.
                     }
                 }
                 if let Some(reason) = optional_text(
@@ -113,10 +113,11 @@ impl ProviderNormalizer {
         }
         if invalid_generation {
             self.terminal = true;
+            // Gemini's malformed-call/response stops are transient; retry.
             events.push(ModelStreamEvent::ResponseError(ProviderError {
                 kind: ProviderErrorKind::Protocol,
                 safe_code: ProviderErrorCode::ProtocolViolation,
-                retryable: false,
+                retryable: true,
                 retry_after_ms: None,
                 diagnostic_ref: self.response_ref.clone(),
             }));
@@ -308,7 +309,7 @@ impl ProviderNormalizer {
                             .insert(index, InteractionStepKind::Input);
                         events.extend(self.ensure_started());
                     }
-                    _ => return Err(NormalizeError::UnknownContentBlock),
+                    _ => {}
                 }
             }
             "step.delta" => {
@@ -361,7 +362,7 @@ impl ProviderNormalizer {
                             delta: fragment.into(),
                         });
                     }
-                    _ => return Err(NormalizeError::UnknownDeltaType),
+                    _ => {}
                 }
             }
             "step.stop" => {
@@ -437,7 +438,10 @@ impl ProviderNormalizer {
                     "failed" => {
                         return self.provider_error(&value, ProviderErrorKind::Server);
                     }
-                    _ => return Err(NormalizeError::UnknownStopReason),
+                    _ => {
+                        self.pending_stop = Some(StopReason::Stop);
+                        events.extend(self.complete_interaction_terminal()?);
+                    }
                 }
             }
             "interaction.status_update" => {
@@ -451,14 +455,14 @@ impl ProviderNormalizer {
                     | "incomplete"
                     | "budget_exceeded"
                     | "requires_continuation" => {}
-                    _ => return Err(NormalizeError::UnknownStopReason),
+                    _ => {} // A new interim status is not a failure.
                 }
                 events.extend(self.ensure_started());
             }
             "error" => {
                 return self.provider_error(&value, ProviderErrorKind::Server);
             }
-            _ => return Err(NormalizeError::UnknownEventType),
+            _ => {}
         }
         Ok(events)
     }

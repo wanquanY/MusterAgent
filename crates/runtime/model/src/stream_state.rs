@@ -97,15 +97,10 @@ impl ModelStreamState {
                 *completed = true;
             }
             ModelStreamEvent::Usage(usage) => {
+                // The latest Provider report wins; usage never fails a response.
                 usage
                     .validate()
                     .map_err(|_| ModelStreamStateError::InvalidUsage)?;
-                if self
-                    .latest_usage
-                    .is_some_and(|earlier| !usage.dominates(earlier))
-                {
-                    return Err(ModelStreamStateError::UsageRegressed);
-                }
                 self.latest_usage = Some(*usage);
             }
             ModelStreamEvent::ResponseCompleted { .. } => {
@@ -156,8 +151,6 @@ pub enum ModelStreamStateError {
     IncompleteToolCall,
     #[error("Provider usage violated the canonical usage contract")]
     InvalidUsage,
-    #[error("Provider cumulative usage regressed")]
-    UsageRegressed,
     #[error("Provider reasoning replay item is invalid")]
     InvalidProviderReplay,
     #[error("Provider emitted a Runtime-derived Artifact preview event")]

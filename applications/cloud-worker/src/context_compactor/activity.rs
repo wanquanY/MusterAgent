@@ -1,5 +1,4 @@
 use super::*;
-use musteragent_context::ContextCompactionModelFailure;
 use musteragent_loop::ExecutionBoundary;
 use musteragent_runtime_model::SupervisedModelCompletion;
 
@@ -73,19 +72,8 @@ impl PersistedContextCompactor {
                     }
                 },
                 |output, terminal| async move {
-                    let output = match output {
-                        Ok(output)
-                            if output.response_model_key != persisted.requested_model_key =>
-                        {
-                            persisted.provider_request_ref = Some(output.provider_request_ref);
-                            persisted.response_model_key = Some(output.response_model_key);
-                            Err(ContextCompactionModelFailure {
-                                error: ContextPlanError::invariant(),
-                                usage: Some(output.usage),
-                            })
-                        }
-                        output => output,
-                    };
+                    // The reported model (dated snapshot, endpoint alias, relay
+                    // variant) is recorded for metering, never compared.
                     match output {
                         Ok(output) => match self
                             .complete_success(

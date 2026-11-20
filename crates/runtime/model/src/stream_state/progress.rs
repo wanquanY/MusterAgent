@@ -81,6 +81,15 @@ fn usage_advances(current: ModelUsage, previous: Option<ModelUsage>) -> bool {
             .into_iter()
             .any(|value| value > 0)
         },
-        |previous| !previous.dominates(current),
+        // Liveness only: some counter grew. A Provider correction downwards
+        // is accepted as the latest report but is not new work.
+        |previous| {
+            current.input_tokens_uncached > previous.input_tokens_uncached
+                || current.output_tokens > previous.output_tokens
+                || current.reasoning_tokens > previous.reasoning_tokens
+                || current.provider_cache_read_tokens > previous.provider_cache_read_tokens
+                || current.provider_cache_write_tokens > previous.provider_cache_write_tokens
+                || current.provider_cache_write_1h_tokens > previous.provider_cache_write_1h_tokens
+        },
     )
 }

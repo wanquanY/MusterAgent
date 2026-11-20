@@ -142,17 +142,27 @@ fn parse_evidence_preserves_position_and_fingerprint_without_argument_values() {
 
 #[test]
 fn incomplete_without_a_reason_is_not_output_token_exhaustion() {
-    for body in [
-        json!({}),
-        json!({"response":{"status":"incomplete"}}),
-        json!({"response":{"incomplete_details":{"reason":"unknown"}}}),
-    ] {
+    for body in [json!({}), json!({"response":{"status":"incomplete"}})] {
         assert!(
             responses()
                 .observe(Some("response.incomplete"), body)
                 .is_err()
         );
     }
+    // An unlisted reason is not claimed as output-token exhaustion.
+    let mut value = responses();
+    let events = value
+        .observe(
+            Some("response.incomplete"),
+            json!({"response":{"incomplete_details":{"reason":"unknown"}}}),
+        )
+        .unwrap_or_default();
+    assert!(!events.iter().any(|event| matches!(
+        event,
+        ModelStreamEvent::ResponseCompleted {
+            stop_reason: StopReason::MaxOutputTokens
+        }
+    )));
 }
 
 #[test]
