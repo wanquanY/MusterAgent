@@ -1,5 +1,5 @@
 #[path = "../support/input_message_fixture.rs"]
-mod fixture;
+pub(super) mod fixture;
 
 use musteragent_conversation::ConversationEvent;
 use musteragent_event_envelope::LedgerCursor;

@@ -334,6 +334,7 @@ impl RuntimeApplication {
                 admission_selection: AdmissionSelection {
                     surface,
                     requested_skill_refs: BTreeSet::new(),
+                    sandbox_routing: None,
                 },
                 prior_discovery: preparation.authority.prior_discovery.clone(),
             })

@@ -7,6 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+musteragent-sandbox.workspace = true
 musteragent-conversation = { version = "0.1.0", path = "../../domains/conversation" }
 musteragent-execution-grant.workspace = true
 musteragent-identity = { version = "0.1.0", path = "../../foundation/identity" }

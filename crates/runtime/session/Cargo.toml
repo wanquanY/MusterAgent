@@ -7,6 +7,7 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
+musteragent-sandbox.workspace = true
 musteragent-runtime-file-query.workspace = true
 musteragent-runtime-artifact.workspace = true
 musteragent-runtime-execution-plan.workspace = true

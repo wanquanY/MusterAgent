@@ -354,6 +354,80 @@ fn lane(e: crate::commit_lane::CommitLaneError) -> Error {
         _ => Error::DurabilityUnavailable,
     }
 }
+/// Insert the trusted routing context of a newly admitted Run inside its
+/// admission transaction. The caller has already authenticated `actor` as the
+/// Run's requester.
+pub(crate) async fn insert_run_context(
+    tx: &mut PgConnection,
+    run: RunId,
+    actor: Actor,
+    routing: SandboxRoutingContext,
+) -> Result<(), sqlx::Error> {
+    sqlx::query("INSERT INTO runtime.sandbox_routing_contexts(run_id,tenant_id,principal_id,surface,trigger,policy) VALUES($1,$2,$3,$4,$5,$6)")
+        .bind(run.into_uuid())
+        .bind(actor.tenant_id.into_uuid())
+        .bind(actor.principal_id.into_uuid())
+        .bind(surface_code(routing.surface))
+        .bind(trigger_code(routing.trigger))
+        .bind(policy_code(routing.policy))
+        .execute(&mut *tx)
+        .await
+        .map(|_| ())
+}
+
+/// Outcome of copying a source Run's routing context to a derived Run.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub(crate) enum InheritedRunContext {
+    /// The source context was copied, owned by the derived Run's actor.
+    Copied,
+    /// The source Run has no routing context; the caller decides the default.
+    SourceHasNone,
+    /// The source context belongs to another tenant. Callers fail closed.
+    TenantMismatch,
+}
+
+/// Surface of a Run's persisted routing context, if it has one.
+pub(crate) async fn run_context_surface(
+    tx: &mut PgConnection,
+    run: RunId,
+) -> Result<Option<i16>, sqlx::Error> {
+    sqlx::query_scalar("SELECT surface FROM runtime.sandbox_routing_contexts WHERE run_id=$1")
+        .bind(run.into_uuid())
+        .fetch_optional(&mut *tx)
+        .await
+}
+
+/// Copy a source Run's routing context to a derived Run (retry or delegated
+/// child) in the derived Run's admission transaction. The context is inherited
+/// within the same tenant whichever principal started the source Run, and is
+/// recorded as owned by the derived Run's actor. It is never silently relaxed.
+pub(crate) async fn inherit_run_context(
+    tx: &mut PgConnection,
+    run: RunId,
+    source: RunId,
+    actor: Actor,
+) -> Result<InheritedRunContext, sqlx::Error> {
+    let Some(tenant) = sqlx::query_scalar::<_, uuid::Uuid>(
+        "SELECT tenant_id FROM runtime.sandbox_routing_contexts WHERE run_id=$1",
+    )
+    .bind(source.into_uuid())
+    .fetch_optional(&mut *tx)
+    .await?
+    else {
+        return Ok(InheritedRunContext::SourceHasNone);
+    };
+    if tenant != actor.tenant_id.into_uuid() {
+        return Ok(InheritedRunContext::TenantMismatch);
+    }
+    sqlx::query("INSERT INTO runtime.sandbox_routing_contexts(run_id,tenant_id,principal_id,surface,trigger,policy) SELECT $1,tenant_id,$3,surface,trigger,policy FROM runtime.sandbox_routing_contexts WHERE run_id=$2")
+        .bind(run.into_uuid())
+        .bind(source.into_uuid())
+        .bind(actor.principal_id.into_uuid())
+        .execute(&mut *tx)
+        .await?;
+    Ok(InheritedRunContext::Copied)
+}
+
 pub(crate) fn surface_code(s: SandboxClientSurface) -> i16 {
     match s {
         SandboxClientSurface::Web => 1,

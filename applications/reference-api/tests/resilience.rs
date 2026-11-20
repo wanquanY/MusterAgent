@@ -164,6 +164,17 @@ async fn assert_receipts(h: &Harness, root: &str, restarted: bool) -> Result<()>
             .fetch_one(&h.pool)
             .await?;
     assert_eq!(count, 1, "exactly one child admitted");
+    let child_routing: (i16, i16, i16) = sqlx::query_as(
+        "SELECT surface,trigger,policy FROM runtime.sandbox_routing_contexts WHERE run_id=$1",
+    )
+    .bind(child)
+    .fetch_one(&h.pool)
+    .await?;
+    assert_eq!(
+        child_routing,
+        (4, 1, 1),
+        "a delegated child inherits its parent's API routing context"
+    );
     let tools:Vec<(String,i64)>=sqlx::query_as("SELECT tool_ref,count(*) FROM tool.tool_invocations WHERE run_id IN ($1,$2) GROUP BY tool_ref ORDER BY tool_ref").bind(root).bind(child).fetch_all(&h.pool).await?;
     assert!(
         tools.iter().all(|(_, n)| *n == 1),
@@ -182,7 +193,8 @@ async fn assert_receipts(h: &Harness, root: &str, restarted: bool) -> Result<()>
     let routes:Vec<Value>=sqlx::query_scalar("SELECT to_jsonb(t) FROM tool.tool_invocations t WHERE run_id=$1 AND tool_ref LIKE 'data.python.run@%'").bind(child).fetch_all(&h.pool).await?;
     assert_eq!(routes.len(), 1);
     assert_eq!(routes[0]["sandbox_executor"], "server");
-    assert_eq!(routes[0]["sandbox_reason"], "policy_server_only");
+    // The child routes with its parent's inherited API context.
+    assert_eq!(routes[0]["sandbox_reason"], "api_surface");
     assert_eq!(routes[0]["status"], 4, "sandbox tool succeeded");
     let jobs:i64=sqlx::query_scalar("SELECT count(*) FROM capability.browser_jobs j JOIN tool.tool_invocations t USING(invocation_id) WHERE t.run_id=$1").bind(child).fetch_one(&h.pool).await?;
     assert_eq!(jobs, 1, "exactly one durable sandbox job");

@@ -148,6 +148,10 @@ pub struct AdmissionReplayReceipt {
 pub struct AdmissionCommit {
     pub batch: AdmissionBatch,
     pub content_stage: AdmissionContentStage,
+    /// Trusted host routing context persisted in the admission transaction.
+    /// `None` keeps the surface default (API admissions) or leaves binding to
+    /// a later explicit host call.
+    pub sandbox_routing: Option<musteragent_sandbox::SandboxRoutingContext>,
 }
 
 /// Target-side durable commit for one cross-Conversation queued turn.

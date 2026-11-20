@@ -596,6 +596,7 @@ fn retry_admission_is_message_free_and_requires_exact_run_lineage() {
         activity,
         run,
         runtime_snapshot,
+        sandbox_routing: None,
     };
 
     assert_eq!(batch.append.records.len(), 2);

@@ -89,7 +89,7 @@ impl SandboxCompatibility {
 }
 
 /// Host routing policy for a tenant, deployment or product.
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, Default)]
 pub enum SandboxRoutingPolicy {
     /// Use an online browser client when the work allows it; otherwise route
     /// to the server sandbox with an explicit reason.
@@ -103,7 +103,7 @@ pub enum SandboxRoutingPolicy {
 
 /// What started the invocation. Background and scheduled work cannot rely on
 /// an attended browser tab.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum SandboxTrigger {
     Interactive,
     Background,
@@ -111,7 +111,7 @@ pub enum SandboxTrigger {
 }
 
 /// Client surface of the conversation that owns the invocation.
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
 pub enum SandboxClientSurface {
     Web,
     Desktop,
@@ -127,6 +127,45 @@ pub struct SandboxAvailability {
     pub online_browser_clients: u32,
     /// Whether the host operates a server sandbox that accepts jobs.
     pub server_available: bool,
+}
+
+/// Trusted host routing context of one Run: where its conversation is
+/// attended, what started it and which executors the host allows.
+///
+/// Hosts supply it with run admission (submit or retry) so the route authority
+/// becomes durable in the same transaction as the Run. Delegated child runs
+/// inherit their parent's context. It is never model-supplied.
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+pub struct SandboxRoutingContext {
+    pub surface: SandboxClientSurface,
+    pub trigger: SandboxTrigger,
+    pub policy: SandboxRoutingPolicy,
+}
+
+impl SandboxRoutingContext {
+    /// Stable one-byte-per-field encoding used in admission idempotency
+    /// fingerprints. Codes never change meaning once published.
+    #[must_use]
+    pub const fn canonical_bytes(self) -> [u8; 3] {
+        [
+            match self.surface {
+                SandboxClientSurface::Web => 1,
+                SandboxClientSurface::Desktop => 2,
+                SandboxClientSurface::Mobile => 3,
+                SandboxClientSurface::Api => 4,
+            },
+            match self.trigger {
+                SandboxTrigger::Interactive => 1,
+                SandboxTrigger::Background => 2,
+                SandboxTrigger::Scheduled => 3,
+            },
+            match self.policy {
+                SandboxRoutingPolicy::PreferBrowser => 1,
+                SandboxRoutingPolicy::BrowserOnly => 2,
+                SandboxRoutingPolicy::ServerOnly => 3,
+            },
+        ]
+    }
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -342,6 +381,22 @@ pub enum SandboxContractError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn routing_context_canonical_bytes_are_stable_per_field() {
+        let context = SandboxRoutingContext {
+            surface: SandboxClientSurface::Web,
+            trigger: SandboxTrigger::Interactive,
+            policy: SandboxRoutingPolicy::BrowserOnly,
+        };
+        assert_eq!(context.canonical_bytes(), [1, 1, 2]);
+        let api = SandboxRoutingContext {
+            surface: SandboxClientSurface::Api,
+            trigger: SandboxTrigger::Scheduled,
+            policy: SandboxRoutingPolicy::ServerOnly,
+        };
+        assert_eq!(api.canonical_bytes(), [4, 3, 3]);
+    }
 
     fn input() -> SandboxRouteInput {
         SandboxRouteInput {

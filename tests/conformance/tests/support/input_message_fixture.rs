@@ -11,8 +11,8 @@ use std::time::Duration;
 use musteragent_capability::{CapabilityEntitlement, CapabilityKey, CapabilityLocation};
 use musteragent_content_ref::{ContentRef, MediaType, SchemaRef, Sha256};
 use musteragent_conversation::{
-    ConversationApplication, ConversationKind, CreateConversation, GetConversation,
-    ParticipantKind, RetractMessage, SubmitMessage,
+    ConversationApplication, ConversationKind, CreateConversation, EditAndResubmitMessage,
+    GetConversation, ParticipantKind, RetractMessage, SubmitMessage,
 };
 use musteragent_definition::{AgentDefinitionStore, PublishedAgentVersionPointer};
 use musteragent_event_envelope::{ExecutionScope, RuntimeHome};
@@ -403,6 +403,24 @@ impl InputMessageHarness {
         idempotency: &str,
         text: &str,
     ) -> (MessageId, RunId) {
+        self.submit_user_message_with_selection(
+            conversation_id,
+            participant_id,
+            idempotency,
+            text,
+            AdmissionSelection::web(BTreeSet::new()),
+        )
+        .await
+    }
+
+    pub async fn submit_user_message_with_selection(
+        &self,
+        conversation_id: ConversationId,
+        participant_id: ParticipantId,
+        idempotency: &str,
+        text: &str,
+        selection: AdmissionSelection,
+    ) -> (MessageId, RunId) {
         let guard = self.current_guard(conversation_id).await;
         let command_id = CommandId::generate();
         let message_id = MessageId::generate();
@@ -428,7 +446,7 @@ impl InputMessageHarness {
             .submit_message_authorized(
                 command,
                 signed_test_grant(self.actor, run_id, self.now),
-                AdmissionSelection::web(BTreeSet::new()),
+                selection,
             )
             .await
             .expect("submit message authorized");
@@ -551,6 +569,59 @@ impl InputMessageHarness {
         expected_attempt_number: u32,
         idempotency: &str,
     ) -> RunId {
+        self.retry_failed_run_with_selection(
+            conversation_id,
+            participant_id,
+            source_run_id,
+            source_message_id,
+            expected_attempt_number,
+            idempotency,
+            AdmissionSelection::web(BTreeSet::new()),
+        )
+        .await
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Mirrors the RetryRun command fields plus the host selection."
+    )]
+    pub async fn retry_failed_run_with_selection(
+        &self,
+        conversation_id: ConversationId,
+        participant_id: ParticipantId,
+        source_run_id: RunId,
+        source_message_id: MessageId,
+        expected_attempt_number: u32,
+        idempotency: &str,
+        selection: AdmissionSelection,
+    ) -> RunId {
+        self.try_retry_failed_run_with_selection(
+            conversation_id,
+            participant_id,
+            source_run_id,
+            source_message_id,
+            expected_attempt_number,
+            idempotency,
+            selection,
+        )
+        .await
+        .expect("retry failed run")
+    }
+
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "Mirrors the RetryRun command fields plus the host selection."
+    )]
+    pub async fn try_retry_failed_run_with_selection(
+        &self,
+        conversation_id: ConversationId,
+        participant_id: ParticipantId,
+        source_run_id: RunId,
+        source_message_id: MessageId,
+        expected_attempt_number: u32,
+        idempotency: &str,
+        selection: AdmissionSelection,
+    ) -> Result<RunId, musteragent_runtime_contract::RuntimeError> {
         let guard = self.current_guard(conversation_id).await;
         let command_id = CommandId::generate();
         let retry_run_id = derive_admission_run_id(command_id).expect("derive retry run id");
@@ -574,12 +645,58 @@ impl InputMessageHarness {
             .retry_run_authorized(
                 command,
                 signed_test_grant(self.actor, retry_run_id, self.now),
-                AdmissionSelection::web(BTreeSet::new()),
+                selection,
+            )
+            .await?;
+        assert_eq!(ack.disposition, CommandDisposition::Committed);
+        Ok(retry_run_id)
+    }
+
+    /// Edit a user Message and resubmit it on a replacement context branch.
+    pub async fn edit_and_resubmit_with_selection(
+        &self,
+        conversation_id: ConversationId,
+        participant_id: ParticipantId,
+        target_message_id: MessageId,
+        idempotency: &str,
+        text: &str,
+        selection: AdmissionSelection,
+    ) -> RunId {
+        let guard = self.current_guard(conversation_id).await;
+        let command_id = CommandId::generate();
+        let run_id = derive_admission_run_id(command_id).expect("derive edit run id");
+        let command = CommandEnvelope::new(
+            command_metadata(command_id, self.actor, idempotency, self.now, Some(guard)),
+            EditAndResubmitMessage {
+                target_message_id,
+                preserved_branch_id: musteragent_identity::ContextBranchId::generate(),
+                replacement_branch_id: musteragent_identity::ContextBranchId::generate(),
+                message: SubmitMessage {
+                    project_task_target: None,
+                    message_id: MessageId::generate(),
+                    participant_id,
+                    content: InputContent::InlineUtf8(InlineInput::new(text).expect("inline text")),
+                    attachment_refs: Vec::new(),
+                    requested_model_class: ModelClass::new("chat.balanced").expect("model class"),
+                    requested_features: RequestedFeatures::default(),
+                    execution_scope: ExecutionScope::Tenant {
+                        tenant_id: self.actor.tenant_id,
+                    },
+                },
+            },
+        )
+        .expect("edit command");
+        let ack = self
+            .application
+            .edit_and_resubmit_message_authorized(
+                command,
+                signed_test_grant(self.actor, run_id, self.now),
+                selection,
             )
             .await
-            .expect("retry failed run");
+            .expect("edit and resubmit");
         assert_eq!(ack.disposition, CommandDisposition::Committed);
-        retry_run_id
+        run_id
     }
 
     pub async fn spawn_delegated_child(
