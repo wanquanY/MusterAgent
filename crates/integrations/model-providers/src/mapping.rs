@@ -411,7 +411,7 @@ fn openai_responses(
                         "parameters": openai_tool_parameters(tool)?,
                     });
                     if supports_strict_tool_schema(request) {
-                        definition["strict"] = Value::Bool(tool.strict);
+                        definition["strict"] = Value::Bool(strict_tool(tool));
                     }
                     Ok(definition)
                 })
@@ -541,7 +541,7 @@ fn anthropic(
                         "description": tool.description.as_str(),
                         "input_schema": crate::tool_schema::provider_tool_schema(&tool.input_schema)?,
                     });
-                    if tool.strict && supports_strict_tool_schema(request) {
+                    if strict_tool(tool) && supports_strict_tool_schema(request) {
                         definition["strict"] = Value::Bool(true);
                     }
                     Ok(definition)
@@ -709,7 +709,7 @@ fn bedrock_converse(
                 "description": tool.description.as_str(),
                 "inputSchema": {"json": crate::tool_schema::provider_tool_schema(&tool.input_schema)?},
             });
-            if tool.strict && supports_strict_tool_schema(request) {
+            if strict_tool(tool) && supports_strict_tool_schema(request) {
                 specification["strict"] = Value::Bool(true);
             }
             Ok(json!({"toolSpec": specification}))
@@ -914,7 +914,7 @@ fn openai_tool(
         "parameters": openai_tool_parameters(tool)?,
     });
     if supports_strict {
-        function["strict"] = Value::Bool(tool.strict);
+        function["strict"] = Value::Bool(strict_tool(tool));
     }
     Ok(json!({
         "type": "function",
@@ -1668,7 +1668,15 @@ fn join_instructions(request: &CanonicalModelRequest) -> String {
         .join("\n\n")
 }
 
-/// OpenAI strict-mode projection of the portable tool parameters.
+/// Strict decoding constrains generation to the schema the Provider sees. A
+/// projected schema only guides the model (its alternatives are described in
+/// prose), so strict decoding over it could forbid valid canonical arguments;
+/// the canonical schema still validates every call before execution.
+fn strict_tool(tool: &CanonicalToolDefinition) -> bool {
+    tool.strict && !crate::tool_schema::is_projected(&tool.input_schema)
+}
+
+/// OpenAI grammar projection of the portable tool parameters.
 fn openai_tool_parameters(tool: &CanonicalToolDefinition) -> Result<Value, MappingError> {
     crate::structured_output::openai_schema(crate::tool_schema::provider_tool_schema(
         &tool.input_schema,

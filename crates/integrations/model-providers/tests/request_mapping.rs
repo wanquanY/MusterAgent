@@ -1780,6 +1780,8 @@ fn anthropic_requests_mark_prompt_cache_breakpoints() {
                 }
             }
         }
+    }
+}
 
 /// Gateways translate one wire protocol into another Provider's API, so tool
 /// parameters must be portable on every format: no top-level combinators.
@@ -1823,5 +1825,55 @@ fn every_wire_format_sends_portable_tool_parameters() {
             body.contains("Provide exactly one of these argument shapes"),
             "{format:?}"
         );
+    }
+}
+
+/// Strict decoding over a projected schema would constrain generation to the
+/// union of alternatives; only canonical (unprojected) schemas are strict.
+#[test]
+fn projected_tool_schemas_are_never_sent_as_strict() {
+    let mut projected = tool_definition();
+    projected.strict = true;
+    let JsonValue::Object(schema) = &mut projected.input_schema else {
+        panic!("object schema");
+    };
+    schema.insert(
+        "oneOf".into(),
+        JsonValue::Array(vec![
+            JsonValue::Object(BTreeMap::from([(
+                "required".into(),
+                JsonValue::Array(vec![JsonValue::String("value".into())]),
+            )])),
+            JsonValue::Object(BTreeMap::from([(
+                "required".into(),
+                JsonValue::Array(vec![JsonValue::String("record_id".into())]),
+            )])),
+        ]),
+    );
+    for format in [
+        ApiFormat::OpenAiChatCompletions,
+        ApiFormat::OpenAiResponses,
+        ApiFormat::AnthropicMessages,
+        ApiFormat::BedrockConverse,
+        ApiFormat::BedrockInvokeModel,
+    ] {
+        let mut request = request(format);
+        request
+            .route
+            .capabilities
+            .insert(capability("strict_tool_schema"));
+        let mut canonical = tool_definition();
+        canonical.strict = true;
+        request.tools = vec![canonical];
+        let body = map_request(&request, &ResolvedContents::default())
+            .expect("map canonical tool")
+            .body;
+        assert_eq!(strict_value(format, &body), Some(true), "{format:?}");
+
+        request.tools = vec![projected.clone()];
+        let body = map_request(&request, &ResolvedContents::default())
+            .expect("map projected tool")
+            .body;
+        assert_ne!(strict_value(format, &body), Some(true), "{format:?}");
     }
 }
