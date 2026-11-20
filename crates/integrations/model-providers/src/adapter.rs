@@ -543,6 +543,12 @@ fn transport_interruption() -> ProviderError {
 }
 
 fn request_mapping_error(error: MappingError) -> ProviderError {
+    // The class only: never request contents, content ids or route values.
+    tracing::warn!(
+        provider.failure = "request_mapping_rejected",
+        provider.mapping_error = error.diagnostic_code(),
+        "Model Provider request was rejected before dispatch"
+    );
     let safe_code = match error {
         MappingError::UnsupportedReasoningPolicy
         | MappingError::UnsafeAuxiliaryParameter
@@ -942,7 +948,105 @@ mod tests {
 
     use crate::{CredentialMaterial, ProviderEndpoint};
 
-    use super::{build_request, consumes_provider_reasoning_replay};
+    use super::{build_request, consumes_provider_reasoning_replay, request_mapping_error};
+    use crate::{ContentResolverError, MappingError};
+
+    #[derive(Clone, Default)]
+    struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl std::io::Write for Captured {
+        fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+            self.0
+                .lock()
+                .expect("captured log")
+                .extend_from_slice(bytes);
+            Ok(bytes.len())
+        }
+
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn local_request_rejection_reports_its_mapping_error_class() {
+        let captured = Captured::default();
+        let writer = captured.clone();
+        let subscriber = tracing_subscriber::fmt()
+            .with_writer(move || writer.clone())
+            .with_ansi(false)
+            .finish();
+        let error = tracing::subscriber::with_default(subscriber, || {
+            request_mapping_error(MappingError::Content(ContentResolverError::NotResolved))
+        });
+        assert_eq!(
+            error.safe_code,
+            musteragent_runtime_model::ProviderErrorCode::InvalidRequest
+        );
+        assert!(!error.retryable);
+        let log =
+            String::from_utf8(captured.0.lock().expect("captured log").clone()).expect("UTF-8 log");
+        assert!(
+            log.contains("provider.mapping_error=\"content_not_resolved\""),
+            "{log}"
+        );
+        assert!(log.contains("request_mapping_rejected"), "{log}");
+    }
+
+    #[test]
+    fn mapping_error_classes_are_stable_unique_snake_case() {
+        let content = [
+            ContentResolverError::NotFound,
+            ContentResolverError::Unauthorized,
+            ContentResolverError::TooLarge,
+            ContentResolverError::Unavailable,
+            ContentResolverError::MediaTypeMismatch,
+            ContentResolverError::LengthMismatch,
+            ContentResolverError::DuplicateContent,
+            ContentResolverError::NotResolved,
+        ];
+        let mut errors = vec![
+            MappingError::InvalidCanonicalRequest,
+            MappingError::InvalidRouteConfiguration,
+            MappingError::JsonEncoding,
+            MappingError::InlineContentRequired,
+            MappingError::InvalidUtf8,
+            MappingError::InvalidProviderReplay,
+            MappingError::InvalidReasoningReplay,
+            MappingError::UnsupportedReasoningPolicy,
+            MappingError::UnsupportedJsonSchemaOutput,
+            MappingError::UnauthorizedInputModality,
+            MappingError::UnsupportedInputModality,
+            MappingError::ExactProviderReplayRequired,
+            MappingError::UnsupportedMedia,
+            MappingError::UnsafeAuxiliaryRequest,
+            MappingError::UnsafeAuxiliaryParameter,
+        ];
+        errors.extend(content.into_iter().map(MappingError::Content));
+        let codes = errors
+            .iter()
+            .map(MappingError::diagnostic_code)
+            .collect::<Vec<_>>();
+        let unique = codes.iter().collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(unique.len(), codes.len(), "{codes:?}");
+        for code in &codes {
+            assert!(
+                !code.is_empty()
+                    && code.bytes().all(|byte| byte.is_ascii_lowercase()
+                        || byte.is_ascii_digit()
+                        || byte == b'_'),
+                "{code}"
+            );
+        }
+        assert_eq!(
+            MappingError::Content(ContentResolverError::NotResolved).diagnostic_code(),
+            "content_not_resolved"
+        );
+        assert_eq!(
+            MappingError::UnsupportedMedia.diagnostic_code(),
+            "unsupported_media"
+        );
+    }
 
     #[test]
     fn content_resolution_covers_every_protocol_that_consumes_private_reasoning() {
