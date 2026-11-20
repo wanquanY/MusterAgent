@@ -826,11 +826,12 @@ pub(super) async fn run_context_compaction_restarts_deterministically_with_fileo
         .expected_plan_fingerprint()
         .expect("model drift plan fingerprint");
     let drift_invocation_id = drift_request.invocation.invocation_id;
-    let drift = drift_compactor
+    // The reported model (dated snapshot, endpoint alias, relay variant) is
+    // recorded for metering, never compared: drift is not a failure.
+    drift_compactor
         .compact(drift_request)
         .await
-        .expect_err("Provider response model drift must fail closed");
-    assert_eq!(drift.code, ErrorCode::InternalInvariantViolated);
+        .expect("Provider response model drift is recorded, not rejected");
     assert_eq!(drift_model.calls.load(Ordering::SeqCst), 1);
     let drift_row = sqlx::query(
         "SELECT invocation.status, invocation.requested_model_key,
@@ -846,7 +847,7 @@ pub(super) async fn run_context_compaction_restarts_deterministically_with_fileo
     .fetch_one(&pool)
     .await
     .expect("query failed response-model drift invocation");
-    assert_eq!(drift_row.get::<i16, _>("status"), 3);
+    assert_eq!(drift_row.get::<i16, _>("status"), 2);
     assert_eq!(
         drift_row.get::<String, _>("requested_model_key"),
         "context-compression"
