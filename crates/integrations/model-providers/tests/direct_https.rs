@@ -7,6 +7,9 @@ mod first_party_recovery;
 #[path = "direct_https/credential_recovery.rs"]
 mod credential_recovery;
 
+#[path = "direct_https/reasoning_replay.rs"]
+mod reasoning_replay;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::future::Future;
 use std::num::{NonZeroU32, NonZeroU64, NonZeroUsize};
