@@ -1,14 +1,17 @@
 //! Agent memory revocation authority against a disposable PostgreSQL instance.
 //! The built-in `main` Agent is a shared definition, not an owned Agent row; the
-//! owner of the tenant's space must still be able to revoke its memories.
+//! tenant's sole owner must still be able to revoke its memories, and with
+//! co-owners in the tenant no owner may manage another's main-agent memories.
 use musteragent_conformance::MemoryBlobs;
 use musteragent_content_ref::MediaType;
 use musteragent_identity::*;
 use musteragent_postgres::{
     PostgresContentStore, PostgresMemoryEvolutionError, PostgresMemoryEvolutionStore,
+    PostgresPrivacyErasureError, PostgresPrivacyErasureStore,
 };
 use musteragent_runtime_content::{ContentStore, PutContent};
 use musteragent_runtime_memory::*;
+use musteragent_runtime_privacy::{AgentMemoryErasureAdmissionStore, RequestAgentMemoryErasure};
 use musteragent_storage_protection::OpaqueRefKeyring;
 use musteragent_testkit::IsolatedPostgres;
 use std::sync::Arc;
@@ -54,6 +57,72 @@ impl Fixture {
         .await
         .expect("owner space");
         fixture
+    }
+
+    /// Another owner space in the same tenant (tenants may have several owners).
+    async fn add_owner(&self) -> PrincipalId {
+        let owner = PrincipalId::generate();
+        sqlx::query(
+            "INSERT INTO agent.owner_spaces (space_id,tenant_id,owner_id,product,revision,created_at_ms)
+             VALUES ($1,$2,$3,'musteragent',1,1)",
+        )
+        .bind(TenantId::generate().into_uuid())
+        .bind(self.tenant_id.into_uuid())
+        .bind(owner.into_uuid())
+        .execute(&self.pool)
+        .await
+        .expect("co-owner space");
+        owner
+    }
+
+    fn actor(&self, principal_id: PrincipalId) -> Actor {
+        Actor {
+            tenant_id: self.tenant_id,
+            principal_id,
+            principal_kind: PrincipalKind::User,
+        }
+    }
+
+    async fn list(
+        &self,
+        principal_id: PrincipalId,
+        agent_id: AgentId,
+    ) -> Result<ManagedMemoryHeadPage, MemoryManagementError> {
+        self.store()
+            .list_managed_memories(ListManagedMemories {
+                identity: AgentMemoryManagementIdentity {
+                    actor: self.actor(principal_id),
+                    agent_id,
+                },
+                lifecycle: ManagedMemoryLifecycle::Active,
+                observed_at: UtcTimestamp::from_unix_millis(i64::MAX / 2),
+                after: None,
+                limit: std::num::NonZeroU16::new(10).expect("limit"),
+            })
+            .await
+    }
+
+    async fn erase(
+        &self,
+        principal_id: PrincipalId,
+        agent_id: AgentId,
+        memory: (MemoryId, MemoryVersionId),
+        key: &str,
+    ) -> Result<(), PostgresPrivacyErasureError> {
+        PostgresPrivacyErasureStore::new(self.pool.clone())
+            .request_agent_memory_erasure(RequestAgentMemoryErasure {
+                tenant_id: self.tenant_id,
+                requested_by: self.actor(principal_id),
+                agent_id,
+                memory_id: memory.0,
+                expected_memory_version_id: memory.1,
+                reason_code: DottedKey::new("user.erased").expect("reason"),
+                idempotency_key: IdempotencyKey::new(key).expect("key"),
+                requested_at: UtcTimestamp::from_unix_millis(500),
+                complete_by: UtcTimestamp::from_unix_millis(10_000),
+            })
+            .await
+            .map(|_| ())
     }
 
     /// The migrations publish the one built-in Agent in the `main` slot.
@@ -255,4 +324,46 @@ async fn non_owners_and_unowned_agents_stay_denied() {
         assert_eq!(fixture.head(memory.0).await, (1, None, 100));
         assert!(fixture.revocations(memory.0).await.is_empty());
     }
+}
+
+/// Main-agent memories are tenant-scoped and carry no producing principal, so
+/// with two owners in one tenant neither may list, read, revoke or erase them.
+#[tokio::test]
+async fn co_owners_cannot_manage_tenant_shared_main_agent_memories() {
+    let fixture = Fixture::new().await;
+    let main = fixture.main_agent().await;
+    let memory = fixture.memory(main).await;
+
+    // Sole owner A: allowed.
+    assert_eq!(
+        fixture
+            .list(fixture.owner, main)
+            .await
+            .expect("sole owner lists")
+            .heads
+            .len(),
+        1
+    );
+
+    // A second owner joins the tenant: both owners now fail closed.
+    let co_owner = fixture.add_owner().await;
+    for principal in [co_owner, fixture.owner] {
+        assert!(matches!(
+            fixture.list(principal, main).await,
+            Err(MemoryManagementError::Unauthorized)
+        ));
+        let revoke = fixture.revoke(principal, main, memory, &format!("revoke:{principal}"));
+        assert!(matches!(
+            fixture.store().revoke_agent_memory(revoke).await,
+            Err(PostgresMemoryEvolutionError::MemoryManagementUnauthorized)
+        ));
+        assert!(matches!(
+            fixture
+                .erase(principal, main, memory, &format!("erase:{principal}"))
+                .await,
+            Err(PostgresPrivacyErasureError::AgentMemoryUnauthorized)
+        ));
+    }
+    assert_eq!(fixture.head(memory.0).await, (1, None, 100));
+    assert!(fixture.revocations(memory.0).await.is_empty());
 }
