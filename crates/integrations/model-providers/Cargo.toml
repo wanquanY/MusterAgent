@@ -62,4 +62,5 @@ musteragent-event-envelope = { version = "0.1.0", path = "../../foundation/event
 musteragent-run = { version = "0.1.0", path = "../../runtime/run" }
 musteragent-testkit = { version = "0.1.0", path = "../../../tests/testkit" }
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
+tracing-subscriber = { version = "0.3.23", features = ["fmt"] }
 uuid.workspace = true
