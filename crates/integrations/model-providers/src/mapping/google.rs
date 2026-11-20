@@ -247,7 +247,7 @@ pub(super) fn google_interactions(
                         "type": "function",
                         "name": tool.model_name.as_str(),
                         "description": tool.description.as_str(),
-                        "parameters": to_serde(&tool.input_schema)?,
+                        "parameters": crate::tool_schema::provider_tool_schema(&tool.input_schema)?,
                     }))
                 })
                 .collect::<Result<_, MappingError>>()?,
