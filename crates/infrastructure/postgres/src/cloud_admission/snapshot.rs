@@ -3,6 +3,20 @@ use musteragent_execution_grant::*;
 use musteragent_model::CredentialGrantRef;
 use musteragent_runtime_contract::OpaqueExternalRef;
 
+/// What a derived Run is. It decides which source capabilities stay
+/// reachable; it is never inferred from other parameters.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum DerivationKind {
+    /// An unattended scheduled occurrence: nobody holds an open page, so no
+    /// browser lease exists for it.
+    Scheduled {
+        retry: musteragent_runtime_automation::schedule_policy::RetrySpec,
+    },
+    /// A delegated child of a live parent Run: the parent's browser binding is
+    /// still live and serves the child.
+    DelegatedChild,
+}
+
 /// New cloud admission authority is bounded to the exact persisted source.
 /// Its ten-minute lifetime limits admission, not the lifetime of an already
 /// admitted Run. Scheduling authority is separately revoked by schedule state.
@@ -12,7 +26,7 @@ pub(super) fn derive(
     now: UtcTimestamp,
     retry: musteragent_runtime_automation::schedule_policy::RetrySpec,
 ) -> Result<musteragent_ledger::RuntimeSnapshotBlob, Error> {
-    derive_with_retry(source, run, now, Some(retry))
+    derive_as(source, run, now, DerivationKind::Scheduled { retry })
 }
 
 pub(crate) fn derive_child(
@@ -20,17 +34,17 @@ pub(crate) fn derive_child(
     run: RunContext,
     now: UtcTimestamp,
 ) -> Result<musteragent_ledger::RuntimeSnapshotBlob, Error> {
-    derive_with_retry(source, run, now, None)
+    derive_as(source, run, now, DerivationKind::DelegatedChild)
 }
 
-fn derive_with_retry(
+fn derive_as(
     source: &Source,
     run: RunContext,
     now: UtcTimestamp,
-    retry: Option<musteragent_runtime_automation::schedule_policy::RetrySpec>,
+    kind: DerivationKind,
 ) -> Result<musteragent_ledger::RuntimeSnapshotBlob, Error> {
     let mut content = source.snapshot.clone();
-    if let Some(spec) = retry {
+    if let DerivationKind::Scheduled { retry: spec } = kind {
         content.execution_policy.recovery_policy = RecoveryPolicySnapshot::BoundedBackoff { spec };
     }
     if !content.application_catalogs.is_empty() {
@@ -53,11 +67,14 @@ fn derive_with_retry(
         ))
         .map_err(|_| Error::Invalid)?;
     }
-    // A scheduled execution never acquires physical device capabilities from
-    // the originating foreground conversation.
+    // A derived execution never acquires physical device capabilities from
+    // the originating foreground conversation. Browser-executed tools are
+    // dropped only when nothing could ever run them (see
+    // `browser_execution_unreachable`) instead of failing on every call.
+    let browser_unreachable = browser_execution_unreachable(kind, source.sandbox_policy);
     content
         .capabilities
-        .retain(|c| c.location != musteragent_capability::CapabilityLocation::Device);
+        .retain(|c| derived_capability_retained(c.location, c.key.as_str(), browser_unreachable));
     content.tools.retain(|tool| {
         content
             .capabilities
@@ -184,4 +201,118 @@ fn derive_with_retry(
         execution_grant: grant,
         execution_grant_proof: None,
     })
+}
+
+/// Whether no browser execution provider can ever serve the derived Run.
+///
+/// - A delegated child shares its live parent's browser binding: reachable.
+/// - A scheduled occurrence has no open page. It can still execute browser
+///   tools on the server sandbox unless the host bound the source Run to
+///   `BrowserOnly` (it operates no server sandbox).
+/// - A source Run without a routing context gives no evidence that the server
+///   sandbox is absent; the scheduled occurrence keeps the tools and its own
+///   routing decides (and records) where each call runs, failing explicitly
+///   when no executor exists.
+fn browser_execution_unreachable(
+    kind: DerivationKind,
+    source_policy: Option<musteragent_sandbox::SandboxRoutingPolicy>,
+) -> bool {
+    use musteragent_sandbox::SandboxRoutingPolicy;
+    match (kind, source_policy) {
+        (DerivationKind::DelegatedChild, _) => false,
+        (DerivationKind::Scheduled { .. }, Some(SandboxRoutingPolicy::BrowserOnly)) => true,
+        (
+            DerivationKind::Scheduled { .. },
+            Some(SandboxRoutingPolicy::PreferBrowser | SandboxRoutingPolicy::ServerOnly),
+        ) => false,
+        (DerivationKind::Scheduled { .. }, None) => false,
+    }
+}
+
+/// Whether a derived Run keeps a capability of its source Run.
+fn derived_capability_retained(
+    location: musteragent_capability::CapabilityLocation,
+    key: &str,
+    browser_unreachable: bool,
+) -> bool {
+    location != musteragent_capability::CapabilityLocation::Device
+        && !(browser_unreachable && musteragent_tool::requires_browser_execution(key))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{DerivationKind, browser_execution_unreachable, derived_capability_retained};
+    use musteragent_capability::CapabilityLocation;
+    use musteragent_sandbox::SandboxRoutingPolicy;
+
+    #[test]
+    fn only_scheduled_occurrences_of_browser_only_sources_lose_browser_execution() {
+        let scheduled = DerivationKind::Scheduled {
+            retry: musteragent_runtime_automation::schedule_policy::RetrySpec::default(),
+        };
+        assert!(browser_execution_unreachable(
+            scheduled,
+            Some(SandboxRoutingPolicy::BrowserOnly)
+        ));
+        for policy in [
+            None,
+            Some(SandboxRoutingPolicy::PreferBrowser),
+            Some(SandboxRoutingPolicy::ServerOnly),
+        ] {
+            assert!(
+                !browser_execution_unreachable(scheduled, policy),
+                "{policy:?}"
+            );
+        }
+        for policy in [
+            None,
+            Some(SandboxRoutingPolicy::PreferBrowser),
+            Some(SandboxRoutingPolicy::BrowserOnly),
+            Some(SandboxRoutingPolicy::ServerOnly),
+        ] {
+            assert!(
+                !browser_execution_unreachable(DerivationKind::DelegatedChild, policy),
+                "{policy:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unreachable_browser_drops_browser_executed_capabilities_and_device_always_drops() {
+        for key in [
+            "data.python.run@11",
+            "sandbox.environment.prepare@1",
+            "sandbox.environment.inspect@2",
+            "sandbox.operation.cancel@1",
+            "application.web.build@1",
+        ] {
+            assert!(
+                !derived_capability_retained(CapabilityLocation::Cloud, key, true),
+                "{key}"
+            );
+            // A server sandbox (or a delegated child's live parent binding)
+            // can still execute them.
+            assert!(
+                derived_capability_retained(CapabilityLocation::Cloud, key, false),
+                "{key}"
+            );
+        }
+        for browser_unreachable in [true, false] {
+            assert!(!derived_capability_retained(
+                CapabilityLocation::Device,
+                "device.terminal.exec@3",
+                browser_unreachable
+            ));
+            assert!(derived_capability_retained(
+                CapabilityLocation::Cloud,
+                "web.fetch@1",
+                browser_unreachable
+            ));
+            assert!(derived_capability_retained(
+                CapabilityLocation::Cloud,
+                "workspace.file.read@1",
+                browser_unreachable
+            ));
+        }
+    }
 }

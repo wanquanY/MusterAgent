@@ -25,7 +25,7 @@ pub mod workspace;
 
 pub use assembly::{
     CapabilityAssemblyEntry, CapabilityAssemblyError, CapabilityAssemblyPlan,
-    CapabilityHandlerKind, ToolExecutionRequirement,
+    CapabilityHandlerKind, ToolExecutionRequirement, requires_browser_execution,
 };
 
 pub use catalog::{
