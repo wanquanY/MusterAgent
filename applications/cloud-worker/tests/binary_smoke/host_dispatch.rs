@@ -439,7 +439,7 @@ async fn serve_model_request(
         } else if called(activate_wire) == 0 {
             assert!(
                 tool_outputs.contains("inventory_quote_lookup"),
-                "catalog search must find deferred host tool via projected tag: {tool_outputs}"
+                "catalog search must find deferred host tool via tag-only query: {tool_outputs}"
             );
             sse_tool_call(
                 turn_tag,
@@ -1087,6 +1087,7 @@ async fn helper_built_snapshot_admits_searches_activates_and_executes_deferred_t
             manifest_ref,
             package_ref,
         )
+        .with_tags(["inventory_playbook", "sku_ops"])
         .with_required_capabilities(["inventory.quote.lookup@1"])])
         .with_initial_exposed_tools(["inventory.status.ping@1"])
         .build()
@@ -1134,6 +1135,23 @@ async fn helper_built_snapshot_admits_searches_activates_and_executes_deferred_t
     .fetch_one(&smoke.pool)
     .await?;
     let persisted = musteragent_wire::ProtobufSnapshotCodec.decode_content(&encoded)?;
+    let persisted_quote_tool = persisted
+        .tools
+        .iter()
+        .find(|t| t.manifest.key.as_str() == "inventory.quote.lookup@1")
+        .expect("persisted quote tool");
+    assert_eq!(
+        persisted_quote_tool.description,
+        "Look up live inventory pricing by SKU."
+    );
+    assert_eq!(
+        persisted_quote_tool.tags,
+        vec!["wholesale_tariff".to_owned(), "sku_quote".to_owned()]
+    );
+    assert_eq!(
+        persisted_quote_tool.when_to_use.as_deref(),
+        Some("Use when computing wholesale hardware quotes.")
+    );
     assert!(
         persisted
             .skills
@@ -1141,6 +1159,15 @@ async fn helper_built_snapshot_admits_searches_activates_and_executes_deferred_t
             .any(|s| s.skill_ref.as_str() == "inventory-ops-guide@1")
     );
     let discovery = persisted.discovery.expect("persisted discovery");
+    let persisted_skill = discovery
+        .authorized_skills
+        .iter()
+        .find(|s| s.skill_ref.as_str() == "inventory-ops-guide@1")
+        .expect("persisted authorized skill");
+    assert_eq!(
+        persisted_skill.tags,
+        vec!["inventory_playbook".to_owned(), "sku_ops".to_owned()]
+    );
     assert!(
         discovery
             .initial_exposed_tool_keys

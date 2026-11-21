@@ -411,6 +411,7 @@ fn seals_snapshot_built_exclusively_from_helper_and_passes_worker_validation() {
                     tenant_id,
                     HostSkillProvenance::hub("https://hub.example.test/skills/inv@1", "example.test"),
                 )
+                .with_tags(["warehouse_ops", "仓库盘点"])
                 .with_required_capabilities(["inventory.quote.lookup@1"]),
                 sample_host_skill(
                     2,
@@ -472,6 +473,43 @@ fn seals_snapshot_built_exclusively_from_helper_and_passes_worker_validation() {
         assert!(skill_catalog.executable("inventory-url-guide@1").is_ok());
         assert!(skill_catalog.executable("inventory-git-guide@1").is_ok());
         assert!(skill_catalog.executable("inventory-local-guide@1").is_ok());
+        let hub_skill = skill_catalog
+            .get("inventory-hub-guide@1")
+            .expect("hub skill descriptor");
+        assert_eq!(
+            hub_skill.description,
+            "Neutral guidance for inventory-hub-guide@1."
+        );
+        assert_eq!(
+            hub_skill.tags,
+            vec!["warehouse_ops".to_owned(), "仓库盘点".to_owned()]
+        );
+        let quote_tool = sealed
+            .content
+            .tools
+            .iter()
+            .find(|t| t.manifest.key.as_str() == "inventory.quote.lookup@1")
+            .expect("quote tool snapshot");
+        assert_eq!(
+            quote_tool.description, "Look up live inventory pricing by SKU.",
+            "description must remain unmutated without appended When to use / Tags suffixes"
+        );
+        assert_eq!(
+            quote_tool.when_to_use.as_deref(),
+            Some("Use when quoting live SKU pricing.")
+        );
+        assert_eq!(
+            quote_tool.tags,
+            vec!["pricing".to_owned(), "warehouse".to_owned()]
+        );
+        let reservation_tool = sealed
+            .content
+            .tools
+            .iter()
+            .find(|t| t.manifest.key.as_str() == "inventory.reservation.create@1")
+            .expect("reservation tool snapshot");
+        assert!(reservation_tool.tags.is_empty());
+        assert!(reservation_tool.when_to_use.is_none());
 
         let grant = ExecutionGrant {
             reviewed_application_source_sha256: Vec::new(),
@@ -532,13 +570,13 @@ fn deferred_exposure_grants_all_tools_exposes_only_initial_set_and_supports_sear
             .with_when_to_use("Use when computing cross-border customs duties.")
             .with_tags(["customs", "harmonized_code"]),
             HostToolDescriptor::new(
-                "inventory.stock.adjust@1",
-                "Adjust warehouse stock count.",
+                "inventory.shelf.adjust@1",
+                "Adjust warehouse shelf count.",
                 sample_input_schema(),
                 sample_output_schema(),
                 Effect::WriteReversible,
                 ApprovalRequirement::ByPolicy,
-                "InventoryService.AdjustStock",
+                "InventoryService.AdjustShelf",
             ),
         ])
         .with_initial_exposed_tools(["inventory.quote.lookup@1"])
@@ -549,7 +587,7 @@ fn deferred_exposure_grants_all_tools_exposes_only_initial_set_and_supports_sear
     for expected_key in [
         "inventory.quote.lookup@1",
         "inventory.tariff.estimate@1",
-        "inventory.stock.adjust@1",
+        "inventory.shelf.adjust@1",
     ] {
         assert!(
             partitions.capabilities.iter().any(|g| {
@@ -567,6 +605,24 @@ fn deferred_exposure_grants_all_tools_exposes_only_initial_set_and_supports_sear
                 .any(|t| t.manifest.key.as_str() == expected_key)
         );
     }
+
+    let tariff_snapshot = partitions
+        .tools
+        .iter()
+        .find(|t| t.manifest.key.as_str() == "inventory.tariff.estimate@1")
+        .expect("tariff tool snapshot");
+    assert_eq!(
+        tariff_snapshot.description,
+        "Look up live inventory pricing by SKU."
+    );
+    assert_eq!(
+        tariff_snapshot.tags,
+        vec!["customs".to_owned(), "harmonized_code".to_owned()]
+    );
+    assert_eq!(
+        tariff_snapshot.when_to_use.as_deref(),
+        Some("Use when computing cross-border customs duties.")
+    );
 
     // Only bootstrap tools (8) + `inventory.quote.lookup@1` are exposed initially.
     assert_eq!(partitions.discovery.bootstrap_tool_keys.len(), 8);
@@ -590,7 +646,7 @@ fn deferred_exposure_grants_all_tools_exposes_only_initial_set_and_supports_sear
             .discovery
             .initial_exposed_tool_keys
             .iter()
-            .any(|k| k.as_str() == "inventory.stock.adjust@1")
+            .any(|k| k.as_str() == "inventory.shelf.adjust@1")
     );
 
     let catalog = authorized_tool_catalog(&partitions.tools, &partitions.capabilities)
@@ -601,7 +657,7 @@ fn deferred_exposure_grants_all_tools_exposes_only_initial_set_and_supports_sear
     assert!(exposure.contains_key("inventory.quote.lookup@1"));
     assert!(!exposure.contains_key("inventory.tariff.estimate@1"));
 
-    // Deferred tool is discoverable via tag and when_to_use text in `tool.catalog.search`.
+    // Deferred tool is discoverable via tag-only and when_to_use-only queries in `tool.catalog.search`.
     let by_tag = catalog
         .search(&ToolCatalogSearchRequest {
             query: "harmonized_code".to_owned(),
@@ -614,6 +670,10 @@ fn deferred_exposure_grants_all_tools_exposes_only_initial_set_and_supports_sear
     assert_eq!(
         by_tag.items[0].tool_ref.as_str(),
         "inventory.tariff.estimate@1"
+    );
+    assert_eq!(
+        by_tag.items[0].description,
+        "Look up live inventory pricing by SKU."
     );
 
     let by_when_to_use = catalog
@@ -661,6 +721,253 @@ fn deferred_exposure_grants_all_tools_exposes_only_initial_set_and_supports_sear
         .apply(&catalog, &event)
         .expect("apply exposure event");
     assert!(exposure.contains_key("inventory.tariff.estimate@1"));
+}
+
+#[test]
+fn builder_populates_native_discovery_metadata_and_ranks_via_k7_field_weights() {
+    let tenant_id = TenantId::generate();
+    let partitions = HostCatalogSnapshotBuilder::new(provider_id())
+        .with_host_tools([
+            HostToolDescriptor::new(
+                "library.a_desc.helper@1",
+                "Supports 馆藏检索 queries across reading rooms.",
+                sample_input_schema(),
+                sample_output_schema(),
+                Effect::Read,
+                ApprovalRequirement::Never,
+                "LibraryService.AlphaHelper",
+            )
+            .with_title("Alpha Helper"),
+            HostToolDescriptor::new(
+                "library.b_when.helper@1",
+                "General reading room helper.",
+                sample_input_schema(),
+                sample_output_schema(),
+                Effect::Read,
+                ApprovalRequirement::Never,
+                "LibraryService.BetaHelper",
+            )
+            .with_title("Beta Helper")
+            .with_when_to_use("当用户询问馆藏检索方案时调用"),
+            HostToolDescriptor::new(
+                "library.c_tags.helper@1",
+                "Supports 馆藏检索 in description too.",
+                sample_input_schema(),
+                sample_output_schema(),
+                Effect::Read,
+                ApprovalRequirement::Never,
+                "LibraryService.GammaHelper",
+            )
+            .with_title("Gamma Helper")
+            .with_tags(["馆藏检索", "meteorology_radar"])
+            .with_when_to_use("也可用于馆藏检索"),
+            HostToolDescriptor::new(
+                "library.z_name.helper@1",
+                "General reading room helper.",
+                sample_input_schema(),
+                sample_output_schema(),
+                Effect::Read,
+                ApprovalRequirement::Never,
+                "LibraryService.ZetaHelper",
+            )
+            .with_title("馆藏检索工具"),
+        ])
+        .with_host_skills([
+            HostSkillDescriptor::new(
+                SkillId::generate(),
+                SkillVersionId::generate(),
+                "library-a-desc@1",
+                "Routine A",
+                "Formats 馆藏编目 bibliography entries.",
+                "Use for periodic library review.",
+                tenant_id,
+                HostSkillProvenance::hub("https://hub.example.test/skills/lib-a@1", "example.test"),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000b1",
+                    "text/markdown;charset=utf-8",
+                    b"# Routine A",
+                ),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000b2",
+                    "application/json",
+                    br#"{"schema_version":"musteragent.skill-package.v2","k":"a"}"#,
+                ),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000b3",
+                    "application/zip",
+                    b"PK-lib-a",
+                ),
+            ),
+            HostSkillDescriptor::new(
+                SkillId::generate(),
+                SkillVersionId::generate(),
+                "library-b-when@1",
+                "Routine B",
+                "Formats citation entries.",
+                "当用户需要处理馆藏编目核对时使用。",
+                tenant_id,
+                HostSkillProvenance::hub("https://hub.example.test/skills/lib-b@1", "example.test"),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000b4",
+                    "text/markdown;charset=utf-8",
+                    b"# Routine B",
+                ),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000b5",
+                    "application/json",
+                    br#"{"schema_version":"musteragent.skill-package.v2","k":"b"}"#,
+                ),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000b6",
+                    "application/zip",
+                    b"PK-lib-b",
+                ),
+            ),
+            HostSkillDescriptor::new(
+                SkillId::generate(),
+                SkillVersionId::generate(),
+                "library-c-tags@1",
+                "Routine C",
+                "Formats 馆藏编目 citation entries.",
+                "当用户需要处理馆藏编目核对时使用。",
+                tenant_id,
+                HostSkillProvenance::hub("https://hub.example.test/skills/lib-c@1", "example.test"),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000b7",
+                    "text/markdown;charset=utf-8",
+                    b"# Routine C",
+                ),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000b8",
+                    "application/json",
+                    br#"{"schema_version":"musteragent.skill-package.v2","k":"c"}"#,
+                ),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000b9",
+                    "application/zip",
+                    b"PK-lib-c",
+                ),
+            )
+            .with_tags(["馆藏编目", "古籍修复"]),
+            HostSkillDescriptor::new(
+                SkillId::generate(),
+                SkillVersionId::generate(),
+                "library-z-name@1",
+                "馆藏编目指南",
+                "Formats citation entries.",
+                "Use for periodic library review.",
+                tenant_id,
+                HostSkillProvenance::hub("https://hub.example.test/skills/lib-z@1", "example.test"),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000ba",
+                    "text/markdown;charset=utf-8",
+                    b"# Routine Z",
+                ),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000bb",
+                    "application/json",
+                    br#"{"schema_version":"musteragent.skill-package.v2","k":"z"}"#,
+                ),
+                content_ref(
+                    "01982f80-0000-7000-8000-0000000000bc",
+                    "application/zip",
+                    b"PK-lib-z",
+                ),
+            ),
+        ])
+        .build()
+        .expect("build weighted metadata partitions");
+
+    // All four host tools are deferred (not in initial_exposed_tool_keys).
+    let tool_catalog = authorized_tool_catalog(&partitions.tools, &partitions.capabilities)
+        .expect("authorized tool catalog");
+    let exposure = ExposureState::from_initial(
+        &tool_catalog,
+        &partitions.discovery.initial_exposed_tool_keys,
+    )
+    .expect("initial exposure");
+    assert!(!exposure.contains_key("library.c_tags.helper@1"));
+
+    // Deferred tool is found by a tag-only query ("meteorology_radar" appears ONLY in tags).
+    let tag_only_hit = tool_catalog
+        .search(&ToolCatalogSearchRequest {
+            query: "meteorology_radar".to_owned(),
+            locations: BTreeSet::from([CapabilityLocation::Backend]),
+            limit: NonZeroUsize::new(10).expect("limit"),
+            cursor: None,
+        })
+        .expect("tag-only tool search");
+    assert_eq!(
+        tag_only_hit
+            .items
+            .iter()
+            .map(|i| i.tool_ref.as_str())
+            .collect::<Vec<_>>(),
+        vec!["library.c_tags.helper@1"]
+    );
+
+    // K7 weighted ranking (`key/name > tags > when_to_use > description`) orders z > c > b > a.
+    let ranked_tools = tool_catalog
+        .search(&ToolCatalogSearchRequest {
+            query: "馆藏检索".to_owned(),
+            locations: BTreeSet::from([CapabilityLocation::Backend]),
+            limit: NonZeroUsize::new(10).expect("limit"),
+            cursor: None,
+        })
+        .expect("weighted tool search");
+    assert_eq!(
+        ranked_tools
+            .items
+            .iter()
+            .map(|i| i.tool_ref.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "library.z_name.helper@1",
+            "library.c_tags.helper@1",
+            "library.b_when.helper@1",
+            "library.a_desc.helper@1",
+        ]
+    );
+
+    // Host skill tags are searchable by tag-only query and ranked with K7 field weights.
+    let skill_catalog =
+        AuthorizedSkillCatalog::new(partitions.discovery.authorized_skills).expect("skill catalog");
+    let skill_tag_only = skill_catalog
+        .search(&SkillCatalogSearchRequest {
+            query: "古籍修复".to_owned(),
+            limit: NonZeroUsize::new(10).expect("limit"),
+            cursor: None,
+        })
+        .expect("tag-only skill search");
+    assert_eq!(
+        skill_tag_only
+            .items
+            .iter()
+            .map(|i| i.skill_ref.as_str())
+            .collect::<Vec<_>>(),
+        vec!["library-c-tags@1"]
+    );
+
+    let ranked_skills = skill_catalog
+        .search(&SkillCatalogSearchRequest {
+            query: "馆藏编目".to_owned(),
+            limit: NonZeroUsize::new(10).expect("limit"),
+            cursor: None,
+        })
+        .expect("weighted skill search");
+    assert_eq!(
+        ranked_skills
+            .items
+            .iter()
+            .map(|i| i.skill_ref.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "library-z-name@1",
+            "library-c-tags@1",
+            "library-b-when@1",
+            "library-a-desc@1",
+        ]
+    );
 }
 
 #[test]
@@ -1064,6 +1371,133 @@ fn rejects_empty_metadata_invalid_schemas_and_incoherent_contracts() {
         Err(HostCatalogBuildError::EmptyToolMetadata {
             key: "inventory.quote.lookup@1".to_owned(),
             field: "tags",
+        })
+    );
+
+    // K7 bounds on tool tags (<= 64 tags, <= 256 bytes per tag) and when_to_use (<= 4000 bytes).
+    assert_eq!(
+        HostCatalogSnapshotBuilder::new(provider_id())
+            .with_host_tools([sample_read_tool(
+                "inventory.quote.lookup@1",
+                "InventoryService.LookupQuote"
+            )
+            .with_tags((0..65).map(|i| format!("tag_{i}")),),])
+            .build(),
+        Err(HostCatalogBuildError::TooManyToolTags {
+            key: "inventory.quote.lookup@1".to_owned(),
+            count: 65,
+            max_tags: 64,
+        })
+    );
+    assert_eq!(
+        HostCatalogSnapshotBuilder::new(provider_id())
+            .with_host_tools([sample_read_tool(
+                "inventory.quote.lookup@1",
+                "InventoryService.LookupQuote"
+            )
+            .with_tags(["x".repeat(257)]),])
+            .build(),
+        Err(HostCatalogBuildError::ToolMetadataTooLong {
+            key: "inventory.quote.lookup@1".to_owned(),
+            field: "tags",
+            max_bytes: 256,
+            actual_bytes: 257,
+        })
+    );
+    assert_eq!(
+        HostCatalogSnapshotBuilder::new(provider_id())
+            .with_host_tools([sample_read_tool(
+                "inventory.quote.lookup@1",
+                "InventoryService.LookupQuote"
+            )
+            .with_when_to_use("w".repeat(4_001)),])
+            .build(),
+        Err(HostCatalogBuildError::ToolMetadataTooLong {
+            key: "inventory.quote.lookup@1".to_owned(),
+            field: "when_to_use",
+            max_bytes: 4_000,
+            actual_bytes: 4_001,
+        })
+    );
+    assert_eq!(
+        HostCatalogSnapshotBuilder::new(provider_id())
+            .with_host_tools([sample_read_tool(
+                "inventory.quote.lookup@1",
+                "InventoryService.LookupQuote"
+            )
+            .with_title("t".repeat(513)),])
+            .build(),
+        Err(HostCatalogBuildError::ToolMetadataTooLong {
+            key: "inventory.quote.lookup@1".to_owned(),
+            field: "title",
+            max_bytes: 512,
+            actual_bytes: 513,
+        })
+    );
+
+    // K7 bounds and duplicate checks on host skill tags and when_to_use.
+    let skill_tenant = TenantId::generate();
+    assert_eq!(
+        HostCatalogSnapshotBuilder::new(provider_id())
+            .with_host_skills([sample_host_skill(
+                10,
+                "inventory-tag-empty@1",
+                skill_tenant,
+                HostSkillProvenance::hub("https://hub.example.test/skills/e@1", "example.test"),
+            )
+            .with_tags(["valid", "   "]),])
+            .build(),
+        Err(HostCatalogBuildError::EmptySkillMetadata {
+            skill_ref: "inventory-tag-empty@1".to_owned(),
+            field: "tags",
+        })
+    );
+    assert_eq!(
+        HostCatalogSnapshotBuilder::new(provider_id())
+            .with_host_skills([sample_host_skill(
+                11,
+                "inventory-tag-dup@1",
+                skill_tenant,
+                HostSkillProvenance::hub("https://hub.example.test/skills/d@1", "example.test"),
+            )
+            .with_tags(["archival", "ARCHIVAL"]),])
+            .build(),
+        Err(HostCatalogBuildError::DuplicateSkillTag {
+            skill_ref: "inventory-tag-dup@1".to_owned(),
+            tag: "ARCHIVAL".to_owned(),
+        })
+    );
+    assert_eq!(
+        HostCatalogSnapshotBuilder::new(provider_id())
+            .with_host_skills([sample_host_skill(
+                12,
+                "inventory-tag-count@1",
+                skill_tenant,
+                HostSkillProvenance::hub("https://hub.example.test/skills/c@1", "example.test"),
+            )
+            .with_tags((0..65).map(|i| format!("skill_tag_{i}"))),])
+            .build(),
+        Err(HostCatalogBuildError::TooManySkillTags {
+            skill_ref: "inventory-tag-count@1".to_owned(),
+            count: 65,
+            max_tags: 64,
+        })
+    );
+    assert_eq!(
+        HostCatalogSnapshotBuilder::new(provider_id())
+            .with_host_skills([sample_host_skill(
+                13,
+                "inventory-tag-len@1",
+                skill_tenant,
+                HostSkillProvenance::hub("https://hub.example.test/skills/l@1", "example.test"),
+            )
+            .with_tags(["s".repeat(257)]),])
+            .build(),
+        Err(HostCatalogBuildError::SkillMetadataTooLong {
+            skill_ref: "inventory-tag-len@1".to_owned(),
+            field: "tags",
+            max_bytes: 256,
+            actual_bytes: 257,
         })
     );
 

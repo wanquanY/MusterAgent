@@ -48,6 +48,11 @@ const DEFAULT_AGENT_CONTRACT: &str = "musteragent.runtime-contract@1";
 const DEFAULT_MAX_EXPOSED_TOOLS: u32 = 64;
 const DEFAULT_MAX_SEARCH_RESULTS: u32 = 20;
 const DEFAULT_TOOL_TIMEOUT_SECS: u64 = 30;
+const MAX_METADATA_TITLE_BYTES: usize = 512;
+const MAX_METADATA_DESCRIPTION_BYTES: usize = 16_000;
+const MAX_WHEN_TO_USE_BYTES: usize = 4_000;
+const MAX_DISCOVERY_TAGS: usize = 64;
+const MAX_DISCOVERY_TAG_BYTES: usize = 256;
 const MAX_SKILL_SOURCE_REF_BYTES: usize = 2_000;
 const MAX_SKILL_PUBLISHER_REF_BYTES: usize = 500;
 
@@ -88,9 +93,11 @@ pub struct HostToolDescriptor {
     pub approval: ApprovalRequirement,
     /// Named `<Service>.<Method>` backend operation (`ExecuteTool` variants forbidden).
     pub backend_operation: String,
-    /// Optional guidance describing when the model should select this tool.
+    /// Optional guidance describing when the model should select this tool,
+    /// populated onto `ToolDefinitionSnapshot.when_to_use` for weighted catalog search.
     pub when_to_use: Option<String>,
-    /// Optional discovery tags projected into the searchable tool description.
+    /// Optional discovery tags populated onto `ToolDefinitionSnapshot.tags` and
+    /// weighted between `key/name` and `when_to_use` during catalog search.
     pub tags: Vec<String>,
     /// Optional explicit wire name (`[a-z][a-z0-9_]*`); derived from `key` when `None`.
     pub wire_name: Option<String>,
@@ -359,6 +366,9 @@ pub struct HostSkillDescriptor {
     pub title: String,
     pub description: String,
     pub when_to_use: String,
+    /// Optional discovery tags weighted between `key/name` and `when_to_use`
+    /// during Skill catalog search.
+    pub tags: Vec<String>,
     pub tenant_id: TenantId,
     pub provenance: HostSkillProvenance,
     pub instructions_ref: ContentRef,
@@ -395,6 +405,7 @@ impl HostSkillDescriptor {
             title: title.into(),
             description: description.into(),
             when_to_use: when_to_use.into(),
+            tags: Vec::new(),
             tenant_id,
             provenance,
             instructions_ref,
@@ -491,6 +502,7 @@ impl HostSkillDescriptor {
             title: entry.definition.title.clone(),
             description: entry.definition.description.clone(),
             when_to_use: entry.authority.when_to_use.clone(),
+            tags: Vec::new(),
             tenant_id,
             provenance,
             instructions_ref,
@@ -516,6 +528,16 @@ impl HostSkillDescriptor {
                 .collect(),
             compatible_surfaces: entry.definition.compatible_surfaces.clone(),
         })
+    }
+
+    #[must_use]
+    pub fn with_tags<I, S>(mut self, tags: I) -> Self
+    where
+        I: IntoIterator<Item = S>,
+        S: Into<String>,
+    {
+        self.tags = tags.into_iter().map(Into::into).collect();
+        self
     }
 
     #[must_use]
@@ -800,16 +822,13 @@ impl HostCatalogSnapshotBuilder {
             product: self.product_release.product,
             release_id: self.product_release.release_id.as_str().to_owned(),
         })?;
+        // Fail closed on compile-time provider constants, matching `is_builtin_provider_id`.
         let rust_provider = BUILTIN_RUST_PROVIDER_ID
             .parse::<CapabilityProviderId>()
-            .map_err(|_| HostCatalogBuildError::DiscoveryValidationFailed {
-                reason: "compiled rust provider id invalid",
-            })?;
+            .expect("compiled rust provider id");
         let backend_provider = BUILTIN_BACKEND_PROVIDER_ID
             .parse::<CapabilityProviderId>()
-            .map_err(|_| HostCatalogBuildError::DiscoveryValidationFailed {
-                reason: "compiled backend provider id invalid",
-            })?;
+            .expect("compiled backend provider id");
 
         // 1. Resolve and validate bootstrap tools.
         let bootstrap_defs = self.resolve_bootstrap_definitions(&cloud_catalog)?;
@@ -956,12 +975,9 @@ impl HostCatalogSnapshotBuilder {
             }
 
             let title = resolve_tool_title(&desc.key, key_v.logical_key(), desc.title.as_deref())?;
-            let description = resolve_tool_description(
-                &desc.key,
-                &desc.description,
-                desc.when_to_use.as_deref(),
-                &desc.tags,
-            )?;
+            let description = resolve_tool_description(&desc.key, &desc.description)?;
+            let when_to_use = resolve_tool_when_to_use(&desc.key, desc.when_to_use.as_deref())?;
+            let tags = resolve_tool_tags(&desc.key, &desc.tags)?;
 
             validate_schema_bytes(&desc.key, "input", &desc.input_schema_json)?;
             validate_schema_bytes(&desc.key, "output", &desc.output_schema_json)?;
@@ -1041,6 +1057,8 @@ impl HostCatalogSnapshotBuilder {
                 file_operation: None,
                 title,
                 description,
+                tags,
+                when_to_use,
                 input_schema_json: desc.input_schema_json.clone(),
                 output_schema_json: desc.output_schema_json.clone(),
             };
@@ -1122,8 +1140,10 @@ impl HostCatalogSnapshotBuilder {
             initial_exposed_tool_keys.push(tool_key);
         }
 
-        let max_exposed_usize = usize::try_from(self.max_exposed_tools.get()).unwrap_or(usize::MAX);
-        if initial_exposed_tool_keys.len() > max_exposed_usize {
+        // Fail closed if `len()` overflows `u32` instead of saturating the ceiling.
+        if u32::try_from(initial_exposed_tool_keys.len())
+            .map_or(true, |count| count > self.max_exposed_tools.get())
+        {
             return Err(HostCatalogBuildError::ExposureLimitExceeded {
                 requested: initial_exposed_tool_keys.len(),
                 max_exposed_tools: self.max_exposed_tools.get(),
@@ -1295,6 +1315,7 @@ impl HostCatalogSnapshotBuilder {
                 title: def.title.clone(),
                 description: def.description.clone(),
                 when_to_use: entry.authority.when_to_use.clone(),
+                tags: Vec::new(),
                 instructions_ref: def.instructions_ref.clone(),
                 instructions_hash: def.instructions_hash,
                 required_tools: def.required_capabilities.clone(),
@@ -1378,18 +1399,44 @@ impl HostCatalogSnapshotBuilder {
                     field: "title",
                 });
             }
+            if host_skill.title.len() > MAX_METADATA_TITLE_BYTES {
+                return Err(HostCatalogBuildError::SkillMetadataTooLong {
+                    skill_ref: host_skill.skill_ref.clone(),
+                    field: "title",
+                    max_bytes: MAX_METADATA_TITLE_BYTES,
+                    actual_bytes: host_skill.title.len(),
+                });
+            }
             if host_skill.description.trim().is_empty() {
                 return Err(HostCatalogBuildError::EmptySkillMetadata {
                     skill_ref: host_skill.skill_ref.clone(),
                     field: "description",
                 });
             }
-            if host_skill.when_to_use.trim().is_empty() {
+            if host_skill.description.len() > MAX_METADATA_DESCRIPTION_BYTES {
+                return Err(HostCatalogBuildError::SkillMetadataTooLong {
+                    skill_ref: host_skill.skill_ref.clone(),
+                    field: "description",
+                    max_bytes: MAX_METADATA_DESCRIPTION_BYTES,
+                    actual_bytes: host_skill.description.len(),
+                });
+            }
+            let skill_when_to_use = host_skill.when_to_use.trim();
+            if skill_when_to_use.is_empty() {
                 return Err(HostCatalogBuildError::EmptySkillMetadata {
                     skill_ref: host_skill.skill_ref.clone(),
                     field: "when_to_use",
                 });
             }
+            if skill_when_to_use.len() > MAX_WHEN_TO_USE_BYTES {
+                return Err(HostCatalogBuildError::SkillMetadataTooLong {
+                    skill_ref: host_skill.skill_ref.clone(),
+                    field: "when_to_use",
+                    max_bytes: MAX_WHEN_TO_USE_BYTES,
+                    actual_bytes: skill_when_to_use.len(),
+                });
+            }
+            let skill_tags = resolve_skill_tags(&host_skill.skill_ref, &host_skill.tags)?;
 
             validate_skill_content_ref(
                 &host_skill.skill_ref,
@@ -1496,7 +1543,8 @@ impl HostCatalogSnapshotBuilder {
                 skill_ref,
                 title: host_skill.title.clone(),
                 description: host_skill.description.clone(),
-                when_to_use: host_skill.when_to_use.clone(),
+                when_to_use: skill_when_to_use.to_owned(),
+                tags: skill_tags,
                 instructions_ref: host_skill.instructions_ref.clone(),
                 instructions_hash,
                 required_tools: required_capabilities,
@@ -1627,6 +1675,8 @@ impl ToolAccumulator {
             file_operation: def.file_operation.clone(),
             title: def.title.clone(),
             description: def.description.clone(),
+            tags: Vec::new(),
+            when_to_use: None,
             input_schema_json: def.input_schema_json.clone(),
             output_schema_json: def.output_schema_json.clone(),
         });
@@ -1669,14 +1719,19 @@ fn collect_compiled_catalogs() -> Result<Vec<BuiltinToolCatalog>, HostCatalogBui
     Ok(catalogs)
 }
 
+/// Returns `true` when a host tool key falls inside a closed kernel namespace,
+/// retired capability family, or policy-disallowed family. Fails closed (`true`)
+/// whenever policy evaluation rejects the key.
 fn is_disallowed_host_tool_key(release: &ProductReleaseRef, key: &VersionedKey) -> bool {
     let logical = key.logical_key();
     let full = key.as_str();
+    let kernel_release = compiled_product_release(ProductId::KERNEL);
     logical.starts_with("device.")
         || logical.starts_with("mcp.")
         || logical.starts_with("account.application.t_")
         || logical.starts_with("component.")
         || video_tool_retired_for_release(release, full)
+        || video_tool_retired_for_release(&kernel_release, full)
         || !capability_available_for_dialogue_policy(CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1, full)
         || !dialogue_capability_ceiling_for_policy(CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1, full)
 }
@@ -1691,6 +1746,14 @@ fn resolve_tool_title(
             return Err(HostCatalogBuildError::EmptyToolMetadata {
                 key: key.to_owned(),
                 field: "title",
+            });
+        }
+        if title.len() > MAX_METADATA_TITLE_BYTES {
+            return Err(HostCatalogBuildError::ToolMetadataTooLong {
+                key: key.to_owned(),
+                field: "title",
+                max_bytes: MAX_METADATA_TITLE_BYTES,
+                actual_bytes: title.len(),
             });
         }
         return Ok(title.to_owned());
@@ -1717,56 +1780,136 @@ fn resolve_tool_title(
             field: "title",
         });
     }
-    Ok(words.join(" "))
+    let derived = words.join(" ");
+    if derived.len() > MAX_METADATA_TITLE_BYTES {
+        return Err(HostCatalogBuildError::ToolMetadataTooLong {
+            key: key.to_owned(),
+            field: "title",
+            max_bytes: MAX_METADATA_TITLE_BYTES,
+            actual_bytes: derived.len(),
+        });
+    }
+    Ok(derived)
 }
 
-fn resolve_tool_description(
-    key: &str,
-    description: &str,
-    when_to_use: Option<&str>,
-    tags: &[String],
-) -> Result<String, HostCatalogBuildError> {
+fn resolve_tool_description(key: &str, description: &str) -> Result<String, HostCatalogBuildError> {
     if description.trim().is_empty() {
         return Err(HostCatalogBuildError::EmptyToolMetadata {
             key: key.to_owned(),
             field: "description",
         });
     }
-    let mut out = description.to_owned();
-    if let Some(guidance) = when_to_use {
-        let trimmed = guidance.trim();
+    if description.len() > MAX_METADATA_DESCRIPTION_BYTES {
+        return Err(HostCatalogBuildError::ToolMetadataTooLong {
+            key: key.to_owned(),
+            field: "description",
+            max_bytes: MAX_METADATA_DESCRIPTION_BYTES,
+            actual_bytes: description.len(),
+        });
+    }
+    Ok(description.to_owned())
+}
+
+fn resolve_tool_when_to_use(
+    key: &str,
+    when_to_use: Option<&str>,
+) -> Result<Option<String>, HostCatalogBuildError> {
+    let Some(guidance) = when_to_use else {
+        return Ok(None);
+    };
+    let trimmed = guidance.trim();
+    if trimmed.is_empty() {
+        return Err(HostCatalogBuildError::EmptyToolMetadata {
+            key: key.to_owned(),
+            field: "when_to_use",
+        });
+    }
+    if trimmed.len() > MAX_WHEN_TO_USE_BYTES {
+        return Err(HostCatalogBuildError::ToolMetadataTooLong {
+            key: key.to_owned(),
+            field: "when_to_use",
+            max_bytes: MAX_WHEN_TO_USE_BYTES,
+            actual_bytes: trimmed.len(),
+        });
+    }
+    Ok(Some(trimmed.to_owned()))
+}
+
+fn resolve_tool_tags(key: &str, tags: &[String]) -> Result<Vec<String>, HostCatalogBuildError> {
+    if tags.len() > MAX_DISCOVERY_TAGS {
+        return Err(HostCatalogBuildError::TooManyToolTags {
+            key: key.to_owned(),
+            count: tags.len(),
+            max_tags: MAX_DISCOVERY_TAGS,
+        });
+    }
+    let mut seen_tags = BTreeSet::new();
+    let mut normalized_tags = Vec::with_capacity(tags.len());
+    for raw_tag in tags {
+        let trimmed = raw_tag.trim();
         if trimmed.is_empty() {
             return Err(HostCatalogBuildError::EmptyToolMetadata {
                 key: key.to_owned(),
-                field: "when_to_use",
+                field: "tags",
             });
         }
-        out.push_str("\nWhen to use: ");
-        out.push_str(trimmed);
-    }
-    if !tags.is_empty() {
-        let mut seen_tags = BTreeSet::new();
-        let mut normalized_tags = Vec::with_capacity(tags.len());
-        for raw_tag in tags {
-            let trimmed = raw_tag.trim();
-            if trimmed.is_empty() {
-                return Err(HostCatalogBuildError::EmptyToolMetadata {
-                    key: key.to_owned(),
-                    field: "tags",
-                });
-            }
-            if !seen_tags.insert(trimmed.to_ascii_lowercase()) {
-                return Err(HostCatalogBuildError::DuplicateToolTag {
-                    key: key.to_owned(),
-                    tag: trimmed.to_owned(),
-                });
-            }
-            normalized_tags.push(trimmed);
+        if trimmed.len() > MAX_DISCOVERY_TAG_BYTES {
+            return Err(HostCatalogBuildError::ToolMetadataTooLong {
+                key: key.to_owned(),
+                field: "tags",
+                max_bytes: MAX_DISCOVERY_TAG_BYTES,
+                actual_bytes: trimmed.len(),
+            });
         }
-        out.push_str("\nTags: ");
-        out.push_str(&normalized_tags.join(", "));
+        if !seen_tags.insert(trimmed.to_lowercase()) {
+            return Err(HostCatalogBuildError::DuplicateToolTag {
+                key: key.to_owned(),
+                tag: trimmed.to_owned(),
+            });
+        }
+        normalized_tags.push(trimmed.to_owned());
     }
-    Ok(out)
+    Ok(normalized_tags)
+}
+
+fn resolve_skill_tags(
+    skill_ref: &str,
+    tags: &[String],
+) -> Result<Vec<String>, HostCatalogBuildError> {
+    if tags.len() > MAX_DISCOVERY_TAGS {
+        return Err(HostCatalogBuildError::TooManySkillTags {
+            skill_ref: skill_ref.to_owned(),
+            count: tags.len(),
+            max_tags: MAX_DISCOVERY_TAGS,
+        });
+    }
+    let mut seen_tags = BTreeSet::new();
+    let mut normalized_tags = Vec::with_capacity(tags.len());
+    for raw_tag in tags {
+        let trimmed = raw_tag.trim();
+        if trimmed.is_empty() {
+            return Err(HostCatalogBuildError::EmptySkillMetadata {
+                skill_ref: skill_ref.to_owned(),
+                field: "tags",
+            });
+        }
+        if trimmed.len() > MAX_DISCOVERY_TAG_BYTES {
+            return Err(HostCatalogBuildError::SkillMetadataTooLong {
+                skill_ref: skill_ref.to_owned(),
+                field: "tags",
+                max_bytes: MAX_DISCOVERY_TAG_BYTES,
+                actual_bytes: trimmed.len(),
+            });
+        }
+        if !seen_tags.insert(trimmed.to_lowercase()) {
+            return Err(HostCatalogBuildError::DuplicateSkillTag {
+                skill_ref: skill_ref.to_owned(),
+                tag: trimmed.to_owned(),
+            });
+        }
+        normalized_tags.push(trimmed.to_owned());
+    }
+    Ok(normalized_tags)
 }
 
 fn validate_schema_bytes(
@@ -2009,8 +2152,23 @@ pub enum HostCatalogBuildError {
     DuplicateWireName { key: String, wire_name: String },
     #[error("host tool {key:?} has empty {field}")]
     EmptyToolMetadata { key: String, field: &'static str },
+    #[error(
+        "host tool {key:?} {field} exceeds maximum length of {max_bytes} bytes ({actual_bytes} bytes)"
+    )]
+    ToolMetadataTooLong {
+        key: String,
+        field: &'static str,
+        max_bytes: usize,
+        actual_bytes: usize,
+    },
     #[error("host tool {key:?} has duplicate tag {tag:?}")]
     DuplicateToolTag { key: String, tag: String },
+    #[error("host tool {key:?} has {count} tags, exceeding maximum of {max_tags}")]
+    TooManyToolTags {
+        key: String,
+        count: usize,
+        max_tags: usize,
+    },
     #[error("host tool {key:?} has invalid {direction} schema: {reason}")]
     InvalidToolSchema {
         key: String,
@@ -2096,6 +2254,23 @@ pub enum HostCatalogBuildError {
     EmptySkillMetadata {
         skill_ref: String,
         field: &'static str,
+    },
+    #[error(
+        "host skill {skill_ref:?} {field} exceeds maximum length of {max_bytes} bytes ({actual_bytes} bytes)"
+    )]
+    SkillMetadataTooLong {
+        skill_ref: String,
+        field: &'static str,
+        max_bytes: usize,
+        actual_bytes: usize,
+    },
+    #[error("host skill {skill_ref:?} has duplicate tag {tag:?}")]
+    DuplicateSkillTag { skill_ref: String, tag: String },
+    #[error("host skill {skill_ref:?} has {count} tags, exceeding maximum of {max_tags}")]
+    TooManySkillTags {
+        skill_ref: String,
+        count: usize,
+        max_tags: usize,
     },
     #[error("host skill {skill_ref:?} provenance is invalid: {reason}")]
     InvalidSkillProvenance {

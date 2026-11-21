@@ -450,8 +450,11 @@ Behavior and validation guarantees:
   listed in `with_initial_exposed_tools`. Tools omitted from
   `with_initial_exposed_tools` remain deferred and are discoverable and
   activatable via `tool.catalog.search` and `tool.catalog.activate`. Optional
-  `when_to_use` and `tags` on `HostToolDescriptor` are projected into the
-  searchable tool description.
+  `when_to_use` and `tags` on `HostToolDescriptor` (and `tags` on
+  `HostSkillDescriptor`) populate the snapshot's native discovery metadata
+  fields (`ToolManifestSnapshot.tags` / `when_to_use` and
+  `AuthorizedSkillDescriptorSnapshot.tags`) for weighted catalog search without
+  mutating `description`.
 - **Fail-closed typed validation**: `build()` never silently drops entries. It
   returns a typed `HostCatalogBuildError` on builtin or empty provider IDs,
   malformed or duplicate tool/skill/exposure keys, keys colliding with compiled
