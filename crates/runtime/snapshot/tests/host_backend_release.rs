@@ -13,7 +13,6 @@ use musteragent_definition::{
     AgentDefinition, AgentKind, AgentLifecycle, AgentVersion, AgentVersionMaterialV1,
     ReleaseChannel,
 };
-use musteragent_discovery::DiscoverySnapshot;
 use musteragent_execution_grant::{
     EXECUTION_GRANT_SCHEMA_V10, ExecutionGrant, ExecutionGrantAuthorityScope,
     ExecutionGrantIdentityBinding,
@@ -35,14 +34,12 @@ use musteragent_runtime_contract::{ModelClass, OpaqueExternalRef};
 use musteragent_runtime_snapshot::{
     AgentVersionSnapshot, CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1, CONTEXT_COMPACTION_POLICY_V11,
     ContextCompactionPolicyV11Spec, ContextPolicySnapshot, ContextSourceSelectionPolicy,
-    MODEL_PROTOCOL_V2, MUSTERAGENT_ASSISTANT_PROMPT_SECTION, ModelRouteSnapshot,
-    OutputPolicySnapshot, PolicySnapshot, PromptAssemblySnapshot, PromptSectionSnapshot,
-    ProtocolVersionSnapshot, RunExecutionPolicySnapshot, RuntimeSnapshot, RuntimeSnapshotContent,
-    SNAPSHOT_SCHEMA_VERSION, SnapshotCodec, SnapshotContractError, SnapshotSealError,
-    ToolDefinitionSnapshot, authorized_tool_catalog,
-};
-use musteragent_skill::{
-    ProductSkillRelease, SkillAuthorizationRequest, SkillDisclosureRequest, Surface,
+    HostCatalogSnapshotBuilder, HostToolDescriptor, MODEL_PROTOCOL_V2,
+    MUSTERAGENT_ASSISTANT_PROMPT_SECTION, ModelRouteSnapshot, OutputPolicySnapshot, PolicySnapshot,
+    PromptAssemblySnapshot, PromptSectionSnapshot, ProtocolVersionSnapshot,
+    RunExecutionPolicySnapshot, RuntimeSnapshot, RuntimeSnapshotContent, SNAPSHOT_SCHEMA_VERSION,
+    SnapshotCodec, SnapshotContractError, SnapshotSealError, ToolDefinitionSnapshot,
+    authorized_tool_catalog, host_capability_provider_id,
 };
 use musteragent_tool::{
     BUILTIN_BACKEND_PROVIDER_ID, BUILTIN_RUST_PROVIDER_ID, BackendOperation, BuiltinIdempotency,
@@ -82,11 +79,34 @@ fn content_ref(id: &str, media_type: &str, bytes: &[u8]) -> ContentRef {
 }
 
 fn host_inventory_provider_id() -> CapabilityProviderId {
-    CapabilityProviderId::from_uuid(uuid::Uuid::new_v5(
+    host_capability_provider_id(
         &uuid::Uuid::NAMESPACE_OID,
-        b"example.test/capability-provider/inventory.v1",
-    ))
+        "example.test/capability-provider/inventory.v1",
+    )
     .expect("deterministic non-nil UUID")
+}
+
+fn quote_input_schema() -> Vec<u8> {
+    br#"{"type":"object","properties":{"sku":{"type":"string"}},"required":["sku"],"additionalProperties":false}"#.to_vec()
+}
+
+fn quote_output_schema() -> Vec<u8> {
+    br#"{"type":"object","properties":{"unit_price":{"type":"number"}},"required":["unit_price"],"additionalProperties":false}"#.to_vec()
+}
+
+fn dynamic_read_descriptor(key_str: &str, wire: &str, method: &str) -> HostToolDescriptor {
+    HostToolDescriptor::new(
+        key_str,
+        "Look up an inventory quote via a host capability provider.",
+        quote_input_schema(),
+        quote_output_schema(),
+        Effect::Read,
+        ApprovalRequirement::Never,
+        method,
+    )
+    .with_title("Lookup Inventory Quote")
+    .with_wire_name(wire)
+    .with_scopes(["inventory.quote.read"])
 }
 
 fn dynamic_backend_read_tool(
@@ -97,10 +117,8 @@ fn dynamic_backend_read_tool(
 ) -> (ToolDefinitionSnapshot, CapabilityGrantSnapshot) {
     let key_v = VersionedKey::new(key_str).expect("valid versioned key");
     let tool_key = ToolKey::from_versioned_key(key_v.clone());
-    let input_schema_json = br#"{"type":"object","properties":{"sku":{"type":"string"}},"required":["sku"],"additionalProperties":false}"#.to_vec();
-    let output_schema_json =
-        br#"{"type":"object","properties":{"unit_price":{"type":"number"}},"required":["unit_price"],"additionalProperties":false}"#
-            .to_vec();
+    let input_schema_json = quote_input_schema();
+    let output_schema_json = quote_output_schema();
     let scope = DottedKey::new("inventory.quote.read").expect("valid scope");
     let target = CapabilityExecutionTarget::BackendNamed(
         BackendOperation::new(method, None).expect("valid Service.Method backend operation"),
@@ -151,8 +169,6 @@ fn dynamic_backend_read_tool(
         file_operation: None,
         title: "Lookup Inventory Quote".to_owned(),
         description: "Look up an inventory quote via a host capability provider.".to_owned(),
-        tags: Vec::new(),
-        when_to_use: None,
         input_schema_json,
         output_schema_json,
     };
@@ -174,9 +190,7 @@ fn dynamic_backend_write_tool(
     approval: ApprovalRequirement,
 ) -> ToolDefinitionSnapshot {
     let key_v = VersionedKey::new("inventory.reservation.create@1").expect("key");
-    let input_schema_json =
-        br#"{"type":"object","properties":{"sku":{"type":"string"}},"required":["sku"],"additionalProperties":false}"#
-            .to_vec();
+    let input_schema_json = quote_input_schema();
     let output_schema_json = br#"{"type":"object"}"#.to_vec();
     let scope = DottedKey::new("inventory.reservation.write").expect("scope");
     ToolDefinitionSnapshot {
@@ -217,84 +231,70 @@ fn dynamic_backend_write_tool(
         file_operation: None,
         title: "Create Inventory Reservation".to_owned(),
         description: "Reserve inventory through the host capability provider.".to_owned(),
-        tags: Vec::new(),
-        when_to_use: None,
         input_schema_json,
         output_schema_json,
     }
+}
+
+fn build_orchestration_snapshot_from_helper(
+    product_release: ProductReleaseRef,
+    host_tools: Vec<HostToolDescriptor>,
+) -> RuntimeSnapshotContent {
+    let partitions = HostCatalogSnapshotBuilder::new(host_inventory_provider_id())
+        .with_product_release(product_release.clone())
+        .with_host_tools(host_tools)
+        .build()
+        .expect("helper partitions");
+    let mut content =
+        build_orchestration_envelope(Some(product_release), partitions.base_skill_refs());
+    partitions.apply_to(&mut content);
+    content
 }
 
 fn build_orchestration_snapshot(
     product_release: Option<ProductReleaseRef>,
     extra_tools: Vec<(ToolDefinitionSnapshot, CapabilityGrantSnapshot)>,
 ) -> RuntimeSnapshotContent {
-    let kernel_release = compiled_product_release(ProductId::KERNEL);
-    let catalog =
-        BuiltinToolCatalog::for_product_release(&kernel_release, ProductExecutionTarget::Cloud)
-            .expect("kernel cloud catalog");
-    let rust_provider: CapabilityProviderId =
-        BUILTIN_RUST_PROVIDER_ID.parse().expect("rust provider");
-    let bootstrap = [
-        "tool.catalog.search",
-        "tool.catalog.activate",
-        "interaction.request",
-        "skills.search",
-        "skills.list",
-        "skills.view",
-        "plan.get",
-        "plan.update",
-    ];
-    let selected_builtins: BTreeSet<&str> = bootstrap.into_iter().collect();
+    let base_release = product_release
+        .clone()
+        .unwrap_or_else(|| compiled_product_release(ProductId::KERNEL));
+    let mut partitions = HostCatalogSnapshotBuilder::new(host_inventory_provider_id())
+        .with_product_release(base_release)
+        .build()
+        .expect("baseline partitions");
 
-    let mut grants = BTreeMap::new();
-    let mut tools = Vec::new();
-    for d in catalog
-        .definitions()
-        .iter()
-        .filter(|d| selected_builtins.contains(d.key.logical_key()))
-    {
-        grants.insert(
-            CapabilityKey::from_versioned_key(d.capability_key.clone()),
-            CapabilityGrantSnapshot {
-                key: CapabilityKey::from_versioned_key(d.capability_key.clone()),
-                provider_id: rust_provider,
-                location: CapabilityLocation::Cloud,
-                effect: d.effect,
-                allowed_scopes: d.required_scopes.clone(),
-                policy_decision: Decision::Allow,
-            },
-        );
-        tools.push(ToolDefinitionSnapshot {
-            manifest: d.pin(rust_provider),
-            execution_target: d.target.clone(),
-            concurrency_class: d.concurrency,
-            idempotency: d.idempotency,
-            file_operation: d.file_operation.clone(),
-            title: d.title.clone(),
-            description: d.description.clone(),
-            tags: Vec::new(),
-            when_to_use: None,
-            input_schema_json: d.input_schema_json.clone(),
-            output_schema_json: d.output_schema_json.clone(),
-        });
-    }
+    let mut grants: BTreeMap<CapabilityKey, CapabilityGrantSnapshot> = partitions
+        .capabilities
+        .into_iter()
+        .map(|g| (g.key.clone(), g))
+        .collect();
     for (tool, grant) in extra_tools {
         grants.insert(grant.key.clone(), grant);
-        tools.push(tool);
+        partitions.tools.push(tool);
     }
-    tools.sort_by(|a, b| a.manifest.key.cmp(&b.manifest.key));
-    let capabilities: Vec<_> = grants.into_values().collect();
+    partitions
+        .tools
+        .sort_by(|a, b| a.manifest.key.cmp(&b.manifest.key));
+    partitions.capabilities = grants.into_values().collect();
+    partitions.discovery.authorized_tool_catalog_hash =
+        authorized_tool_catalog(&partitions.tools, &partitions.capabilities)
+            .map(|c| c.catalog_hash())
+            .unwrap_or_else(|_| Sha256::digest(b"unvalidated-catalog"));
 
-    let skill_release =
-        ProductSkillRelease::resolve(&kernel_release).expect("kernel skill release");
-    let skill_catalog = skill_release.catalog().expect("skill catalog");
-    let base_skill = skill_catalog
-        .definitions()
-        .find(|s| s.activation_policy == musteragent_skill::ActivationPolicy::Base)
-        .expect("base skill")
-        .skill_ref
-        .clone();
+    let mut content =
+        build_orchestration_envelope(product_release.clone(), partitions.base_skill_refs());
+    content.capabilities = partitions.capabilities;
+    content.tools = partitions.tools;
+    content.skills = partitions.skills;
+    content.discovery = Some(partitions.discovery);
+    content.product_release = product_release;
+    content
+}
 
+fn build_orchestration_envelope(
+    product_release: Option<ProductReleaseRef>,
+    base_skill_refs: Vec<VersionedKey>,
+) -> RuntimeSnapshotContent {
     let policy_bytes = b"safety policy bytes";
     let persona_bytes = b"assistant persona bytes";
     let memory_bytes = b"memory policy bytes";
@@ -338,7 +338,7 @@ fn build_orchestration_snapshot(
         version: VersionNumber::new(1).expect("v1"),
         persona_version: VersionNumber::new(1).expect("p1"),
         persona_content_ref: persona_ref.clone(),
-        base_skill_refs: vec![base_skill],
+        base_skill_refs,
         policy_ref: VersionedKey::new("musteragent.runtime-policy@1").expect("policy ref"),
         policy_hash: safety_ref.sha256,
         memory_policy_ref: VersionedKey::new(
@@ -363,92 +363,6 @@ fn build_orchestration_snapshot(
         }),
     };
 
-    let authorized_capabilities: BTreeSet<VersionedKey> = capabilities
-        .iter()
-        .map(|g| VersionedKey::new(g.key.as_str()).expect("cap key"))
-        .collect();
-    let skills: Vec<_> = skill_catalog
-        .authorize(&SkillAuthorizationRequest {
-            surface: Surface::Api,
-            agent_contract: agent_ver.supported_runtime_contract.clone(),
-            authorized_capabilities: authorized_capabilities.clone(),
-        })
-        .expect("authorize skills")
-        .into_iter()
-        .filter(|s| s.required_capabilities.is_subset(&authorized_capabilities))
-        .collect();
-    let entries: Vec<_> = skill_release
-        .entries()
-        .expect("skill entries")
-        .into_iter()
-        .filter(|e| {
-            skills
-                .iter()
-                .any(|s| s.skill_version_id == e.definition.skill_version_id)
-        })
-        .collect();
-    let authorized_skills = musteragent_discovery::AuthorizedSkillCatalog::new(
-        entries
-            .iter()
-            .map(|e| {
-                let d = &e.definition;
-                musteragent_discovery::AuthorizedSkillDescriptor {
-                    skill_id: d.skill_id,
-                    skill_version_id: d.skill_version_id,
-                    skill_ref: d.skill_ref.clone(),
-                    title: d.title.clone(),
-                    description: d.description.clone(),
-                    when_to_use: d.description.clone(),
-                    tags: Vec::new(),
-                    origin: musteragent_discovery::SkillOrigin::Bundled,
-                    trust: musteragent_discovery::SkillCatalogTrust::Official,
-                    provenance: musteragent_discovery::SkillCatalogProvenance::Bundled {
-                        bundle_ref: VersionedKey::new("musteragent.skill-bundle@1")
-                            .expect("bundle"),
-                    },
-                    install_scope: musteragent_discovery::SkillCatalogInstallScope::Global,
-                    spec_hash: d.instructions_hash,
-                    instructions_ref: d.instructions_ref.clone(),
-                    instructions_hash: d.instructions_hash,
-                    references: vec![musteragent_discovery::SkillCatalogReference {
-                        kind: musteragent_discovery::SkillCatalogReferenceKind::Instructions,
-                        content_ref: d.instructions_ref.clone(),
-                    }],
-                    required_tools: d.required_capabilities.clone(),
-                    optional_tools: d.optional_capabilities.clone(),
-                    compatible_agent_contracts: d.compatible_agent_contracts.clone(),
-                    compatible_surfaces: d
-                        .compatible_surfaces
-                        .iter()
-                        .map(|s| s.as_str().to_owned())
-                        .collect(),
-                    activation: match d.activation_policy {
-                        musteragent_skill::ActivationPolicy::Base => {
-                            musteragent_discovery::SkillCatalogActivation::Base
-                        }
-                        musteragent_skill::ActivationPolicy::ExplicitOrResolved => {
-                            musteragent_discovery::SkillCatalogActivation::ExplicitOrResolved
-                        }
-                        musteragent_skill::ActivationPolicy::SurfacePinned => {
-                            musteragent_discovery::SkillCatalogActivation::SurfacePinned
-                        }
-                    },
-                    lifecycle: musteragent_discovery::SkillCatalogLifecycle::Active,
-                    availability: musteragent_discovery::SkillAvailability::Available,
-                }
-            })
-            .collect(),
-    )
-    .expect("authorized skills");
-    let disclosures = skill_catalog
-        .select_initial_disclosures(
-            &skills,
-            &SkillDisclosureRequest {
-                explicitly_selected_skill_refs: BTreeSet::new(),
-            },
-        )
-        .expect("initial disclosures");
-
     let route = ModelRoute {
         route_ref: VersionedKey::new("host.chat@1").expect("route ref"),
         resolved_model_key: "gpt-test".parse().expect("model key"),
@@ -468,19 +382,6 @@ fn build_orchestration_snapshot(
         provider_state_policy: ProviderStatePolicy::Stateless,
     };
     let budgets = ContextCompactionPolicyV11Spec::resolve(&route).expect("budgets");
-
-    let bootstrap_tools: Vec<_> = bootstrap
-        .iter()
-        .map(|logical| {
-            tools
-                .iter()
-                .find(|t| t.manifest.key.logical_key() == *logical)
-                .expect("bootstrap tool")
-                .manifest
-                .key
-                .clone()
-        })
-        .collect();
 
     let mut prompt_bytes = policy_bytes.to_vec();
     prompt_bytes.extend_from_slice(persona_bytes);
@@ -515,7 +416,7 @@ fn build_orchestration_snapshot(
             fallback_candidates: Vec::new(),
         },
         auxiliary_models: Vec::new(),
-        skills,
+        skills: Vec::new(),
         policy: PolicySnapshot {
             policy_ref: agent_ver.policy_ref,
             policy_hash: agent_ver.policy_hash,
@@ -550,26 +451,9 @@ fn build_orchestration_snapshot(
             snapshot_schema: DottedKey::new(SNAPSHOT_SCHEMA_VERSION).expect("snap"),
             model_protocol: VersionedKey::new(MODEL_PROTOCOL_V2).expect("proto"),
         },
-        discovery: Some(DiscoverySnapshot {
-            authorized_tool_catalog_hash: authorized_tool_catalog(&tools, &capabilities)
-                .map(|c| c.catalog_hash())
-                .unwrap_or_else(|_| Sha256::digest(b"unvalidated-catalog")),
-            authorized_skills: authorized_skills.definitions().to_vec(),
-            authorized_skill_catalog_hash: authorized_skills.catalog_hash(),
-            bootstrap_tool_keys: bootstrap_tools.clone(),
-            initial_exposed_tool_keys: bootstrap_tools,
-            initial_disclosed_skill_refs: disclosures.initial_disclosed_skill_refs,
-            default_disclosed_skill_refs: Vec::new(),
-            explicitly_selected_skill_refs: Vec::new(),
-            carry_forward_source_run_id: None,
-            carry_forward_decision_ref: None,
-            discovery_policy_ref: VersionedKey::new(CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1)
-                .expect("policy"),
-            max_exposed_tools: NonZeroU32::new(64).expect("max exposed"),
-            max_search_results: NonZeroU32::new(20).expect("max search"),
-        }),
-        tools,
-        capabilities,
+        discovery: None,
+        tools: Vec::new(),
+        capabilities: Vec::new(),
     }
 }
 
@@ -677,24 +561,22 @@ fn install_minimal_host_release() -> ProductReleaseRef {
 fn dynamic_backend_tool_seals_with_compiled_and_host_product_releases() {
     let now = UtcTimestamp::from_unix_millis(1_790_874_000_000);
     let provider = host_inventory_provider_id();
-    let read_pair = dynamic_backend_read_tool(
+    let read_desc = dynamic_read_descriptor(
         "inventory.quote.lookup@1",
         "inventory_quote_lookup",
         "InventoryService.LookupQuote",
-        provider,
     );
-    let write_tool = dynamic_backend_write_tool(provider, ApprovalRequirement::ByPolicy);
-    write_tool
-        .validate()
-        .expect("non-read dynamic tool with ByPolicy approval validates");
-    let write_grant = CapabilityGrantSnapshot {
-        key: CapabilityKey::from_versioned_key(write_tool.manifest.capability_key.clone()),
-        provider_id: provider,
-        location: CapabilityLocation::Backend,
-        effect: Effect::WriteExternal,
-        allowed_scopes: write_tool.manifest.required_scopes.clone(),
-        policy_decision: Decision::Allow,
-    };
+    let write_desc = HostToolDescriptor::new(
+        "inventory.reservation.create@1",
+        "Reserve inventory through the host capability provider.",
+        quote_input_schema(),
+        br#"{"type":"object"}"#.to_vec(),
+        Effect::WriteExternal,
+        ApprovalRequirement::ByPolicy,
+        "InventoryService.CreateReservation",
+    )
+    .with_title("Create Inventory Reservation")
+    .with_scopes(["inventory.reservation.write"]);
 
     // Non-read tool without approval floor is rejected by ToolManifest validation.
     let unsafe_write = dynamic_backend_write_tool(provider, ApprovalRequirement::Never);
@@ -713,9 +595,9 @@ fn dynamic_backend_tool_seals_with_compiled_and_host_product_releases() {
         compiled_product_release(ProductId::KERNEL),
         install_minimal_host_release(),
     ] {
-        let content = build_orchestration_snapshot(
-            Some(release),
-            vec![read_pair.clone(), (write_tool.clone(), write_grant.clone())],
+        let content = build_orchestration_snapshot_from_helper(
+            release,
+            vec![read_desc.clone(), write_desc.clone()],
         );
         RuntimeSnapshot::seal(
             RuntimeSnapshotId::generate(),
@@ -867,8 +749,6 @@ fn compiled_key_with_mismatched_contract_is_rejected_even_with_host_provider() {
         file_operation: compiled_backend.file_operation.clone(),
         title: compiled_backend.title.clone(),
         description: compiled_backend.description.clone(),
-        tags: Vec::new(),
-        when_to_use: None,
         input_schema_json: compiled_backend.input_schema_json.clone(),
         output_schema_json: compiled_backend.output_schema_json.clone(),
     };
@@ -935,13 +815,12 @@ fn derived_child_narrowing_retains_dynamic_backend_capability_and_seals_with_pro
     let principal_id = PrincipalId::generate();
     let provider = host_inventory_provider_id();
 
-    let dyn_pair = dynamic_backend_read_tool(
+    let dyn_desc = dynamic_read_descriptor(
         "inventory.quote.lookup@1",
         "inventory_quote_lookup",
         "InventoryService.LookupQuote",
-        provider,
     );
-    let mut derived = build_orchestration_snapshot(Some(release), vec![dyn_pair]);
+    let mut derived = build_orchestration_snapshot_from_helper(release, vec![dyn_desc]);
     let grant_ref =
         CredentialGrantRef::new(format!("grant_derived_{child_run_id}")).expect("grant ref");
     derived.model.credential_grant_ref = grant_ref.clone();
@@ -1068,8 +947,6 @@ fn device_home_snapshot_with_cloud_only_backend_tool_is_rejected() {
                 file_operation: cloud_only_backend.file_operation.clone(),
                 title: cloud_only_backend.title.clone(),
                 description: cloud_only_backend.description.clone(),
-                tags: Vec::new(),
-                when_to_use: None,
                 input_schema_json: cloud_only_backend.input_schema_json.clone(),
                 output_schema_json: cloud_only_backend.output_schema_json.clone(),
             };

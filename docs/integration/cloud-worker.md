@@ -389,6 +389,91 @@ route to that host dispatcher; other calls fall through to the inner product
 dispatcher, and an unknown provider ID for a host-shaped call fails explicitly
 with `ErrorCode::CapabilityUnavailable`.
 
+#### Building host catalog snapshot partitions
+
+Instead of hand-assembling capability grants, `ToolDefinitionSnapshot` values,
+bundled and tenant skill projections, and `DiscoverySnapshot` hashes at run
+admission, use the pure `HostCatalogSnapshotBuilder` in
+`musteragent-runtime-snapshot`:
+
+```rust
+use musteragent_policy::{ApprovalRequirement, Effect};
+use musteragent_runtime_snapshot::{
+    HostCatalogBuildError, HostCatalogSnapshotBuilder, HostCatalogSnapshotPartitions,
+    HostSkillDescriptor, HostSkillProvenance, HostToolDescriptor, host_capability_provider_id,
+};
+use uuid::Uuid;
+
+fn build_host_partitions(
+    skills: Vec<HostSkillDescriptor>,
+) -> Result<HostCatalogSnapshotPartitions, HostCatalogBuildError> {
+    let provider_id = host_capability_provider_id(
+        &Uuid::NAMESPACE_OID,
+        "example.test/capability-provider/inventory.v1",
+    )?;
+    HostCatalogSnapshotBuilder::new(provider_id)
+        .with_builtin_tools(["skills.resource.read@2"])
+        .with_host_tools([
+            HostToolDescriptor::new(
+                "inventory.status.ping@1",
+                "Check live status of the inventory service.",
+                br#"{"type":"object","additionalProperties":false}"#.to_vec(),
+                br#"{"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"],"additionalProperties":false}"#.to_vec(),
+                Effect::Read,
+                ApprovalRequirement::Never,
+                "InventoryService.CheckStatus",
+            ),
+            HostToolDescriptor::new(
+                "inventory.quote.lookup@1",
+                "Look up live inventory pricing by SKU.",
+                br#"{"type":"object","properties":{"sku":{"type":"string"}},"required":["sku"],"additionalProperties":false}"#.to_vec(),
+                br#"{"type":"object","properties":{"unit_price":{"type":"integer"}},"required":["unit_price"],"additionalProperties":false}"#.to_vec(),
+                Effect::Read,
+                ApprovalRequirement::Never,
+                "InventoryService.LookupQuote",
+            )
+            .with_when_to_use("Use when computing wholesale SKU quotes.")
+            .with_tags(["pricing", "warehouse"]),
+        ])
+        .with_host_skills(skills)
+        .with_initial_exposed_tools(["inventory.status.ping@1"])
+        .build()
+}
+```
+
+Behavior and validation guarantees:
+
+- **Authorized vs. initially exposed tools**: Every declared host tool receives a
+  `CapabilityLocation::Backend` grant and enters `tools`, while
+  `discovery.initial_exposed_tool_keys` contains only the 8 mandatory
+  `CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1` bootstrap tools followed by the keys
+  listed in `with_initial_exposed_tools`. Tools omitted from
+  `with_initial_exposed_tools` remain deferred and are discoverable and
+  activatable via `tool.catalog.search` and `tool.catalog.activate`. Optional
+  `when_to_use` and `tags` on `HostToolDescriptor` are projected into the
+  searchable tool description.
+- **Fail-closed typed validation**: `build()` never silently drops entries. It
+  returns a typed `HostCatalogBuildError` on builtin or empty provider IDs,
+  malformed or duplicate tool/skill/exposure keys, keys colliding with compiled
+  `Cloud` or `Device` catalogs, disallowed kernel namespaces, `ExecuteTool` or
+  malformed `<Service>.<Method>` operations, non-`Effect::Read` tools paired with
+  `ApprovalRequirement::Never`, non-object JSON schemas, or ungranted skill
+  capability requirements.
+- **Allowed host skill provenance (`source != "marketplace"`)**: Host skill
+  descriptors (`HostSkillDescriptor` / `HostSkillProvenance`, including
+  `HostSkillDescriptor::from_catalog_entry`) must use installed sources `"hub"`
+  (`HostSkillProvenance::hub`), `"url"` (`HostSkillProvenance::url`), or
+  `"github"` (`HostSkillProvenance::github`), or tenant-local custom provenance
+  (`HostSkillProvenance::custom`). `source = "marketplace"` is rejected with
+  `HostCatalogBuildError::MarketplaceSkillSourceUnsupported` because
+  `cloud-worker` leaves `CurrentMarketSkillSource` unwired and requires a root
+  `execution_grant_proof` that derived delegation and scheduled runs do not
+  carry.
+- **Snapshot and grant projection**: Call `partitions.apply_to(&mut content)` to
+  populate `product_release`, `capabilities`, `tools`, `skills`, and `discovery`
+  before `RuntimeSnapshot::seal`, and `partitions.capability_entitlements()` when
+  minting the matching `ExecutionGrant`.
+
 ## Sandbox and process lifecycle
 
 Host admission calls `PostgresSandboxRoutingStore::bind_run_context` with the

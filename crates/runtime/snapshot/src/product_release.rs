@@ -237,13 +237,17 @@ impl ToolDefinitionSnapshot {
     }
 }
 
-fn is_builtin_provider_id(id: musteragent_identity::CapabilityProviderId) -> bool {
-    let rust = musteragent_tool::BUILTIN_RUST_PROVIDER_ID
+pub(crate) fn is_builtin_provider_id(id: musteragent_identity::CapabilityProviderId) -> bool {
+    let Ok(rust) = musteragent_tool::BUILTIN_RUST_PROVIDER_ID
         .parse::<musteragent_identity::CapabilityProviderId>()
-        .expect("compiled rust provider id");
-    let backend = musteragent_tool::BUILTIN_BACKEND_PROVIDER_ID
+    else {
+        return false;
+    };
+    let Ok(backend) = musteragent_tool::BUILTIN_BACKEND_PROVIDER_ID
         .parse::<musteragent_identity::CapabilityProviderId>()
-        .expect("compiled backend provider id");
+    else {
+        return false;
+    };
     id == rust || id == backend
 }
 
