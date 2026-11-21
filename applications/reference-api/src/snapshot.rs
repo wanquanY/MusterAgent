@@ -110,6 +110,8 @@ pub(crate) async fn prepare(
             file_operation: d.file_operation.clone(),
             title: d.title.clone(),
             description: d.description.clone(),
+            tags: Vec::new(),
+            when_to_use: None,
             input_schema_json: d.input_schema_json.clone(),
             output_schema_json: d.output_schema_json.clone(),
         });

@@ -700,6 +700,8 @@ pub fn decode_tool(
         },
         title: value.title,
         description: value.description,
+        tags: value.tags,
+        when_to_use: value.when_to_use,
         input_schema_json: value.input_schema_json,
         output_schema_json: value.output_schema_json,
     })
@@ -870,6 +872,7 @@ fn authorized_skill_descriptor(
             .iter()
             .map(versioned_ref)
             .collect(),
+        tags: skill.tags.clone(),
     }
 }
 
@@ -963,6 +966,7 @@ fn decode_authorized_skill_descriptor(
         title: skill.title,
         description: skill.description,
         when_to_use: skill.when_to_use,
+        tags: skill.tags,
         instructions_ref: decode_content_ref(
             skill
                 .instructions_ref
@@ -1058,6 +1062,8 @@ pub fn tool_manifest(tool: &ToolDefinitionSnapshot) -> wire::ToolManifestSnapsho
         }),
         title: tool.title.clone(),
         description: tool.description.clone(),
+        tags: tool.tags.clone(),
+        when_to_use: tool.when_to_use.clone(),
         input_schema_json: tool.input_schema_json.clone(),
         output_schema_json: tool.output_schema_json.clone(),
         execution_target: tool.execution_target.as_str().to_owned(),

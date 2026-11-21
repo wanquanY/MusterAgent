@@ -36,6 +36,7 @@ pub struct SkillCatalogPage {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AuthorizedSkillCatalog {
     definitions: Vec<AuthorizedSkillDescriptor>,
+    search_index: Vec<crate::search::DocumentSearchIndex>,
     by_ref: BTreeMap<String, usize>,
     catalog_hash: Sha256,
     model_names: crate::ModelSkillNames,
@@ -113,8 +114,28 @@ impl AuthorizedSkillCatalog {
         let model_names =
             crate::ModelSkillNames::new(definitions.iter().map(|skill| &skill.skill_ref))
                 .map_err(|_| SkillDiscoveryContractError::InvalidSkillDescriptor)?;
+        let search_index = definitions
+            .iter()
+            .map(|skill| {
+                let model_name = model_names
+                    .name(&skill.skill_ref)
+                    .unwrap_or(skill.skill_ref.logical_key());
+                crate::search::DocumentSearchIndex::new(
+                    [
+                        skill.skill_ref.as_str(),
+                        skill.skill_ref.logical_key(),
+                        model_name,
+                        skill.title.as_str(),
+                    ],
+                    skill.tags.iter().map(String::as_str),
+                    Some(skill.when_to_use.as_str()),
+                    skill.description.as_str(),
+                )
+            })
+            .collect();
         Ok(Self {
             definitions,
+            search_index,
             by_ref,
             catalog_hash,
             model_names,
@@ -161,32 +182,14 @@ impl AuthorizedSkillCatalog {
         &self,
         request: &SkillCatalogSearchRequest,
     ) -> Result<SkillCatalogPage, SkillDiscoveryContractError> {
-        let query = normalize(&request.query);
-        let terms = query
-            .split_whitespace()
-            .filter(|term| !term.is_empty())
-            .collect::<Vec<_>>();
+        let parsed = crate::search::ParsedQuery::parse(&request.query);
+        let query = parsed.canonical().to_owned();
         let mut matches = self
             .definitions
             .iter()
-            .filter_map(|skill| {
-                let searchable = normalize(&format!(
-                    "{} {} {} {}",
-                    skill.skill_ref.as_str(),
-                    skill.title,
-                    skill.description,
-                    skill.when_to_use
-                ));
-                let score = if query.is_empty() {
-                    1
-                } else if searchable.contains(&query) {
-                    terms.len().saturating_add(2)
-                } else {
-                    terms
-                        .iter()
-                        .filter(|term| searchable.contains(**term))
-                        .count()
-                };
+            .zip(self.search_index.iter())
+            .filter_map(|(skill, index)| {
+                let score = parsed.score(index);
                 (score > 0).then_some((Reverse(score), skill.skill_ref.as_str(), skill))
             })
             .collect::<Vec<_>>();
@@ -357,6 +360,15 @@ fn hash_definitions(definitions: &[AuthorizedSkillDescriptor]) -> Sha256 {
             }
         }
     }
+    if definitions.iter().any(|skill| !skill.tags.is_empty()) {
+        append_bytes(&mut canonical, b"skill-discovery-metadata:v1");
+        for skill in definitions {
+            append_len(&mut canonical, skill.tags.len());
+            for tag in &skill.tags {
+                append_bytes(&mut canonical, tag.as_bytes());
+            }
+        }
+    }
     Sha256::digest(canonical)
 }
 
@@ -476,22 +488,6 @@ fn reference_order(
         right.content_ref.sha256,
     );
     left_key.cmp(&right_key)
-}
-
-fn normalize(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| {
-            if character.is_alphanumeric() {
-                character.to_ascii_lowercase()
-            } else {
-                ' '
-            }
-        })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 fn append_bytes(target: &mut Vec<u8>, value: &[u8]) {

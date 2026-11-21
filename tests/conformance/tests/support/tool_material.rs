@@ -83,6 +83,8 @@ pub fn fixture_tool_material(
         file_operation: None,
         title: "Web search".into(),
         description: "Search the web.".into(),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json,
         output_schema_json,
     };

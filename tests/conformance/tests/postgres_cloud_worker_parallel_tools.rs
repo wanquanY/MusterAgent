@@ -605,6 +605,8 @@ fn loop_snapshot_tool(
         file_operation: None,
         title: format!("Fixture {wire_name}"),
         description: format!("Execute the {wire_name} conformance Tool."),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json,
         output_schema_json,
     }

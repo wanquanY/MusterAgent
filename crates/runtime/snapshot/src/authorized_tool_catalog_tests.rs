@@ -27,6 +27,8 @@ fn tool(capability: &str) -> ToolDefinitionSnapshot {
         file_operation: definition.file_operation,
         title: definition.title,
         description: definition.description,
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json: definition.input_schema_json,
         output_schema_json: definition.output_schema_json,
     }

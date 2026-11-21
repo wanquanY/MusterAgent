@@ -1554,6 +1554,8 @@ async fn interaction_contracts(
         file_operation: definition.file_operation.clone(),
         title: definition.title.clone(),
         description: definition.description.clone(),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json: definition.input_schema_json.clone(),
         output_schema_json: definition.output_schema_json.clone(),
     };
@@ -1687,6 +1689,8 @@ async fn approval_contracts(
         file_operation: None,
         title: "Approval write".into(),
         description: "Write only after an explicit approval.".into(),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json,
         output_schema_json,
     };

@@ -112,6 +112,8 @@ fn dynamic_backend_tool(
         file_operation: None,
         title: title.to_owned(),
         description: description.to_owned(),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json,
         output_schema_json,
     };
@@ -645,6 +647,8 @@ async fn seed_dynamic_orchestration_run(
         file_operation: spawn_def.file_operation.clone(),
         title: spawn_def.title.clone(),
         description: spawn_def.description.clone(),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json: spawn_def.input_schema_json.clone(),
         output_schema_json: spawn_def.output_schema_json.clone(),
     });

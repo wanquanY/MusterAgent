@@ -335,6 +335,8 @@ fn dynamic_tool_pair(
         file_operation: None,
         title: "Lookup Quote".to_owned(),
         description: "Look up an inventory quote.".to_owned(),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json: input_json,
         output_schema_json: output_json,
     };
@@ -776,6 +778,8 @@ fn routes_host_providers_falls_through_to_product_and_fails_unknown_host_provide
         file_operation: time_def.file_operation.clone(),
         title: time_def.title.clone(),
         description: time_def.description.clone(),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json: time_def.input_schema_json.clone(),
         output_schema_json: time_def.output_schema_json.clone(),
     };

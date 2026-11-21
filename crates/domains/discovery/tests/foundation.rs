@@ -25,6 +25,8 @@ fn tool(key: &str, title: &str, location: CapabilityLocation) -> AuthorizedToolD
         wire_name: WireName::new(key.replace(['.', '@'], "_")).expect("wire name"),
         title: title.to_owned().into(),
         description: format!("{title} capability").into(),
+        tags: Vec::new(),
+        when_to_use: None,
         schema_hash: Sha256::digest(&schema_bytes),
         schema: schema_bytes.into(),
         provider_id: provider_id(location),

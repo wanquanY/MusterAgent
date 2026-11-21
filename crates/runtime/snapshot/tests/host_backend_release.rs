@@ -151,6 +151,8 @@ fn dynamic_backend_read_tool(
         file_operation: None,
         title: "Lookup Inventory Quote".to_owned(),
         description: "Look up an inventory quote via a host capability provider.".to_owned(),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json,
         output_schema_json,
     };
@@ -215,6 +217,8 @@ fn dynamic_backend_write_tool(
         file_operation: None,
         title: "Create Inventory Reservation".to_owned(),
         description: "Reserve inventory through the host capability provider.".to_owned(),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json,
         output_schema_json,
     }
@@ -268,6 +272,8 @@ fn build_orchestration_snapshot(
             file_operation: d.file_operation.clone(),
             title: d.title.clone(),
             description: d.description.clone(),
+            tags: Vec::new(),
+            when_to_use: None,
             input_schema_json: d.input_schema_json.clone(),
             output_schema_json: d.output_schema_json.clone(),
         });
@@ -393,6 +399,7 @@ fn build_orchestration_snapshot(
                     title: d.title.clone(),
                     description: d.description.clone(),
                     when_to_use: d.description.clone(),
+                    tags: Vec::new(),
                     origin: musteragent_discovery::SkillOrigin::Bundled,
                     trust: musteragent_discovery::SkillCatalogTrust::Official,
                     provenance: musteragent_discovery::SkillCatalogProvenance::Bundled {
@@ -860,6 +867,8 @@ fn compiled_key_with_mismatched_contract_is_rejected_even_with_host_provider() {
         file_operation: compiled_backend.file_operation.clone(),
         title: compiled_backend.title.clone(),
         description: compiled_backend.description.clone(),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json: compiled_backend.input_schema_json.clone(),
         output_schema_json: compiled_backend.output_schema_json.clone(),
     };
@@ -1059,6 +1068,8 @@ fn device_home_snapshot_with_cloud_only_backend_tool_is_rejected() {
                 file_operation: cloud_only_backend.file_operation.clone(),
                 title: cloud_only_backend.title.clone(),
                 description: cloud_only_backend.description.clone(),
+                tags: Vec::new(),
+                when_to_use: None,
                 input_schema_json: cloud_only_backend.input_schema_json.clone(),
                 output_schema_json: cloud_only_backend.output_schema_json.clone(),
             };

@@ -57,6 +57,8 @@ pub(super) async fn install(f: &Fixture, run: RunContext) {
                 file_operation: tool.file_operation.clone(),
                 title: tool.title.clone(),
                 description: tool.description.clone(),
+                tags: Vec::new(),
+                when_to_use: None,
                 input_schema_json: tool.input_schema_json.clone(),
                 output_schema_json: tool.output_schema_json.clone(),
             }

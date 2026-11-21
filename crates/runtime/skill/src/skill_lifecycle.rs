@@ -290,6 +290,7 @@ pub fn authorized_skill_catalog(
                 title: skill.title.clone(),
                 description: skill.description.clone(),
                 when_to_use: entry.authority.when_to_use.clone(),
+                tags: Vec::new(),
                 instructions_ref: skill.instructions_ref.clone(),
                 instructions_hash: skill.instructions_hash,
                 required_tools: skill.required_capabilities.clone(),
