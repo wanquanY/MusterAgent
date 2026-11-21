@@ -62,6 +62,18 @@ pub enum ToolExecutionRequirement {
 }
 
 impl CapabilityHandlerKind {
+    /// Handlers that can only run through a live browser execution provider
+    /// (a user's open page holding a browser lease). A Run with nobody attached
+    /// to a page, such as a scheduled or other unattended execution, can never
+    /// satisfy them.
+    #[must_use]
+    pub const fn requires_browser_execution(self) -> bool {
+        matches!(
+            self,
+            Self::BrowserEnvironment | Self::BrowserPython | Self::WebApplication
+        )
+    }
+
     #[must_use]
     pub const fn execution_requirements(self) -> &'static [ToolExecutionRequirement] {
         match self {
@@ -233,8 +245,8 @@ fn classify(
         CapabilityHandlerKind::DeviceFileArtifact
     } else if key == "resource.file.create" {
         CapabilityHandlerKind::FileArtifact
-    } else if key.starts_with("sandbox.environment.") || key.starts_with("sandbox.operation.") {
-        CapabilityHandlerKind::BrowserEnvironment
+    } else if let Some(handler) = browser_execution_handler(key) {
+        handler
     } else if matches!(
         key,
         "video.scene.preview" | "video.scene.render" | "video.narrate"
@@ -250,10 +262,6 @@ fn classify(
         "video.template.search" | "video.template.use" | "video.template.package"
     ) {
         CapabilityHandlerKind::VideoTemplate
-    } else if key == "data.python.run" {
-        CapabilityHandlerKind::BrowserPython
-    } else if key.starts_with("application.web.") {
-        CapabilityHandlerKind::WebApplication
     } else if key.starts_with("files.") {
         CapabilityHandlerKind::FileQuery
     } else if key == "resource.file.read" || key.starts_with("resource.file.edit.") {
@@ -289,6 +297,31 @@ fn classify(
         ));
     };
     Ok(handler)
+}
+
+/// The single owner of browser-executed handler families, shared by handler
+/// assembly and by derivations that must drop them.
+fn browser_execution_handler(logical_key: &str) -> Option<CapabilityHandlerKind> {
+    if logical_key.starts_with("sandbox.environment.")
+        || logical_key.starts_with("sandbox.operation.")
+    {
+        Some(CapabilityHandlerKind::BrowserEnvironment)
+    } else if logical_key == "data.python.run" {
+        Some(CapabilityHandlerKind::BrowserPython)
+    } else if logical_key.starts_with("application.web.") {
+        Some(CapabilityHandlerKind::WebApplication)
+    } else {
+        None
+    }
+}
+
+/// Whether a built-in Tool or Capability key (versioned or logical) can only
+/// execute through a browser execution provider.
+#[must_use]
+pub fn requires_browser_execution(key: &str) -> bool {
+    let logical = key.rsplit_once('@').map_or(key, |(logical, _)| logical);
+    browser_execution_handler(logical)
+        .is_some_and(CapabilityHandlerKind::requires_browser_execution)
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Error)]
@@ -377,6 +410,47 @@ mod tests {
                     entry.definition.key.logical_key()
                 );
             }
+        }
+    }
+
+    #[test]
+    fn browser_execution_predicate_matches_handler_ownership() {
+        let mut browser = 0;
+        for catalog in [
+            BuiltinToolCatalog::load_cloud().unwrap(),
+            BuiltinToolCatalog::load_device().unwrap(),
+        ] {
+            let plan = CapabilityAssemblyPlan::from_catalog(&catalog).unwrap();
+            for entry in plan.entries() {
+                let key = entry.definition.key.as_str();
+                assert_eq!(
+                    requires_browser_execution(key),
+                    entry.handler.requires_browser_execution(),
+                    "{key}"
+                );
+                browser += usize::from(entry.handler.requires_browser_execution());
+            }
+        }
+        assert!(
+            browser > 0,
+            "no browser-executed tool in the built-in catalogs"
+        );
+        for key in [
+            "data.python.run@11",
+            "data.python.run",
+            "sandbox.environment.prepare@1",
+            "sandbox.operation.inspect@1",
+            "application.web.build@1",
+        ] {
+            assert!(requires_browser_execution(key), "{key}");
+        }
+        for key in [
+            "device.terminal.exec@3",
+            "workspace.file.read@1",
+            "data.python.runner@1",
+            "web.fetch@1",
+        ] {
+            assert!(!requires_browser_execution(key), "{key}");
         }
     }
 }

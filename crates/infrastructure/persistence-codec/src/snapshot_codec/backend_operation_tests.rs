@@ -84,3 +84,68 @@ fn host_publication_round_trips_its_exact_method_and_artifact_contract() {
     document["cloud"][0]["idempotency"] = "native".into();
     assert!(read(&document).is_err());
 }
+
+/// Long process work is sealed at admission: the pinned silence and startup
+/// windows survive the snapshot codec exactly, so a recovered Run keeps them.
+#[test]
+fn long_process_tool_windows_survive_the_snapshot_codec() {
+    use musteragent_runtime_contract::execution_liveness::LONG_WORK_SILENCE_WINDOW;
+    let mut seen = 0;
+    for catalog in [
+        BuiltinToolCatalog::load_cloud().unwrap(),
+        BuiltinToolCatalog::load_device().unwrap(),
+    ] {
+        for def in catalog.definitions() {
+            if !musteragent_tool::ToolExecutionPolicy::runs_long_process(def.key.as_str()) {
+                continue;
+            }
+            seen += 1;
+            let snap = ToolDefinitionSnapshot {
+                manifest: def.pin(CapabilityProviderId::generate()),
+                title: def.title.clone(),
+                description: def.description.clone(),
+                execution_target: def.target.clone(),
+                concurrency_class: def.concurrency,
+                idempotency: def.idempotency,
+                file_operation: def.file_operation.clone(),
+                input_schema_json: def.input_schema_json.clone(),
+                output_schema_json: def.output_schema_json.clone(),
+            };
+            snap.validate().unwrap();
+            let stored = tool_manifest(&snap);
+            assert_eq!(stored.timeout_ms, 0, "{}", def.key.as_str());
+            let restored = decode_tool(
+                wire::ToolManifestSnapshot::decode(stored.encode_to_vec().as_slice()).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(restored, snap, "{}", def.key.as_str());
+            let windows = restored
+                .manifest
+                .execution_policy
+                .liveness()
+                .unwrap()
+                .windows();
+            assert_eq!(
+                windows.idle,
+                LONG_WORK_SILENCE_WINDOW,
+                "{}",
+                def.key.as_str()
+            );
+            if musteragent_tool::requires_browser_execution(def.key.as_str()) {
+                assert!(
+                    windows.startup < LONG_WORK_SILENCE_WINDOW,
+                    "{}",
+                    def.key.as_str()
+                );
+            } else {
+                assert_eq!(
+                    windows.startup,
+                    LONG_WORK_SILENCE_WINDOW,
+                    "{}",
+                    def.key.as_str()
+                );
+            }
+        }
+    }
+    assert!(seen > 0, "no long-process tool in the built-in catalogs");
+}
