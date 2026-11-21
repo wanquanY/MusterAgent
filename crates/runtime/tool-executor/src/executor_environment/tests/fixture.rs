@@ -100,6 +100,8 @@ impl Fixture {
             file_operation: definition.file_operation.clone(),
             title: definition.title.clone(),
             description: definition.description.clone(),
+            tags: Vec::new(),
+            when_to_use: None,
             input_schema_json: definition.input_schema_json.clone(),
             output_schema_json: definition.output_schema_json.clone(),
         };

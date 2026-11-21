@@ -708,6 +708,8 @@ pub struct ToolDefinitionSnapshot {
     pub file_operation: Option<FileOperationMetadata>,
     pub title: String,
     pub description: String,
+    pub tags: Vec<String>,
+    pub when_to_use: Option<String>,
     pub input_schema_json: Vec<u8>,
     pub output_schema_json: Vec<u8>,
 }

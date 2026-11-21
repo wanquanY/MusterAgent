@@ -144,6 +144,8 @@ impl ResolvedToolCatalog {
             file_operation: definition.file_operation,
             title: definition.title,
             description: definition.description,
+            tags: tool.tags.clone(),
+            when_to_use: tool.when_to_use.clone(),
             input_schema_json: definition.input_schema_json,
             output_schema_json: definition.output_schema_json,
         };
@@ -232,6 +234,8 @@ pub async fn resolve_indexed_tool_catalog(
                     .map_err(|_| Error::Corrupt)?,
                     title: tool.title.clone(),
                     description: tool.description.clone(),
+                    tags: tool.tags.clone(),
+                    when_to_use: tool.when_to_use.clone(),
                     schema_hash: tool
                         .input_schema_content
                         .digest()

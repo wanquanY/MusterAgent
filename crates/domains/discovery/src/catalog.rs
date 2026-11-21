@@ -28,6 +28,7 @@ pub struct ToolCatalogSearchResult {
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AuthorizedToolCatalog {
     definitions: std::sync::Arc<[AuthorizedToolDescriptor]>,
+    search_index: std::sync::Arc<[crate::search::DocumentSearchIndex]>,
     by_key: std::sync::Arc<BTreeMap<String, usize>>,
     by_logical_key: std::sync::Arc<BTreeMap<String, usize>>,
     by_wire_name: std::sync::Arc<BTreeMap<String, usize>>,
@@ -94,8 +95,29 @@ impl AuthorizedToolCatalog {
                 .map(|tool| (&tool.tool_ref, &tool.wire_name)),
         )
         .map_err(|_| DiscoveryContractError::DuplicateTool)?;
+        let search_index = definitions
+            .iter()
+            .map(|tool| {
+                let model_name = model_names
+                    .name(&tool.tool_ref)
+                    .map_or(tool.wire_name.as_str(), musteragent_tool::WireName::as_str);
+                crate::search::DocumentSearchIndex::new(
+                    [
+                        tool.tool_ref.as_str(),
+                        tool.tool_ref.logical_key(),
+                        tool.wire_name.as_str(),
+                        model_name,
+                        tool.title.as_ref(),
+                    ],
+                    tool.tags.iter().map(String::as_str),
+                    tool.when_to_use.as_deref(),
+                    tool.description.as_ref(),
+                )
+            })
+            .collect::<Vec<_>>();
         Ok(Self {
             definitions: definitions.into(),
+            search_index: search_index.into(),
             by_key: by_key.into(),
             by_logical_key: by_logical_key.into(),
             by_wire_name: by_wire_name.into(),
@@ -177,40 +199,22 @@ impl AuthorizedToolCatalog {
         if scores.keys().any(|key| self.get_by_key(key).is_none()) {
             return Err(DiscoveryContractError::ToolNotAuthorized);
         }
-        let query = normalize(&request.query);
-        let terms = query
-            .split_whitespace()
-            .filter(|term| !term.is_empty())
-            .collect::<Vec<_>>();
+        let parsed = crate::search::ParsedQuery::parse(&request.query);
+        let query = parsed.canonical().to_owned();
         let mut matches = self
             .definitions
             .iter()
-            .filter(|tool| {
+            .zip(self.search_index.iter())
+            .filter(|(tool, _)| {
                 request.locations.is_empty() || request.locations.contains(&tool.location)
             })
-            .filter_map(|tool| {
-                let searchable = normalize(&format!(
-                    "{} {} {} {}",
-                    tool.tool_ref.as_str(),
-                    tool.wire_name.as_str(),
-                    tool.title,
-                    tool.description
-                ));
-                let score = if query.is_empty() {
-                    1
-                } else if searchable.contains(&query) {
-                    terms.len().saturating_add(2)
-                } else {
-                    terms
-                        .iter()
-                        .filter(|term| searchable.contains(**term))
-                        .count()
-                };
+            .filter_map(|(tool, index)| {
+                let lexical = parsed.score(index);
                 let semantic = scores
                     .get(tool.tool_ref.as_str())
                     .copied()
                     .unwrap_or_default() as usize;
-                let score = semantic.saturating_add(score.saturating_mul(10));
+                let score = semantic.saturating_add(lexical);
                 (score > 0).then_some((Reverse(score), tool.tool_ref.as_str(), tool))
             })
             .collect::<Vec<_>>();
@@ -277,22 +281,6 @@ fn search_cursor(
     format!("v1:{}", Sha256::digest(binding))
 }
 
-fn normalize(value: &str) -> String {
-    value
-        .chars()
-        .map(|character| {
-            if character.is_alphanumeric() {
-                character.to_ascii_lowercase()
-            } else {
-                ' '
-            }
-        })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
 fn hash_definitions(definitions: &[AuthorizedToolDescriptor]) -> Sha256 {
     let mut canonical = Vec::new();
     append_u64(&mut canonical, definitions.len());
@@ -317,6 +305,27 @@ fn hash_definitions(definitions: &[AuthorizedToolDescriptor]) -> Sha256 {
                 musteragent_policy::RequiredContext::Workspace => 1,
                 musteragent_policy::RequiredContext::ConversationAttachments => 2,
             });
+        }
+    }
+    // Preserve byte-identical catalog hashes when optional discovery metadata
+    // (`tags` and `when_to_use`) is absent across all definitions.
+    if definitions
+        .iter()
+        .any(|tool| !tool.tags.is_empty() || tool.when_to_use.is_some())
+    {
+        append_bytes(&mut canonical, b"tool-discovery-metadata:v1");
+        for tool in definitions {
+            append_u64(&mut canonical, tool.tags.len());
+            for tag in &tool.tags {
+                append_bytes(&mut canonical, tag.as_bytes());
+            }
+            match &tool.when_to_use {
+                Some(when_to_use) => {
+                    canonical.push(1);
+                    append_bytes(&mut canonical, when_to_use.as_bytes());
+                }
+                None => canonical.push(0),
+            }
         }
     }
     Sha256::digest(canonical)

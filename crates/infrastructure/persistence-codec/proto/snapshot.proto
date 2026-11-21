@@ -64,6 +64,7 @@ message AuthorizedSkillDescriptorSnapshot {
   Sha256 spec_hash = 25;
   repeated SkillCatalogReferenceSnapshot references = 26;
   repeated VersionedRef missing_required_capabilities = 27;
+  repeated string tags = 28;
 }
 
 enum AuxiliaryModelRole {
@@ -453,6 +454,8 @@ message ToolManifestSnapshot {
   // Empty for kernel and non-marketplace tools. This is material, not consent.
   bytes application_binding_json = 26;
   optional string backend_artifact_type = 27;
+  repeated string tags = 28;
+  optional string when_to_use = 29;
 }
 
 enum ToolRetryContract {

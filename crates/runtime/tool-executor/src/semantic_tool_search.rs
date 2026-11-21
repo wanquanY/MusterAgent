@@ -151,6 +151,16 @@ impl SemanticToolSearch {
                             tool.title,
                             tool.description
                         );
+                        if !tool.tags.is_empty() {
+                            text.push('\n');
+                            text.push_str(&tool.tags.join(" "));
+                        }
+                        if let Some(when_to_use) = &tool.when_to_use
+                            && !when_to_use.trim().is_empty()
+                        {
+                            text.push('\n');
+                            text.push_str(when_to_use);
+                        }
                         let mut end = text
                             .len()
                             .min(1536)

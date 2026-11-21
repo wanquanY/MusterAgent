@@ -45,6 +45,12 @@ pub struct AuthorizedToolDescriptor {
     pub wire_name: WireName,
     pub title: std::sync::Arc<str>,
     pub description: std::sync::Arc<str>,
+    /// Optional descriptive tags weighted between `key/name` and `when_to_use`
+    /// during catalog search. Absent in legacy snapshots (`[]`).
+    pub tags: Vec<String>,
+    /// Optional model-facing usage guidance weighted between `tags` and
+    /// `description` during catalog search. Absent in legacy snapshots (`None`).
+    pub when_to_use: Option<String>,
     pub schema_hash: Sha256,
     pub schema: crate::ToolSchemaMaterial,
     pub provider_id: CapabilityProviderId,
@@ -191,6 +197,9 @@ pub struct AuthorizedSkillDescriptor {
     pub title: String,
     pub description: String,
     pub when_to_use: String,
+    /// Optional descriptive tags weighted between `key/name` and `when_to_use`
+    /// during Skill catalog search. Absent in legacy snapshots (`[]`).
+    pub tags: Vec<String>,
     pub instructions_ref: ContentRef,
     pub instructions_hash: Sha256,
     pub required_tools: std::collections::BTreeSet<VersionedKey>,

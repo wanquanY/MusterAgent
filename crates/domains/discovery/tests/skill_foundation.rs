@@ -43,6 +43,7 @@ fn descriptor(reference: &str, instructions: &[u8]) -> AuthorizedSkillDescriptor
         title: reference.to_owned(),
         description: format!("Use {reference} for governed work."),
         when_to_use: format!("Use when {reference} is explicitly relevant."),
+        tags: Vec::new(),
         instructions_ref: instructions_ref.clone(),
         instructions_hash: hash,
         required_tools: BTreeSet::from([
@@ -106,6 +107,9 @@ fn catalog_hash_covers_every_authorization_discovery_supply_chain_and_recovery_f
     let mut when_to_use = original.clone();
     when_to_use.when_to_use.push_str(" Now.");
     mutations.push(when_to_use);
+    let mut tags = original.clone();
+    tags.tags = vec!["notes".to_owned()];
+    mutations.push(tags);
     let mut content_identity = original.clone();
     content_identity.instructions_ref.content_id = ContentId::generate();
     content_identity

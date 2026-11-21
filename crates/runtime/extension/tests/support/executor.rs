@@ -434,6 +434,8 @@ fn material(context: &ExtensionContext, d: &CanonicalToolDefinition) -> ToolExec
         file_operation: None,
         title: "Fixture".into(),
         description: "Fixture tool".into(),
+        tags: Vec::new(),
+        when_to_use: None,
         input_schema_json: input,
         output_schema_json: output,
     };

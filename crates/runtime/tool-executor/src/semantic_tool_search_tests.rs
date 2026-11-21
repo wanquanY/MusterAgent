@@ -69,6 +69,8 @@ fn catalog(names: &[&str]) -> AuthorizedToolCatalog {
                     wire_name: WireName::new(*name).unwrap(),
                     title: name.to_string().into(),
                     description: format!("{name} English documentation").into(),
+                    tags: Vec::new(),
+                    when_to_use: None,
                     schema_hash: Sha256::digest(&schema),
                     schema: schema.into(),
                     provider_id: "019fa6de-38fd-7000-8000-000000000402".parse().unwrap(),

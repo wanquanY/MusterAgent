@@ -49,6 +49,8 @@ pub fn authorized_tool_catalog(
                 wire_name: tool.manifest.wire_name.clone(),
                 title: tool.title.clone().into(),
                 description: tool.description.clone().into(),
+                tags: tool.tags.clone(),
+                when_to_use: tool.when_to_use.clone(),
                 schema_hash: tool.manifest.input_schema.schema_hash,
                 schema: tool.input_schema_json.clone().into(),
                 provider_id: grant.provider_id,

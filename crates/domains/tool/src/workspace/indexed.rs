@@ -235,6 +235,10 @@ pub struct IndexedApplicationTool {
     pub operation_sha256: String,
     pub title: std::sync::Arc<str>,
     pub description: std::sync::Arc<str>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    #[serde(default)]
+    pub when_to_use: Option<String>,
     pub effect: WorkspaceEffect,
     pub input_schema_content: CatalogObjectReference,
     pub scope_alternatives: Vec<Vec<String>>,
@@ -249,6 +253,12 @@ impl IndexedApplicationTool {
             || self.title.is_empty()
             || self.title.len() > 512
             || self.description.len() > 16_000
+            || self.tags.len() > 64
+            || self.tags.iter().any(|tag| tag.len() > 256)
+            || self
+                .when_to_use
+                .as_ref()
+                .is_some_and(|text| text.len() > 4_000)
             || self.scope_alternatives.is_empty()
             || self.scope_alternatives.len() > 100
             || self.scope_alternatives.iter().any(|s| {
@@ -296,4 +306,87 @@ pub fn digest(value: &str) -> Result<Sha256, Error> {
         .map(|i| u8::from_str_radix(&value[i..i + 2], 16).map_err(|_| Error))
         .collect::<Result<Vec<_>, _>>()?;
     Sha256::from_bytes(bytes).map_err(|_| Error)
+}
+
+#[cfg(test)]
+mod k7_serde_tests {
+    use super::*;
+
+    fn make_index_and_page(
+        tool_extra_json: &str,
+    ) -> (
+        ApplicationCatalogIndex,
+        ApplicationCatalogPageReference,
+        Vec<u8>,
+    ) {
+        let schema_bytes = br#"{"type":"object","properties":{}}"#;
+        let schema_sha = Sha256::digest(schema_bytes).to_string();
+        let op_sha = "a".repeat(64);
+        let page_json = format!(
+            r#"{{"schema_version":"musteragent.application-tool-index-page.v1","tools":[{{"ordinal":0,"key":"quote.lookup.h_{op_sha}@1","operation_key":"quote.lookup","operation_sha256":"{op_sha}","title":"Quote Lookup","description":"查询 A 股个股实时行情","effect":"read","input_schema_content":{{"sha256":"{schema_sha}","byte_length":{}}},"scope_alternatives":[["quote.read"]]{tool_extra_json}}}]}}"#,
+            schema_bytes.len()
+        );
+        let page_bytes = page_json.into_bytes();
+        let page_ref = ApplicationCatalogPageReference {
+            first_operation: "quote.lookup".to_owned(),
+            last_operation: "quote.lookup".to_owned(),
+            tool_count: 1,
+            content: CatalogObjectReference {
+                sha256: Sha256::digest(&page_bytes).to_string(),
+                byte_length: page_bytes.len(),
+            },
+        };
+        let release_id = "01982f80-0000-7000-8000-000000000999".to_owned();
+        let release_sha = "b".repeat(64);
+        let index_json = serde_json::json!({
+            "schema_version": "musteragent.application-tool-index.v1",
+            "release_id": release_id,
+            "plugin_id": "market_data",
+            "version": "1.0.0",
+            "release_sha256": release_sha,
+            "provider_key": "workspace_market",
+            "source_tool_sha256": "c".repeat(64),
+            "tool_count": 1,
+            "pages": [{
+                "first_operation": page_ref.first_operation,
+                "last_operation": page_ref.last_operation,
+                "tool_count": 1,
+                "content": {
+                    "sha256": page_ref.content.sha256,
+                    "byte_length": page_ref.content.byte_length,
+                }
+            }]
+        });
+        let index_bytes = serde_json::to_vec(&index_json).expect("index json");
+        let catalog_ref = ApplicationCatalogReference {
+            family: "workspace".to_owned(),
+            source_id: release_id,
+            release_sha256: digest(&release_sha).expect("release digest"),
+            index_sha256: Sha256::digest(&index_bytes),
+        };
+        let index =
+            ApplicationCatalogIndex::parse(&catalog_ref, &index_bytes).expect("parse index");
+        (index, page_ref, page_bytes)
+    }
+
+    #[test]
+    fn indexed_page_serde_accepts_legacy_tools_and_optional_tags_and_when_to_use() {
+        let (legacy_index, legacy_ref, legacy_bytes) = make_index_and_page("");
+        let legacy_page = ApplicationCatalogPage::parse(&legacy_index, &legacy_ref, &legacy_bytes)
+            .expect("legacy page parses with unchanged digest");
+        assert!(legacy_page.tools[0].tags.is_empty());
+        assert!(legacy_page.tools[0].when_to_use.is_none());
+
+        let (enriched_index, enriched_ref, enriched_bytes) = make_index_and_page(
+            r#","tags":["行情","equity"],"when_to_use":"当用户询问个股行情时调用""#,
+        );
+        let enriched_page =
+            ApplicationCatalogPage::parse(&enriched_index, &enriched_ref, &enriched_bytes)
+                .expect("enriched page parses");
+        assert_eq!(enriched_page.tools[0].tags, vec!["行情", "equity"]);
+        assert_eq!(
+            enriched_page.tools[0].when_to_use.as_deref(),
+            Some("当用户询问个股行情时调用")
+        );
+    }
 }

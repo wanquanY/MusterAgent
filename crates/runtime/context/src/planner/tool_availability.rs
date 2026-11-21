@@ -125,6 +125,8 @@ mod tests {
                 file_operation: t.file_operation.clone(),
                 title: t.title.clone(),
                 description: t.description.clone(),
+                tags: Vec::new(),
+                when_to_use: None,
                 input_schema_json: t.input_schema_json.clone(),
                 output_schema_json: t.output_schema_json.clone(),
             })

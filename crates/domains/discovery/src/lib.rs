@@ -10,6 +10,7 @@ mod exposure;
 mod model;
 mod model_names;
 mod model_skill_names;
+pub mod search;
 mod skill_catalog;
 mod skill_disclosure;
 

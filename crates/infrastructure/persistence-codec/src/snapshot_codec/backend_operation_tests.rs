@@ -48,6 +48,8 @@ fn host_publication_round_trips_its_exact_method_and_artifact_contract() {
         manifest: def.pin(CapabilityProviderId::generate()),
         title: def.title.clone(),
         description: def.description.clone(),
+        tags: Vec::new(),
+        when_to_use: None,
         execution_target: def.target.clone(),
         concurrency_class: def.concurrency,
         idempotency: def.idempotency,
@@ -83,4 +85,63 @@ fn host_publication_round_trips_its_exact_method_and_artifact_contract() {
     document["cloud"][0]["effect"] = "read".into();
     document["cloud"][0]["idempotency"] = "native".into();
     assert!(read(&document).is_err());
+}
+
+#[test]
+fn legacy_tool_and_skill_snapshots_without_search_metadata_preserve_wire_bytes_and_hashes() {
+    let catalog = BuiltinToolCatalog::load_cloud().expect("cloud catalog");
+    let def = catalog
+        .definitions()
+        .iter()
+        .find(|d| d.key.logical_key() == "tool.catalog.search")
+        .expect("search tool");
+    let provider = CapabilityProviderId::generate();
+    let legacy_snap = ToolDefinitionSnapshot {
+        manifest: def.pin(provider),
+        title: def.title.clone(),
+        description: def.description.clone(),
+        tags: Vec::new(),
+        when_to_use: None,
+        execution_target: def.target.clone(),
+        concurrency_class: def.concurrency,
+        idempotency: def.idempotency,
+        file_operation: def.file_operation.clone(),
+        input_schema_json: def.input_schema_json.clone(),
+        output_schema_json: def.output_schema_json.clone(),
+    };
+
+    // Construct pre-K7 wire bytes manually with empty tags/when_to_use and verify
+    // byte-identical encoding and SHA-256 digest when the optional fields are absent.
+    let mut manual_wire = tool_manifest(&legacy_snap);
+    manual_wire.tags.clear();
+    manual_wire.when_to_use = None;
+    let pre_k7_bytes = manual_wire.encode_to_vec();
+    let current_bytes = tool_manifest(&legacy_snap).encode_to_vec();
+    assert_eq!(current_bytes, pre_k7_bytes);
+    assert_eq!(
+        musteragent_content_ref::Sha256::digest(&current_bytes),
+        musteragent_content_ref::Sha256::digest(&pre_k7_bytes)
+    );
+
+    let decoded_legacy = decode_tool(
+        wire::ToolManifestSnapshot::decode(pre_k7_bytes.as_slice()).expect("decode legacy wire"),
+    )
+    .expect("decode legacy tool");
+    assert_eq!(decoded_legacy, legacy_snap);
+    assert!(decoded_legacy.tags.is_empty());
+    assert!(decoded_legacy.when_to_use.is_none());
+
+    // Round-trip a snapshot with `tags` and `when_to_use` populated.
+    let mut enriched_snap = legacy_snap.clone();
+    enriched_snap.tags = vec!["行情".to_owned(), "market".to_owned()];
+    enriched_snap.when_to_use = Some("当用户查询个股实时行情时调用".to_owned());
+    let enriched_bytes = tool_manifest(&enriched_snap).encode_to_vec();
+    assert_ne!(enriched_bytes, pre_k7_bytes);
+    let decoded_enriched = decode_tool(
+        wire::ToolManifestSnapshot::decode(enriched_bytes.as_slice())
+            .expect("decode enriched wire"),
+    )
+    .expect("decode enriched tool");
+    assert_eq!(decoded_enriched, enriched_snap);
+    assert!(decoded_enriched.matches_execution_contract(def));
 }
