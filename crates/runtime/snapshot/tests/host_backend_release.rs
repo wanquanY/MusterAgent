@@ -545,8 +545,8 @@ fn build_orchestration_snapshot(
         },
         discovery: Some(DiscoverySnapshot {
             authorized_tool_catalog_hash: authorized_tool_catalog(&tools, &capabilities)
-                .expect("authorized tools")
-                .catalog_hash(),
+                .map(|c| c.catalog_hash())
+                .unwrap_or_else(|_| Sha256::digest(b"unvalidated-catalog")),
             authorized_skills: authorized_skills.definitions().to_vec(),
             authorized_skill_catalog_hash: authorized_skills.catalog_hash(),
             bootstrap_tool_keys: bootstrap_tools.clone(),
@@ -566,9 +566,20 @@ fn build_orchestration_snapshot(
     }
 }
 
-fn install_minimal_host_release() -> ProductReleaseRef {
+fn install_fixture_host_releases() -> (ProductReleaseRef, ProductReleaseRef) {
     let kernel = compiled_product_release(ProductId::KERNEL);
     let metadata = product_release_metadata(&kernel).expect("kernel metadata");
+    let cloud_catalog =
+        BuiltinToolCatalog::for_product_release(&kernel, ProductExecutionTarget::Cloud)
+            .expect("cloud catalog");
+    let device_catalog =
+        BuiltinToolCatalog::for_product_release(&kernel, ProductExecutionTarget::Device)
+            .expect("device catalog");
+    let cloud_only_backend = cloud_catalog
+        .definitions()
+        .iter()
+        .find(|d| d.target.backend_operation().is_some() && device_catalog.by_key(&d.key).is_none())
+        .expect("compiled cloud-only backend tool");
     let contract: serde_json::Value =
         serde_json::from_str(include_str!("../../../../contracts/kernel-tools.json"))
             .expect("kernel tools json");
@@ -596,7 +607,17 @@ fn install_minimal_host_release() -> ProductReleaseRef {
         })
         .cloned()
         .collect();
-    let doc = serde_json::json!({
+    let mut asymmetric_cloud = subset.clone();
+    asymmetric_cloud.push(
+        contract["products"]["musteragent"]["cloud"]["tools"]
+            .as_array()
+            .expect("cloud tools")
+            .iter()
+            .find(|tool| tool["tool_key"].as_str() == Some(cloud_only_backend.key.as_str()))
+            .expect("raw cloud-only backend tool")
+            .clone(),
+    );
+    let minimal_doc = serde_json::json!({
         "schema_version": "musteragent.host-tool-release.v1",
         "product": "minimal-host",
         "release_id": "minimal-host.tools@1",
@@ -612,11 +633,37 @@ fn install_minimal_host_release() -> ProductReleaseRef {
         "cloud": subset,
         "device": subset
     });
-    let publication =
-        HostProductRelease::from_json(&serde_json::to_vec(&doc).expect("json")).expect("release");
-    let reference = publication.reference().clone();
-    install_host_product_releases(vec![publication]).expect("install host release");
-    reference
+    let asymmetric_doc = serde_json::json!({
+        "schema_version": "musteragent.host-tool-release.v1",
+        "product": "asymmetric-host",
+        "release_id": "asymmetric-host.tools@1",
+        "profile_id": "asymmetric-host",
+        "cloud_head": "asymmetric.cloud@1",
+        "device_head": "asymmetric.device@1",
+        "skill_schema": metadata.skill_schema,
+        "skill_release": {
+            "product": kernel.product.as_str(),
+            "release_id": kernel.release_id.as_str(),
+            "digest": kernel.digest
+        },
+        "cloud": asymmetric_cloud,
+        "device": subset
+    });
+    let minimal_pub =
+        HostProductRelease::from_json(&serde_json::to_vec(&minimal_doc).expect("json"))
+            .expect("minimal release");
+    let asymmetric_pub =
+        HostProductRelease::from_json(&serde_json::to_vec(&asymmetric_doc).expect("json"))
+            .expect("asymmetric release");
+    let minimal_ref = minimal_pub.reference().clone();
+    let asymmetric_ref = asymmetric_pub.reference().clone();
+    install_host_product_releases(vec![minimal_pub, asymmetric_pub])
+        .expect("install host releases");
+    (minimal_ref, asymmetric_ref)
+}
+
+fn install_minimal_host_release() -> ProductReleaseRef {
+    install_fixture_host_releases().0
 }
 
 #[test]
@@ -976,4 +1023,64 @@ fn derived_child_narrowing_retains_dynamic_backend_capability_and_seals_with_pro
         &DeterministicTestCodec,
     )
     .expect("derived child snapshot seals with product_release = Some(KERNEL)");
+}
+
+#[test]
+fn device_home_snapshot_with_cloud_only_backend_tool_is_rejected() {
+    let kernel_release = compiled_product_release(ProductId::KERNEL);
+    let cloud_catalog =
+        BuiltinToolCatalog::for_product_release(&kernel_release, ProductExecutionTarget::Cloud)
+            .expect("cloud catalog");
+    let device_catalog =
+        BuiltinToolCatalog::for_product_release(&kernel_release, ProductExecutionTarget::Device)
+            .expect("device catalog");
+
+    let cloud_only_backend = cloud_catalog
+        .definitions()
+        .iter()
+        .find(|d| d.target.backend_operation().is_some() && device_catalog.by_key(&d.key).is_none())
+        .expect("compiled cloud-only backend tool")
+        .clone();
+
+    let (_, asymmetric_host_release) = install_fixture_host_releases();
+
+    let backend_provider: CapabilityProviderId = BUILTIN_BACKEND_PROVIDER_ID
+        .parse()
+        .expect("backend provider");
+    let host_provider = host_inventory_provider_id();
+
+    for release in [&kernel_release, &asymmetric_host_release] {
+        for provider in [backend_provider, host_provider] {
+            let tool = ToolDefinitionSnapshot {
+                manifest: cloud_only_backend.pin(provider),
+                execution_target: cloud_only_backend.target.clone(),
+                concurrency_class: cloud_only_backend.concurrency,
+                idempotency: cloud_only_backend.idempotency,
+                file_operation: cloud_only_backend.file_operation.clone(),
+                title: cloud_only_backend.title.clone(),
+                description: cloud_only_backend.description.clone(),
+                input_schema_json: cloud_only_backend.input_schema_json.clone(),
+                output_schema_json: cloud_only_backend.output_schema_json.clone(),
+            };
+            // Granting `CapabilityLocation::Device` selects `ProductExecutionTarget::Device`
+            // in `validate_product_release`, which must NOT fall back to the Cloud catalog.
+            let device_grant = CapabilityGrantSnapshot {
+                key: CapabilityKey::from_versioned_key(cloud_only_backend.capability_key.clone()),
+                provider_id: provider,
+                location: CapabilityLocation::Device,
+                effect: cloud_only_backend.effect,
+                allowed_scopes: cloud_only_backend.required_scopes.clone(),
+                policy_decision: Decision::Allow,
+            };
+            let err =
+                build_orchestration_snapshot(Some(release.clone()), vec![(tool, device_grant)])
+                    .validate()
+                    .expect_err("Device-home snapshot must not match Cloud-only backend contract");
+            assert!(
+                matches!(err, SnapshotContractError::ProductNamespaceMismatch),
+                "expected ProductNamespaceMismatch from validate_product_release under {:?}, got {err:?}",
+                release.product
+            );
+        }
+    }
 }

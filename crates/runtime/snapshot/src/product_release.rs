@@ -68,28 +68,35 @@ impl RuntimeSnapshotContent {
             if tool.execution_target.backend_operation().is_some() {
                 // Backend location identifies the RPC provider, independently
                 // of the worker home. Admission and physical registration own
-                // the home-specific catalog. Here we verify release membership,
-                // or admit a host-dispatched capability when its provider is
-                // non-builtin and its key collides with no compiled release.
-                let alternate = match target {
-                    musteragent_tool::ProductExecutionTarget::Cloud => {
-                        musteragent_tool::ProductExecutionTarget::Device
-                    }
-                    musteragent_tool::ProductExecutionTarget::Device => {
-                        musteragent_tool::ProductExecutionTarget::Cloud
-                    }
-                };
-                let alternate_catalog =
-                    musteragent_tool::BuiltinToolCatalog::for_product_release(reference, alternate)
-                        .map_err(|_| invalid())?;
-                let alternate_declared = alternate_catalog.by_key(&tool.manifest.key);
-                if alternate_declared.is_some_and(|def| tool.matches_execution_contract(def)) {
+                // the home-specific catalog. Only a Cloud-target lookup may
+                // fall back to the release's Device catalog; for Device-target
+                // tools there is no alternate catalog.
+                let device = musteragent_tool::BuiltinToolCatalog::for_product_release(
+                    reference,
+                    musteragent_tool::ProductExecutionTarget::Device,
+                )
+                .map_err(|_| invalid())?;
+                if target == musteragent_tool::ProductExecutionTarget::Cloud
+                    && device
+                        .by_key(&tool.manifest.key)
+                        .is_some_and(|def| tool.matches_execution_contract(def))
+                {
                     continue;
                 }
-                if declared.is_some() || alternate_declared.is_some() {
-                    return Err(invalid());
-                }
-                if is_builtin_provider_id(tool.manifest.capability_provider_id) {
+                let in_release = match target {
+                    musteragent_tool::ProductExecutionTarget::Cloud => {
+                        declared.is_some() || device.by_key(&tool.manifest.key).is_some()
+                    }
+                    musteragent_tool::ProductExecutionTarget::Device => {
+                        let cloud = musteragent_tool::BuiltinToolCatalog::for_product_release(
+                            reference,
+                            musteragent_tool::ProductExecutionTarget::Cloud,
+                        )
+                        .map_err(|_| invalid())?;
+                        declared.is_some() || cloud.by_key(&tool.manifest.key).is_some()
+                    }
+                };
+                if in_release || is_builtin_provider_id(tool.manifest.capability_provider_id) {
                     return Err(invalid());
                 }
                 for other in musteragent_tool::compiled_product_releases_refs() {
