@@ -237,7 +237,10 @@ impl ToolDefinitionSnapshot {
     }
 }
 
-fn is_builtin_provider_id(id: musteragent_identity::CapabilityProviderId) -> bool {
+/// Returns `true` when `id` is reserved for compiled kernel providers.
+/// Panics via `expect` if a compile-time provider constant ever fails to parse
+/// so dynamic capability admission gates fail closed instead of returning `false`.
+pub(crate) fn is_builtin_provider_id(id: musteragent_identity::CapabilityProviderId) -> bool {
     let rust = musteragent_tool::BUILTIN_RUST_PROVIDER_ID
         .parse::<musteragent_identity::CapabilityProviderId>()
         .expect("compiled rust provider id");

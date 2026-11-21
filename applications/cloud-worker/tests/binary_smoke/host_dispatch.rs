@@ -3,17 +3,14 @@
 //! `WorkerOverrides.capability_dispatchers` (`run_worker`) and `CloudWorkerComposition`,
 //! explicit `CapabilityUnavailable` on unknown provider IDs, and derived delegation runs.
 use super::*;
-use musteragent_capability::{CapabilityGrantSnapshot, CapabilityKey, CapabilityLocation};
 use musteragent_cloud_worker::{
     CapabilityDispatcher, CloudWorkerSettings, DispatchedCapabilityOutcome,
     DispatchedReconciliationOutcome, ProviderCapabilityDispatcher, ProviderDispatcherError,
     ToolPhysicalExecution, ToolServices, WorkerOverrides, kernel_dispatcher,
     opaque_dispatcher_execution, run_worker,
 };
-use musteragent_content_ref::{MediaType, SchemaRef, Sha256};
-use musteragent_policy::{
-    ApprovalRequirement, DataClassification, Decision, Effect, EgressPolicy, PermissionMode,
-};
+use musteragent_content_ref::MediaType;
+use musteragent_policy::{ApprovalRequirement, Effect, PermissionMode};
 use musteragent_run::AttemptContext;
 use musteragent_runtime_capability::{
     CapabilityInvocation, CapabilityOutcome, CapabilityReconciliation, CapabilityResult,
@@ -24,10 +21,9 @@ use musteragent_runtime_contract::{
     ApplicationFuture, ErrorCode, OpaqueExternalRef, execution_liveness::ExecutionBinding,
 };
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::num::NonZeroU32;
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -38,95 +34,27 @@ const CHILD_MINIO_ENDPOINT_ENV: &str = "K1_TEST_MINIO_ENDPOINT";
 const CHILD_MINIO_BUCKET_ENV: &str = "K1_TEST_MINIO_BUCKET";
 
 fn inventory_provider_id() -> CapabilityProviderId {
-    CapabilityProviderId::from_uuid(uuid::Uuid::new_v5(
+    host_capability_provider_id(
         &uuid::Uuid::NAMESPACE_OID,
-        b"example.test/capability-provider/inventory.v1",
-    ))
+        "example.test/capability-provider/inventory.v1",
+    )
     .expect("deterministic host provider id")
 }
 
 fn unregistered_provider_id() -> CapabilityProviderId {
-    CapabilityProviderId::from_uuid(uuid::Uuid::new_v5(
+    host_capability_provider_id(
         &uuid::Uuid::NAMESPACE_OID,
-        b"example.test/capability-provider/unregistered.v1",
-    ))
+        "example.test/capability-provider/unregistered.v1",
+    )
     .expect("deterministic unregistered provider id")
 }
 
-fn dynamic_backend_tool(
-    key_str: &str,
-    wire_str: &str,
-    method: &str,
-    title: &str,
-    description: &str,
-    provider_id: CapabilityProviderId,
-) -> (ToolDefinitionSnapshot, CapabilityGrantSnapshot) {
-    let key_v = VersionedKey::new(key_str).expect("versioned key");
-    let input_schema_json = br#"{"type":"object","properties":{"sku":{"type":"string"}},"required":["sku"],"additionalProperties":false}"#.to_vec();
-    let output_schema_json = br#"{"type":"object","properties":{"sku":{"type":"string"},"unit_price":{"type":"integer"},"method":{"type":"string"}},"required":["sku","unit_price","method"],"additionalProperties":false}"#.to_vec();
-    let scope = DottedKey::new("inventory.quote.read").expect("scope");
-    let tool = ToolDefinitionSnapshot {
-        manifest: ToolManifest {
-            application: None,
-            key: ToolKey::from_versioned_key(key_v.clone()),
-            wire_name: WireName::new(wire_str).expect("wire name"),
-            input_schema: SchemaRef {
-                schema_key: VersionedKey::new(format!(
-                    "{}.input@{}",
-                    key_v.logical_key(),
-                    key_v.version()
-                ))
-                .expect("input schema key"),
-                schema_hash: Sha256::digest(&input_schema_json),
-            },
-            output_schema: SchemaRef {
-                schema_key: VersionedKey::new(format!(
-                    "{}.output@{}",
-                    key_v.logical_key(),
-                    key_v.version()
-                ))
-                .expect("output schema key"),
-                schema_hash: Sha256::digest(&output_schema_json),
-            },
-            capability_key: key_v.clone(),
-            capability_provider_id: provider_id,
-            effect: Effect::Read,
-            approval: ApprovalRequirement::Never,
-            execution_policy: ToolExecutionPolicy::builtin_activity(
-                key_v.clone(),
-                Duration::from_secs(30),
-                None,
-            ),
-            max_attempts: NonZeroU32::MIN,
-            retry_contract: ToolRetryContract::ReadOnly,
-            required_scopes: BTreeSet::from([scope.clone()]),
-            required_contexts: BTreeSet::new(),
-            data_classification: DataClassification::Internal,
-            egress_policy: EgressPolicy::ProviderBound,
-        },
-        execution_target: CapabilityExecutionTarget::BackendNamed(
-            BackendOperation::new(method, None).expect("Service.Method"),
-        ),
-        concurrency_class: ConcurrencyClass::BoundedNetworkRead,
-        idempotency: BuiltinIdempotency::Native,
-        file_operation: None,
-        title: title.to_owned(),
-        description: description.to_owned(),
-        tags: Vec::new(),
-        when_to_use: None,
-        input_schema_json,
-        output_schema_json,
-    };
-    tool.validate().expect("dynamic tool contract validates");
-    let grant = CapabilityGrantSnapshot {
-        key: CapabilityKey::from_versioned_key(key_v),
-        provider_id,
-        location: CapabilityLocation::Backend,
-        effect: Effect::Read,
-        allowed_scopes: BTreeSet::from([scope]),
-        policy_decision: Decision::Allow,
-    };
-    (tool, grant)
+fn quote_input_schema_json() -> Vec<u8> {
+    br#"{"type":"object","properties":{"sku":{"type":"string"}},"required":["sku"],"additionalProperties":false}"#.to_vec()
+}
+
+fn quote_output_schema_json() -> Vec<u8> {
+    br#"{"type":"object","properties":{"sku":{"type":"string"},"unit_price":{"type":"integer"},"method":{"type":"string"}},"required":["sku","unit_price","method"],"additionalProperties":false}"#.to_vec()
 }
 
 struct InventoryHostDispatcher {
@@ -491,8 +419,55 @@ async fn serve_model_request(
             .count()
     };
 
+    let is_k3_helper = users.contains("[e2e:k3-helper]");
     let is_child = users.contains("[e2e:k1-child]");
-    let body = if !is_child {
+    let body = if is_k3_helper {
+        if called(search_wire) == 0 {
+            assert!(
+                offered_tool(&request, "inventory_status_ping"),
+                "initially exposed host tool must be offered before activation"
+            );
+            assert!(
+                !offered_tool(&request, "inventory_quote_lookup"),
+                "deferred host tool must not be offered before activation"
+            );
+            sse_tool_call(
+                turn_tag,
+                search_wire,
+                json!({"query": "wholesale_tariff", "locations": ["backend"]}),
+            )
+        } else if called(activate_wire) == 0 {
+            assert!(
+                tool_outputs.contains("inventory_quote_lookup"),
+                "catalog search must find deferred host tool via tag-only query: {tool_outputs}"
+            );
+            sse_tool_call(
+                turn_tag,
+                activate_wire,
+                json!({
+                    "tool_names": ["inventory_quote_lookup"],
+                    "reason": "Activate deferred wholesale quote tool"
+                }),
+            )
+        } else if called("inventory_quote_lookup") == 0 {
+            assert!(
+                offered_tool(&request, "inventory_quote_lookup"),
+                "activated deferred host tool must be offered to model"
+            );
+            sse_tool_call(
+                turn_tag,
+                "inventory_quote_lookup",
+                json!({"sku": "rack-unit-7"}),
+            )
+        } else {
+            assert!(
+                tool_outputs.contains("\"unit_price\":420")
+                    && tool_outputs.contains("\"method\":\"InventoryService.LookupQuote\""),
+                "host dispatcher must execute activated deferred tool: {tool_outputs}"
+            );
+            sse_text(turn_tag, "k3_helper_deferred_dispatch_complete:420")
+        }
+    } else if !is_child {
         if called(search_wire) == 0 {
             assert!(
                 !offered_tool(&request, "inventory_quote_lookup"),
@@ -606,86 +581,52 @@ async fn seed_dynamic_orchestration_run(
     let (fixture, _) =
         running_loop::seed_running_loop_with_input(&smoke.pool, smoke.content.as_ref(), input)
             .await;
-    let mut snapshot = source_selection_snapshot::isolated_snapshot(
+    let partitions = HostCatalogSnapshotBuilder::new(inventory_provider_id())
+        .with_builtin_tools(["delegation.spawn@5"])
+        .with_host_tools([
+            HostToolDescriptor::new(
+                "inventory.quote.lookup@1",
+                "Look up live inventory pricing by SKU.",
+                quote_input_schema_json(),
+                quote_output_schema_json(),
+                Effect::Read,
+                ApprovalRequirement::Never,
+                "InventoryService.LookupQuote",
+            )
+            .with_title("Lookup Inventory Quote")
+            .with_scopes(["inventory.quote.read"]),
+            HostToolDescriptor::new(
+                "inventory.audit.ping@1",
+                "Probe an inventory audit endpoint.",
+                quote_input_schema_json(),
+                quote_output_schema_json(),
+                Effect::Read,
+                ApprovalRequirement::Never,
+                "InventoryService.PingAudit",
+            )
+            .with_title("Ping Inventory Audit")
+            .with_scopes(["inventory.quote.read"])
+            .with_provider_id(unregistered_provider_id()),
+        ])
+        .with_initial_exposed_tools(["delegation.spawn@5"])
+        .build()
+        .expect("host catalog partitions");
+    install_partitions_on_fixture(smoke, route, fixture, partitions, input).await
+}
+
+async fn install_partitions_on_fixture(
+    smoke: &Smoke,
+    route: &musteragent_model::ModelRoute,
+    fixture: running_loop::Fixture,
+    partitions: HostCatalogSnapshotPartitions,
+    input: &[u8],
+) -> running_loop::Fixture {
+    let snapshot = source_selection_snapshot::isolated_snapshot(
         smoke.content.clone(),
         running_loop::run_context(fixture),
         route.clone(),
     )
     .await;
-    let rust_provider: CapabilityProviderId = musteragent_tool::BUILTIN_RUST_PROVIDER_ID
-        .parse()
-        .expect("rust provider");
-    for grant in &mut snapshot.content.capabilities {
-        grant.provider_id = rust_provider;
-    }
-    for tool in &mut snapshot.content.tools {
-        tool.manifest.capability_provider_id = rust_provider;
-    }
-    let kernel_release = compiled_product_release(ProductId::KERNEL);
-    let catalog =
-        BuiltinToolCatalog::for_product_release(&kernel_release, ProductExecutionTarget::Cloud)
-            .expect("kernel cloud catalog");
-
-    let spawn_def = catalog
-        .definitions()
-        .iter()
-        .find(|d| d.key.logical_key() == "delegation.spawn")
-        .expect("delegation.spawn");
-    snapshot.content.capabilities.push(CapabilityGrantSnapshot {
-        key: CapabilityKey::from_versioned_key(spawn_def.capability_key.clone()),
-        provider_id: rust_provider,
-        location: CapabilityLocation::Cloud,
-        effect: spawn_def.effect,
-        allowed_scopes: spawn_def.required_scopes.clone(),
-        policy_decision: Decision::Allow,
-    });
-    snapshot.content.tools.push(ToolDefinitionSnapshot {
-        manifest: spawn_def.pin(rust_provider),
-        execution_target: spawn_def.target.clone(),
-        concurrency_class: spawn_def.concurrency,
-        idempotency: spawn_def.idempotency,
-        file_operation: spawn_def.file_operation.clone(),
-        title: spawn_def.title.clone(),
-        description: spawn_def.description.clone(),
-        tags: Vec::new(),
-        when_to_use: None,
-        input_schema_json: spawn_def.input_schema_json.clone(),
-        output_schema_json: spawn_def.output_schema_json.clone(),
-    });
-    snapshot
-        .content
-        .capabilities
-        .sort_by(|a, b| a.key.cmp(&b.key));
-    snapshot
-        .content
-        .tools
-        .sort_by(|a, b| a.manifest.key.cmp(&b.manifest.key));
-    {
-        let discovery = snapshot
-            .content
-            .discovery
-            .as_mut()
-            .expect("fixture discovery");
-        discovery.discovery_policy_ref =
-            VersionedKey::new(CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1).expect("policy");
-        discovery.bootstrap_tool_keys.retain(|key| {
-            matches!(
-                key.logical_key(),
-                "tool.catalog.search"
-                    | "tool.catalog.activate"
-                    | "interaction.request"
-                    | "skills.search"
-                    | "skills.list"
-                    | "skills.view"
-                    | "plan.get"
-                    | "plan.update"
-            )
-        });
-        discovery
-            .initial_exposed_tool_keys
-            .push(spawn_def.key.clone());
-    }
-
     let mut snapshot = liveness_admission::seal(
         snapshot,
         Arc::new(
@@ -696,72 +637,37 @@ async fn seed_dynamic_orchestration_run(
         ),
     );
     snapshot.content.policy.permission_mode = PermissionMode::ServiceManaged;
-    snapshot.content.product_release = Some(kernel_release);
-    for tool in &mut snapshot.content.tools {
-        tool.manifest.execution_policy = catalog
-            .by_key(&tool.manifest.key)
-            .expect("catalog tool")
-            .pin(rust_provider)
-            .execution_policy;
-    }
-
-    // Admit two dynamic host backend capabilities omitted from `initial_exposed_tool_keys`:
-    // one backed by our registered host dispatcher, and one with an unregistered provider ID.
-    let (quote_tool, quote_grant) = dynamic_backend_tool(
-        "inventory.quote.lookup@1",
-        "inventory_quote_lookup",
-        "InventoryService.LookupQuote",
-        "Lookup Inventory Quote",
-        "Look up live inventory pricing by SKU.",
-        inventory_provider_id(),
-    );
-    let (audit_tool, audit_grant) = dynamic_backend_tool(
-        "inventory.audit.ping@1",
-        "inventory_audit_ping",
-        "InventoryService.PingAudit",
-        "Ping Inventory Audit",
-        "Probe an inventory audit endpoint.",
-        unregistered_provider_id(),
-    );
-    snapshot.content.tools.push(quote_tool);
-    snapshot.content.tools.push(audit_tool);
-    snapshot.content.capabilities.push(quote_grant);
-    snapshot.content.capabilities.push(audit_grant);
-    snapshot
-        .content
-        .tools
-        .sort_by(|a, b| a.manifest.key.cmp(&b.manifest.key));
-    snapshot
-        .content
-        .capabilities
-        .sort_by(|a, b| a.key.cmp(&b.key));
-    snapshot
-        .content
-        .discovery
-        .as_mut()
-        .expect("discovery")
-        .authorized_tool_catalog_hash =
-        authorized_tool_catalog(&snapshot.content.tools, &snapshot.content.capabilities)
-            .expect("authorized catalog")
-            .catalog_hash();
-
-    let snapshot = RuntimeSnapshot::seal(
-        fixture.runtime_snapshot_id,
-        snapshot.content,
-        running_loop::database_now(&smoke.pool).await,
-        &musteragent_wire::ProtobufSnapshotCodec,
-    )
-    .expect("release-bound snapshot with dynamic host backend tools seals");
-
     production_context::install_production_context(
         &smoke.pool,
         smoke.content.clone(),
         fixture,
         Arc::new(ProtobufLedgerPayloadCodec),
-        snapshot.content,
+        snapshot.content.clone(),
         input,
     )
     .await;
+
+    partitions.apply_to(&mut snapshot.content);
+    let sealed = RuntimeSnapshot::seal(
+        fixture.runtime_snapshot_id,
+        snapshot.content,
+        running_loop::database_now(&smoke.pool).await,
+        &musteragent_wire::ProtobufSnapshotCodec,
+    )
+    .expect("release-bound snapshot built from HostCatalogSnapshotBuilder seals");
+
+    sqlx::query(
+        "UPDATE capability.runtime_snapshots
+         SET schema_version = $2, encoded_snapshot = $3, content_hash = $4
+         WHERE runtime_snapshot_id = $1",
+    )
+    .bind(fixture.runtime_snapshot_id.into_uuid())
+    .bind(sealed.content.schema_version.as_str())
+    .bind(&sealed.encoded_content)
+    .bind(sealed.content_hash.into_bytes().to_vec())
+    .execute(&smoke.pool)
+    .await
+    .expect("persist sealed helper-built RuntimeSnapshot");
     sqlx::query("UPDATE runtime.leases SET expires_at_ms=renewed_at_ms WHERE run_id=$1")
         .bind(fixture.run_id.into_uuid())
         .execute(&smoke.pool)
@@ -1069,6 +975,225 @@ async fn host_dispatcher_executes_discovered_dynamic_tool_in_root_and_derived_ru
     );
     assert_eq!(records[1]["has_grant_proof"], false);
     assert_eq!(records[1]["sku"], "rack-unit-9");
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn helper_built_snapshot_admits_searches_activates_and_executes_deferred_tool()
+-> Result<(), BuildError> {
+    if let Some(config) = std::env::var_os(CHILD_WORKER_CONFIG_ENV) {
+        return run_host_worker_process(config.into()).await;
+    }
+
+    let smoke = Smoke::start_for("k3").await?;
+    let mut route = context_snapshot::snapshot_content(
+        RunId::generate(),
+        musteragent_conformance::fixtures::agent::fixture_runtime_policy_content_ref()?,
+    )
+    .model
+    .route;
+    route.api_format = musteragent_model::ApiFormat::OpenAiChatCompletions;
+    route.adapter_version = VersionedKey::new("openai.chat-adapter@1")?;
+    route.protocol_version = VersionedKey::new("openai.chat@1")?;
+
+    let kernel_release = compiled_product_release(ProductId::KERNEL);
+    let catalog =
+        BuiltinToolCatalog::for_product_release(&kernel_release, ProductExecutionTarget::Cloud)?;
+    let wire_for = |logical: &str| {
+        catalog
+            .definitions()
+            .iter()
+            .find(|d| d.key.logical_key() == logical)
+            .expect("builtin tool")
+            .wire_name
+            .as_str()
+            .to_owned()
+    };
+    let server = ScriptedModelServer::start(
+        wire_for("tool.catalog.search"),
+        wire_for("tool.catalog.activate"),
+        wire_for("delegation.spawn"),
+    )
+    .await?;
+
+    let input =
+        b"[e2e:k3-helper] Search for the wholesale_tariff tool, activate it, and quote rack-unit-7.";
+    let (fixture, _) =
+        running_loop::seed_running_loop_with_input(&smoke.pool, smoke.content.as_ref(), input)
+            .await;
+    let tenant_id = fixture.tenant_id;
+    let instructions_ref = smoke
+        .content
+        .put(PutContent {
+            tenant_id,
+            media_type: MediaType::new("text/markdown;charset=utf-8")?,
+            bytes: b"# Inventory Operations\nUse wholesale quote tools when requested.".to_vec(),
+        })
+        .await?;
+    let manifest_ref = smoke
+        .content
+        .put(PutContent {
+            tenant_id,
+            media_type: MediaType::new("application/json")?,
+            bytes: br#"{"schema_version":"musteragent.skill-package.v2","stable_skill_key":"inventory-ops-guide","revision":1}"#.to_vec(),
+        })
+        .await?;
+    let package_ref = smoke
+        .content
+        .put(PutContent {
+            tenant_id,
+            media_type: MediaType::new("application/zip")?,
+            bytes: b"PK-inventory-ops-guide-v1".to_vec(),
+        })
+        .await?;
+
+    let partitions = HostCatalogSnapshotBuilder::new(inventory_provider_id())
+        .with_host_tools([
+            HostToolDescriptor::new(
+                "inventory.status.ping@1",
+                "Check live status of the inventory service.",
+                quote_input_schema_json(),
+                quote_output_schema_json(),
+                Effect::Read,
+                ApprovalRequirement::Never,
+                "InventoryService.CheckStatus",
+            ),
+            HostToolDescriptor::new(
+                "inventory.quote.lookup@1",
+                "Look up live inventory pricing by SKU.",
+                quote_input_schema_json(),
+                quote_output_schema_json(),
+                Effect::Read,
+                ApprovalRequirement::Never,
+                "InventoryService.LookupQuote",
+            )
+            .with_when_to_use("Use when computing wholesale hardware quotes.")
+            .with_tags(["wholesale_tariff", "sku_quote"]),
+        ])
+        .with_host_skills([HostSkillDescriptor::new(
+            SkillId::generate(),
+            SkillVersionId::generate(),
+            "inventory-ops-guide@1",
+            "Inventory Operations Guide",
+            "Guidance for wholesale inventory pricing workflows.",
+            "Use when handling SKU pricing requests.",
+            tenant_id,
+            HostSkillProvenance::hub(
+                "https://hub.example.test/skills/inventory-ops-guide@1",
+                "example.test",
+            ),
+            instructions_ref,
+            manifest_ref,
+            package_ref,
+        )
+        .with_tags(["inventory_playbook", "sku_ops"])
+        .with_required_capabilities(["inventory.quote.lookup@1"])])
+        .with_initial_exposed_tools(["inventory.status.ping@1"])
+        .build()
+        .map_err(|err| err.to_string())?;
+
+    let run = install_partitions_on_fixture(&smoke, &route, fixture, partitions, input).await;
+
+    let config = smoke.worker_config("k3-host-worker", &route, &server.endpoint, None, "")?;
+    let mut cmd = Command::new(std::env::current_exe()?);
+    cmd.args([
+        "--exact",
+        "host_dispatch::helper_built_snapshot_admits_searches_activates_and_executes_deferred_tool",
+    ])
+    .env(CHILD_WORKER_CONFIG_ENV, &config)
+    .env(CHILD_MINIO_ENDPOINT_ENV, &smoke.minio.endpoint)
+    .env(CHILD_MINIO_BUCKET_ENV, smoke.minio.bucket)
+    .env("P9_MODEL_KEY", "test-only-model-key");
+    let mut worker = smoke.spawn_worker("k3-host-worker", cmd)?;
+
+    smoke.wait_completed(run, &mut worker).await;
+    terminate(&mut worker).await;
+
+    let succeeded: Vec<String> = sqlx::query_scalar(
+        "SELECT tool_ref FROM tool.tool_invocations WHERE run_id=$1 AND status=4 ORDER BY tool_ref",
+    )
+    .bind(run.run_id.into_uuid())
+    .fetch_all(&smoke.pool)
+    .await?;
+    assert!(
+        succeeded
+            .iter()
+            .any(|k| k.starts_with("tool.catalog.search@"))
+    );
+    assert!(
+        succeeded
+            .iter()
+            .any(|k| k.starts_with("tool.catalog.activate@"))
+    );
+    assert!(succeeded.contains(&"inventory.quote.lookup@1".to_owned()));
+
+    let encoded: Vec<u8> = sqlx::query_scalar(
+        "SELECT s.encoded_snapshot FROM runtime.runs r JOIN capability.runtime_snapshots s ON s.runtime_snapshot_id=r.runtime_snapshot_id WHERE r.run_id=$1",
+    )
+    .bind(run.run_id.into_uuid())
+    .fetch_one(&smoke.pool)
+    .await?;
+    let persisted = musteragent_wire::ProtobufSnapshotCodec.decode_content(&encoded)?;
+    let persisted_quote_tool = persisted
+        .tools
+        .iter()
+        .find(|t| t.manifest.key.as_str() == "inventory.quote.lookup@1")
+        .expect("persisted quote tool");
+    assert_eq!(
+        persisted_quote_tool.description,
+        "Look up live inventory pricing by SKU."
+    );
+    assert_eq!(
+        persisted_quote_tool.tags,
+        vec!["wholesale_tariff".to_owned(), "sku_quote".to_owned()]
+    );
+    assert_eq!(
+        persisted_quote_tool.when_to_use.as_deref(),
+        Some("Use when computing wholesale hardware quotes.")
+    );
+    assert!(
+        persisted
+            .skills
+            .iter()
+            .any(|s| s.skill_ref.as_str() == "inventory-ops-guide@1")
+    );
+    let discovery = persisted.discovery.expect("persisted discovery");
+    let persisted_skill = discovery
+        .authorized_skills
+        .iter()
+        .find(|s| s.skill_ref.as_str() == "inventory-ops-guide@1")
+        .expect("persisted authorized skill");
+    assert_eq!(
+        persisted_skill.tags,
+        vec!["inventory_playbook".to_owned(), "sku_ops".to_owned()]
+    );
+    assert!(
+        discovery
+            .initial_exposed_tool_keys
+            .iter()
+            .any(|k| k.as_str() == "inventory.status.ping@1")
+    );
+    assert!(
+        !discovery
+            .initial_exposed_tool_keys
+            .iter()
+            .any(|k| k.as_str() == "inventory.quote.lookup@1")
+    );
+
+    let dispatch_log = std::fs::read_to_string(config.with_extension("host-dispatches.jsonl"))?;
+    let records: Vec<Value> = dispatch_log
+        .lines()
+        .map(serde_json::from_str)
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(records.len(), 1);
+    assert_eq!(records[0]["run_id"], run.run_id.to_string());
+    assert_eq!(records[0]["tool_key"], "inventory.quote.lookup@1");
+    assert_eq!(
+        records[0]["provider_id"],
+        inventory_provider_id().to_string()
+    );
+    assert_eq!(records[0]["sku"], "rack-unit-7");
 
     Ok(())
 }

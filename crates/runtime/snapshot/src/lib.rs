@@ -1424,6 +1424,12 @@ mod authorized_tool_catalog_tests;
 
 mod tool_catalog;
 pub use tool_catalog::authorized_tool_catalog;
+mod host_catalog;
+pub use host_catalog::{
+    HostCatalogBuildError, HostCatalogSnapshotBuilder, HostCatalogSnapshotPartitions,
+    HostSkillDescriptor, HostSkillProvenance, HostSkillTrust, HostToolDescriptor,
+    host_capability_provider_id,
+};
 pub mod application_catalog;
 mod dialogue_authority;
 pub use dialogue_authority::{
