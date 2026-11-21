@@ -73,3 +73,22 @@ fn retained_same_key_variants_still_require_the_exact_execution_contract() {
         CapabilityExecutionTarget::parse("Web.Search", None).expect("fixture backend operation");
     assert!(!old_snapshot.matches_execution_contract(&wrong_owner));
 }
+
+#[test]
+fn is_builtin_provider_id_recognizes_only_compiled_kernel_provider_identities() {
+    let rust: CapabilityProviderId = musteragent_tool::BUILTIN_RUST_PROVIDER_ID
+        .parse()
+        .expect("rust provider");
+    let backend: CapabilityProviderId = musteragent_tool::BUILTIN_BACKEND_PROVIDER_ID
+        .parse()
+        .expect("backend provider");
+    let host = CapabilityProviderId::from_uuid(uuid::Uuid::new_v5(
+        &uuid::Uuid::NAMESPACE_OID,
+        b"example.test/capability-provider/inventory.v1",
+    ))
+    .expect("deterministic host provider");
+
+    assert!(is_builtin_provider_id(rust));
+    assert!(is_builtin_provider_id(backend));
+    assert!(!is_builtin_provider_id(host));
+}

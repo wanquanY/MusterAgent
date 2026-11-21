@@ -2,8 +2,10 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 mod physical;
+mod provider;
 pub use physical::ToolPhysicalExecution;
 pub(crate) use physical::validate as validate_physical_execution;
+pub use provider::{ProviderCapabilityDispatcher, ProviderDispatcherError};
 
 use musteragent_capability::{CapabilityKey, CapabilityManifest};
 use musteragent_identity::{ActivityId, CapabilityProviderId, DelegationId, InteractionId, RunId};

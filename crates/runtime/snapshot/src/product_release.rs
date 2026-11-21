@@ -68,19 +68,53 @@ impl RuntimeSnapshotContent {
             if tool.execution_target.backend_operation().is_some() {
                 // Backend location identifies the RPC provider, independently
                 // of the worker home. Admission and physical registration own
-                // the home-specific catalog. Here we verify release membership.
+                // the home-specific catalog. Only a Cloud-target lookup may
+                // fall back to the release's Device catalog; for Device-target
+                // tools there is no alternate catalog.
                 let device = musteragent_tool::BuiltinToolCatalog::for_product_release(
                     reference,
                     musteragent_tool::ProductExecutionTarget::Device,
                 )
                 .map_err(|_| invalid())?;
-                if device
-                    .by_key(&tool.manifest.key)
-                    .is_some_and(|def| tool.matches_execution_contract(def))
+                if target == musteragent_tool::ProductExecutionTarget::Cloud
+                    && device
+                        .by_key(&tool.manifest.key)
+                        .is_some_and(|def| tool.matches_execution_contract(def))
                 {
                     continue;
                 }
-                return Err(invalid());
+                let in_release = match target {
+                    musteragent_tool::ProductExecutionTarget::Cloud => {
+                        declared.is_some() || device.by_key(&tool.manifest.key).is_some()
+                    }
+                    musteragent_tool::ProductExecutionTarget::Device => {
+                        let cloud = musteragent_tool::BuiltinToolCatalog::for_product_release(
+                            reference,
+                            musteragent_tool::ProductExecutionTarget::Cloud,
+                        )
+                        .map_err(|_| invalid())?;
+                        declared.is_some() || cloud.by_key(&tool.manifest.key).is_some()
+                    }
+                };
+                if in_release || is_builtin_provider_id(tool.manifest.capability_provider_id) {
+                    return Err(invalid());
+                }
+                for other in musteragent_tool::compiled_product_releases_refs() {
+                    for compiled_target in [
+                        musteragent_tool::ProductExecutionTarget::Cloud,
+                        musteragent_tool::ProductExecutionTarget::Device,
+                    ] {
+                        let history = musteragent_tool::BuiltinToolCatalog::for_product_release(
+                            &other,
+                            compiled_target,
+                        )
+                        .map_err(|_| invalid())?;
+                        if history.by_key(&tool.manifest.key).is_some() {
+                            return Err(invalid());
+                        }
+                    }
+                }
+                continue;
             }
             if declared.is_some() {
                 return Err(invalid());
@@ -201,6 +235,16 @@ impl ToolDefinitionSnapshot {
             && (media_projection || definition.input_schema_json == self.input_schema_json)
             && definition.output_schema_json == self.output_schema_json
     }
+}
+
+fn is_builtin_provider_id(id: musteragent_identity::CapabilityProviderId) -> bool {
+    let rust = musteragent_tool::BUILTIN_RUST_PROVIDER_ID
+        .parse::<musteragent_identity::CapabilityProviderId>()
+        .expect("compiled rust provider id");
+    let backend = musteragent_tool::BUILTIN_BACKEND_PROVIDER_ID
+        .parse::<musteragent_identity::CapabilityProviderId>()
+        .expect("compiled backend provider id");
+    id == rust || id == backend
 }
 
 #[cfg(test)]

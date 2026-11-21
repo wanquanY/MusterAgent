@@ -1,4 +1,5 @@
 use crate::*;
+use musteragent_identity::CapabilityProviderId;
 use musteragent_model_providers::*;
 use musteragent_postgres::{PostgresContentStore, PostgresPoolConfig};
 use musteragent_runtime_model::*;
@@ -32,11 +33,14 @@ impl MeteringPublicationEncoder for LocalUsage {
     }
 }
 
-/// Optional host authority for model HTTP. Each override replaces its configured default.
+/// Optional host authority for model HTTP and host-dispatched backend capabilities.
+/// Model overrides replace their configured defaults; `capability_dispatchers`
+/// routes non-builtin `CapabilityProviderId`s outside `ProductCapabilityDispatcher`.
 #[derive(Default)]
 pub struct WorkerOverrides {
     pub credentials: Option<Arc<dyn CredentialResolver>>,
     pub model_headers: Option<Arc<dyn ModelRequestHeaderHook>>,
+    pub capability_dispatchers: BTreeMap<CapabilityProviderId, Arc<dyn CapabilityDispatcher>>,
 }
 
 /// Run the shipped worker composition until shutdown or a worker task exits.
@@ -97,9 +101,15 @@ pub async fn run_worker(
     if let Some(catalog) = workspace {
         workspace_releases::publish_workspace_releases(&catalog, content.as_ref()).await?;
     }
+    let WorkerOverrides {
+        credentials,
+        model_headers,
+        capability_dispatchers,
+    } = overrides;
     let model = Arc::new(build_model_provider(
         &settings.models,
-        overrides,
+        credentials,
+        model_headers,
         Arc::new(RuntimeModelContentResolver::new(content.clone())),
     )?);
     let liveness_clock =
@@ -113,7 +123,7 @@ pub async fn run_worker(
     let metering = Arc::new(LocalUsage {
         publish_raw: settings.publish_raw_usage,
     });
-    let dispatcher = kernel_dispatcher(ToolServices {
+    let product_dispatcher = kernel_dispatcher(ToolServices {
         database: database.clone(),
         content: content.clone(),
         keys: keys.clone(),
@@ -127,6 +137,10 @@ pub async fn run_worker(
         releases,
         browser_unavailable_notice: settings.browser_unavailable_notice()?,
     })?;
+    let dispatcher: Arc<dyn CapabilityDispatcher> = Arc::new(ProviderCapabilityDispatcher::new(
+        product_dispatcher,
+        capability_dispatchers,
+    )?);
     let composition = CloudWorkerComposition::build(
         WorkerHost {
             database: database.clone(),
@@ -198,17 +212,18 @@ pub async fn run_worker(
 
 fn build_model_provider(
     models: &[ModelSettings],
-    overrides: WorkerOverrides,
+    credentials_override: Option<Arc<dyn CredentialResolver>>,
+    model_headers_override: Option<Arc<dyn ModelRequestHeaderHook>>,
     content: Arc<dyn ContentResolver>,
 ) -> Result<DirectModelProvider, BuildError> {
-    let per_request = overrides.credentials.is_some() || overrides.model_headers.is_some();
-    let credentials = match overrides.credentials {
+    let per_request = credentials_override.is_some() || model_headers_override.is_some();
+    let credentials = match credentials_override {
         Some(resolver) => resolver,
         None => EnvironmentCredentials::new(models)?,
     };
     let headers = HostRequestHeaders {
         static_headers: Default::default(),
-        hook: Some(match overrides.model_headers {
+        hook: Some(match model_headers_override {
             Some(hook) => hook,
             None => Arc::new(ConfiguredModelHeaders::from_settings(models)?),
         }),
