@@ -444,7 +444,12 @@ async fn kernel_baseline_reapply_preserves_existing_ledger_bytes() {
         .await
         .expect("PostgreSQL");
     let pool = postgres.pool().await.expect("pool");
-    apply_migrations_through(&pool, 1).await;
+    let latest = migration_set()
+        .iter()
+        .map(|migration| migration.version)
+        .max()
+        .expect("at least baseline migration");
+    apply_migrations_through(&pool, latest).await;
     verify_migrations(&pool)
         .await
         .expect("complete baseline is ready for workers");

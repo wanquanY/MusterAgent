@@ -28,7 +28,9 @@ use musteragent_identity::{
     UtcTimestamp, WorkspaceId,
 };
 use musteragent_runtime_capability::RuntimeClock;
-use musteragent_runtime_contract::{ErrorCode, RuntimeError, TraceContext, TraceParent};
+use musteragent_runtime_contract::{
+    ErrorCode, RuntimeError, SafeDisplayText, TraceContext, TraceParent,
+};
 use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 
@@ -92,13 +94,28 @@ impl StandingGoalContinuationAuthorityFailure {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Error)]
+#[derive(Debug, Clone, Eq, PartialEq, Error)]
 #[error("standing Goal continuation authority failed: {kind:?}")]
 pub struct StandingGoalContinuationAuthorityError {
     pub runtime_code: Option<ErrorCode>,
     pub correlation_id: Option<musteragent_identity::CorrelationId>,
     pub kind: StandingGoalContinuationAuthorityFailure,
     pub retryable: bool,
+    pub reason: Option<SafeDisplayText>,
+}
+
+impl StandingGoalContinuationAuthorityError {
+    /// Permanent host refusal carrying a display-safe reason for the wait barrier.
+    #[must_use]
+    pub fn denied(reason: SafeDisplayText) -> Self {
+        Self {
+            runtime_code: Some(ErrorCode::PolicyDenied),
+            correlation_id: None,
+            kind: StandingGoalContinuationAuthorityFailure::Denied,
+            retryable: false,
+            reason: Some(reason),
+        }
+    }
 }
 
 pub trait StandingGoalContinuationAuthority: Send + Sync {
@@ -580,16 +597,20 @@ impl StandingGoalSupervisor {
                             })
                             .await
                     } else {
+                        let permanent = disposition == AdmissionFailureDisposition::Block;
                         self.goals
                             .record_admission_failure(RecordStandingGoalAdmissionFailure {
                                 tenant_id: actor.tenant_id,
                                 goal_id,
                                 pursuit_id: pursuit.pursuit_id,
                                 claim_token: claim.claim_token.clone(),
-                                permanent: disposition == AdmissionFailureDisposition::Block,
+                                permanent,
                                 retry_at: (disposition == AdmissionFailureDisposition::Retry)
                                     .then_some(retry_at),
                                 occurred_at,
+                                reason: permanent
+                                    .then(|| admission_denial_reason(&admission))
+                                    .flatten(),
                             })
                             .await
                     };
@@ -855,6 +876,15 @@ fn continuation_settlement(
     }
 }
 
+fn admission_denial_reason(
+    result: &Result<StandingGoalAdmissionOutcome, StandingGoalSupervisorError>,
+) -> Option<SafeDisplayText> {
+    match result {
+        Err(StandingGoalSupervisorError::Authority(error)) => error.reason.clone(),
+        _ => None,
+    }
+}
+
 fn admission_failure_disposition(
     error: &StandingGoalSupervisorError,
 ) -> AdmissionFailureDisposition {
@@ -1075,6 +1105,7 @@ mod tests {
                     correlation_id: None,
                     kind,
                     retryable,
+                    reason: None,
                 });
             assert_eq!(admission_failure_disposition(&error), expected);
         }

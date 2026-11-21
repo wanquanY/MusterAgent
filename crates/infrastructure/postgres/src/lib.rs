@@ -314,6 +314,10 @@ mod cloud_schedule;
 pub use cloud_schedule::{
     PostgresCloudScheduleTools, PostgresScheduleDispatcher, PostgresScheduleService,
 };
+pub use musteragent_runtime_automation::{
+    PreTriggerDecision, RefreshedAutomationPartition, ScheduleAdmissionHook,
+    ScheduleAdmissionHookError, ScheduleTriggerContext,
+};
 
 #[cfg(test)]
 #[path = "../tests/dialogue_fixture/mod.rs"]

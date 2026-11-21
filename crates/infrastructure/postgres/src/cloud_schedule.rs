@@ -215,6 +215,7 @@ impl PostgresScheduleService {
                 owner_epoch: 1,
                 pending_owner: None,
                 handover_due_at_unix_ms: None,
+                pause_reason: None,
             }
         } else {
             let raw=sqlx::query("SELECT * FROM agent.owner_schedules WHERE schedule_id=$1 AND tenant_id=$2 AND owner_id=$3 AND owner_conversation_id=$4 AND status<>'deleted' FOR UPDATE")
@@ -236,6 +237,7 @@ impl PostgresScheduleService {
                 ScheduleAction::Update { definition } => {
                     definition.validate()?;
                     item.definition = definition.clone();
+                    item.pause_reason = None;
                     if item.status != "paused" {
                         item.status = "active".into();
                         item.next_run_at_unix_ms = Some(next(&item, command.now)?);
@@ -244,16 +246,19 @@ impl PostgresScheduleService {
                 ScheduleAction::Pause => {
                     item.status = "paused".into();
                     item.next_run_at_unix_ms = None;
+                    item.pause_reason = None;
                 }
                 ScheduleAction::Resume => {
                     item.status = "active".into();
                     item.next_run_at_unix_ms = Some(next(&item, command.now)?);
+                    item.pause_reason = None;
                 }
                 ScheduleAction::Delete => {
                     item.status = "deleted".into();
                     item.next_run_at_unix_ms = None;
                     item.pending_owner = None;
                     item.handover_due_at_unix_ms = None;
+                    item.pause_reason = None;
                     handover_status = None;
                 }
                 ScheduleAction::RunNow => {
@@ -282,12 +287,15 @@ impl PostgresScheduleService {
                     item.owner = item.pending_owner.take().ok_or(Error::StaleOwner)?;
                     item.status = handover_status.take().ok_or(Error::Corrupt)?;
                     item.next_run_at_unix_ms = item.handover_due_at_unix_ms.take();
+                    if item.status != "paused" {
+                        item.pause_reason = None;
+                    }
                 }
                 ScheduleAction::Create { .. } => return Err(Error::Invalid),
             }
             item.revision = item.revision.checked_add(1).ok_or(Error::Corrupt)?;
-            sqlx::query("UPDATE agent.owner_schedules SET next_dispatch_after_ms=NULL,revision=$2,definition=$3,status=$4,next_run_at_ms=$5,updated_at_ms=$6,trigger_owner=$7,trigger_epoch=$8,pending_trigger_owner=$9,handover_due_at_ms=$10,handover_status=$11 WHERE schedule_id=$1")
-                .bind(item.schedule_id).bind(integer(item.revision)?).bind(serde_json::to_vec(&item.definition).map_err(|_|Error::Corrupt)?).bind(&item.status).bind(item.next_run_at_unix_ms).bind(command.now.unix_millis()).bind(serde_json::to_value(&item.owner).map_err(|_|Error::Corrupt)?).bind(integer(item.owner_epoch)?).bind(item.pending_owner.as_ref().map(serde_json::to_value).transpose().map_err(|_|Error::Corrupt)?).bind(item.handover_due_at_unix_ms).bind(handover_status).execute(&mut *tx).await.map_err(db)?;
+            sqlx::query("UPDATE agent.owner_schedules SET next_dispatch_after_ms=NULL,revision=$2,definition=$3,status=$4,next_run_at_ms=$5,updated_at_ms=$6,trigger_owner=$7,trigger_epoch=$8,pending_trigger_owner=$9,handover_due_at_ms=$10,handover_status=$11,pause_reason=$12 WHERE schedule_id=$1")
+                .bind(item.schedule_id).bind(integer(item.revision)?).bind(serde_json::to_vec(&item.definition).map_err(|_|Error::Corrupt)?).bind(&item.status).bind(item.next_run_at_unix_ms).bind(command.now.unix_millis()).bind(serde_json::to_value(&item.owner).map_err(|_|Error::Corrupt)?).bind(integer(item.owner_epoch)?).bind(item.pending_owner.as_ref().map(serde_json::to_value).transpose().map_err(|_|Error::Corrupt)?).bind(item.handover_due_at_unix_ms).bind(handover_status).bind(item.pause_reason.as_ref().map(musteragent_runtime_contract::SafeDisplayText::as_str)).execute(&mut *tx).await.map_err(db)?;
             if !matches!(command.action, ScheduleAction::RunNow) {
                 let cancelled:Vec<uuid::Uuid> = sqlx::query_scalar("UPDATE agent.owner_schedule_occurrences SET status='cancelled',error_code='schedule_changed',completed_at_ms=$2 WHERE schedule_id=$1 AND status='pending' RETURNING occurrence_id").bind(item.schedule_id).bind(command.now.unix_millis()).fetch_all(&mut *tx).await.map_err(db)?;
                 for occurrence in cancelled {
@@ -338,6 +346,12 @@ pub(super) fn view(row: &PgRow) -> Result<ScheduleView, Error> {
             .try_get::<Option<serde_json::Value>, _>("pending_trigger_owner")
             .map_err(db)?
             .map(serde_json::from_value)
+            .transpose()
+            .map_err(|_| Error::Corrupt)?,
+        pause_reason: row
+            .try_get::<Option<String>, _>("pause_reason")
+            .map_err(db)?
+            .map(musteragent_runtime_contract::SafeDisplayText::new)
             .transpose()
             .map_err(|_| Error::Corrupt)?,
     })

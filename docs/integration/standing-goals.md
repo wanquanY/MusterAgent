@@ -44,7 +44,18 @@ Neither creates a Conversation message.
 
 - `StandingGoalContinuationAuthority`: signs the execution grant for
   `StandingGoalContinuationAuthorityRequest::target_run_id`. It may also return
-  opaque durable continuation authority, which is persisted with the Run.
+  opaque durable continuation authority, which is persisted with the Run. When
+  the host permanently refuses continuation (for example, a required external
+  capability was revoked), return `Err(StandingGoalContinuationAuthorityError::denied(reason))`
+  (or set `reason: Option<SafeDisplayText>` on `StandingGoalContinuationAuthorityError`
+  / `RecordStandingGoalAdmissionFailure`). The supervisor settles the Pursuit into
+  `GoalPursuitStatus::Waiting` (`StandingGoalProgressPhase::Waiting`) with an
+  `ExternalDependency` `GoalWaitBarrier` whose `reason_ref` stores the host's
+  `SafeDisplayText` (falling back to the default denial guidance when `reason` is
+  `None`), keeping continuation halted until explicit user resume (`resume_wait`
+  or status recovery). Transient failures (`DependencyUnavailable` with
+  `retryable: true`) release the claim and schedule bounded backoff instead of
+  blocking.
 - `RuntimeSnapshotResolver::resolve`: seals the Snapshot for the continuation
   (`run_context.activity_kind == Automation`) or judge (`Evaluation`). Apply the
   same unattended-run tool rules you apply to scheduled Runs here: no device

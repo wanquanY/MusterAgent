@@ -33,7 +33,7 @@ async fn real_migrator_initializes_and_verifies_only_the_kernel_chain() {
             .fetch_all(&pool)
             .await
             .expect("migrator process fixture");
-    assert_eq!(versions, vec![1]);
+    assert_eq!(versions, vec![1, 2]);
     assert!(
         !run("unknown")
             .output()

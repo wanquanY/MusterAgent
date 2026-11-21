@@ -117,6 +117,165 @@ pub struct ScheduleView {
     pub owner_epoch: u64,
     pub pending_owner: Option<ScheduleTriggerOwner>,
     pub handover_due_at_unix_ms: Option<i64>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        with = "optional_safe_display_text"
+    )]
+    pub pause_reason: Option<musteragent_runtime_contract::SafeDisplayText>,
+}
+
+impl ScheduleView {
+    /// Projects this view to the frozen `@2` schedule tool schema shape, which
+    /// forbids additional properties on tool responses.
+    #[must_use]
+    pub fn without_pause_reason(mut self) -> Self {
+        self.pause_reason = None;
+        self
+    }
+}
+
+mod optional_safe_display_text {
+    use musteragent_runtime_contract::SafeDisplayText;
+    use serde::{Deserialize, Deserializer, Serializer, de::Error as _};
+
+    pub fn serialize<S>(value: &Option<SafeDisplayText>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some(text) => serializer.serialize_some(text.as_str()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<SafeDisplayText>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Option::<String>::deserialize(deserializer)?
+            .map(|raw| SafeDisplayText::new(raw).map_err(D::Error::custom))
+            .transpose()
+    }
+}
+
+/// Immutable occurrence and source-Run facts supplied to [`ScheduleAdmissionHook`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScheduleTriggerContext {
+    pub actor: Actor,
+    pub owner_conversation_id: ConversationId,
+    pub workspace_id: Option<musteragent_identity::WorkspaceId>,
+    pub schedule: ScheduleView,
+    pub occurrence_id: uuid::Uuid,
+    pub scheduled_at: UtcTimestamp,
+    pub manual: bool,
+    pub target_run_id: RunId,
+    pub source_run_id: RunId,
+    pub source_snapshot: musteragent_runtime_snapshot::RuntimeSnapshotContent,
+}
+
+/// Refreshed capability, tool, skill, discovery and prompt material for a
+/// scheduled Run. Non-partition Snapshot fields (Agent version, model routes,
+/// policy mode, memory/instinct selections and Goal authority) stay pinned to
+/// the frozen source Run, and the resulting Snapshot still undergoes full
+/// admission sealing and derived-grant validation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RefreshedAutomationPartition {
+    pub capabilities: Vec<musteragent_capability::CapabilityGrantSnapshot>,
+    pub tools: Vec<musteragent_runtime_snapshot::ToolDefinitionSnapshot>,
+    pub skills: Vec<musteragent_skill::SkillDefinition>,
+    pub discovery: Option<musteragent_discovery::DiscoverySnapshot>,
+    pub prompt: musteragent_runtime_snapshot::PromptAssemblySnapshot,
+}
+
+impl RefreshedAutomationPartition {
+    /// Clones the refreshable partition from an existing Snapshot.
+    #[must_use]
+    pub fn from_snapshot(snapshot: &musteragent_runtime_snapshot::RuntimeSnapshotContent) -> Self {
+        Self {
+            capabilities: snapshot.capabilities.clone(),
+            tools: snapshot.tools.clone(),
+            skills: snapshot.skills.clone(),
+            discovery: snapshot.discovery.clone(),
+            prompt: snapshot.prompt.clone(),
+        }
+    }
+}
+
+/// Host admission decision returned before a due schedule occurrence creates a Run.
+#[derive(Debug, Clone, PartialEq)]
+pub enum PreTriggerDecision {
+    UseFrozenSource,
+    Refresh(Box<RefreshedAutomationPartition>),
+    Pause {
+        reason: musteragent_runtime_contract::SafeDisplayText,
+    },
+}
+
+impl PreTriggerDecision {
+    #[must_use]
+    pub fn refresh(partition: RefreshedAutomationPartition) -> Self {
+        Self::Refresh(Box::new(partition))
+    }
+}
+
+/// Explicit failure from [`ScheduleAdmissionHook::before_trigger`].
+///
+/// Retryable errors defer dispatch without consuming the occurrence; permanent
+/// errors dead-letter the occurrence without retrying or falling back to the
+/// frozen source Snapshot.
+#[derive(Debug, Clone, Eq, PartialEq, thiserror::Error)]
+#[error(
+    "schedule admission hook failed ({}): {}",
+    if *retryable { "retryable" } else { "permanent" },
+    message.as_str()
+)]
+pub struct ScheduleAdmissionHookError {
+    pub retryable: bool,
+    pub message: musteragent_runtime_contract::SafeDisplayText,
+    pub runtime_code: Option<musteragent_runtime_contract::ErrorCode>,
+}
+
+impl ScheduleAdmissionHookError {
+    #[must_use]
+    pub fn retryable(message: musteragent_runtime_contract::SafeDisplayText) -> Self {
+        Self {
+            retryable: true,
+            message,
+            runtime_code: None,
+        }
+    }
+
+    #[must_use]
+    pub fn permanent(message: musteragent_runtime_contract::SafeDisplayText) -> Self {
+        Self {
+            retryable: false,
+            message,
+            runtime_code: None,
+        }
+    }
+
+    #[must_use]
+    pub fn with_runtime_code(
+        mut self,
+        runtime_code: musteragent_runtime_contract::ErrorCode,
+    ) -> Self {
+        self.runtime_code = Some(runtime_code);
+        self
+    }
+}
+
+/// Optional host gate consulted before admitting a scheduled Run.
+///
+/// Delegated child sub-agent Runs do not invoke this hook.
+pub trait ScheduleAdmissionHook: Send + Sync {
+    fn before_trigger(
+        &self,
+        context: ScheduleTriggerContext,
+    ) -> musteragent_runtime_contract::ApplicationFuture<
+        '_,
+        Result<PreTriggerDecision, ScheduleAdmissionHookError>,
+    >;
 }
 
 /// Stable, exclusive history position; UUID disambiguates simultaneous facts.
@@ -135,7 +294,7 @@ pub struct ScheduleHistoryPage {
 }
 
 /// Typed failure reasons shared by host API and kernel tools.
-#[derive(Debug, thiserror::Error, Copy, Clone, Eq, PartialEq)]
+#[derive(Debug, thiserror::Error, Clone, Eq, PartialEq)]
 pub enum ScheduleServiceError {
     #[error("invalid schedule request")]
     Invalid,
@@ -158,4 +317,6 @@ pub enum ScheduleServiceError {
     Unavailable,
     #[error("schedule state violates its contract")]
     Corrupt,
+    #[error(transparent)]
+    AdmissionHookFailed(#[from] ScheduleAdmissionHookError),
 }

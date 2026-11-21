@@ -1,6 +1,8 @@
 //! Claim-fenced admission settlement. Suspending a host is not a Goal failure.
 use super::*;
 
+const DEFAULT_ADMISSION_DENIED_REASON: &[u8] = b"Execution admission was denied. Resolve account, permission or configuration requirements, then explicitly continue.";
+
 enum AdmissionResolution {
     Failure,
     Deferred,
@@ -30,6 +32,7 @@ impl StandingGoalProductApplication {
                 permanent: false,
                 retry_at: Some(request.retry_at),
                 occurred_at: request.occurred_at,
+                reason: None,
             },
             AdmissionResolution::Deferred,
         )
@@ -44,6 +47,7 @@ impl StandingGoalProductApplication {
         if request.claim_token.is_empty()
             || request.claim_token.len() > 512
             || request.permanent == request.retry_at.is_some()
+            || (!request.permanent && request.reason.is_some())
             || request
                 .retry_at
                 .is_some_and(|value| value < request.occurred_at)
@@ -76,12 +80,17 @@ impl StandingGoalProductApplication {
         pursuit.updated_at = request.occurred_at;
         pursuit.continuation_due_at = if blocked { None } else { request.retry_at };
         if blocked {
+            let reason_bytes = request
+                .reason
+                .as_ref()
+                .map_or(DEFAULT_ADMISSION_DENIED_REASON, |reason| {
+                    reason.as_str().as_bytes()
+                });
             pursuit.status = GoalPursuitStatus::Waiting;
             pursuit.wait_barrier = Some(GoalWaitBarrier {
                 kind: GoalWaitKind::ExternalDependency,
                 correlation_key: format!("admission-blocked:{}", pursuit.pursuit_id),
-                reason_ref: self.put_text(request.tenant_id,
-                    b"Execution admission was denied. Resolve account, permission or configuration requirements, then explicitly continue.").await?,
+                reason_ref: self.put_text(request.tenant_id, reason_bytes).await?,
                 resume_not_before: None,
                 expires_at: None,
             });
