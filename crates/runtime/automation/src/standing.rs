@@ -171,6 +171,8 @@ pub struct RecordStandingGoalAdmissionFailure {
     pub permanent: bool,
     pub retry_at: Option<UtcTimestamp>,
     pub occurred_at: UtcTimestamp,
+    /// Optional host-supplied refusal message stored in the `Waiting` barrier when `permanent` is true.
+    pub reason: Option<musteragent_runtime_contract::SafeDisplayText>,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]

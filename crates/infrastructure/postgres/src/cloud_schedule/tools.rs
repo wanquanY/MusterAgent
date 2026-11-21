@@ -76,7 +76,15 @@ impl PostgresCloudScheduleTools {
                 if value != serde_json::json!({}) {
                     return Err(ToolError::InvalidArguments);
                 }
-                serde_json::json!({"schedules":self.service.list(&scope).await.map_err(map)?})
+                let schedules = self
+                    .service
+                    .list(&scope)
+                    .await
+                    .map_err(map)?
+                    .into_iter()
+                    .map(ScheduleView::without_pause_reason)
+                    .collect::<Vec<_>>();
+                serde_json::json!({"schedules": schedules})
             } else {
                 let input: History =
                     serde_json::from_value(value).map_err(|_| ToolError::InvalidArguments)?;
@@ -141,7 +149,7 @@ impl PostgresCloudScheduleTools {
                 )
                 .await
                 .map_err(map)?;
-            serde_json::json!({"schedule":view})
+            serde_json::json!({"schedule": view.without_pause_reason()})
         };
         let result = self.result(&command, response).await?;
         let ledger = crate::PostgresLedgerStore::new(self.service.database.clone());
@@ -243,7 +251,7 @@ fn map(e: Error) -> ToolError {
         Error::ApplicationCatalogUnsupported => ToolError::ApplicationCatalogUnsupported,
         Error::Conflict | Error::StaleOwner => ToolError::Conflict,
         Error::StaleAttempt => ToolError::StaleFence,
-        Error::Unavailable => ToolError::Infrastructure,
+        Error::Unavailable | Error::AdmissionHookFailed(_) => ToolError::Infrastructure,
         Error::Corrupt => ToolError::Corrupt,
     }
 }

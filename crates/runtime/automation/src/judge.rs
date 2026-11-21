@@ -559,7 +559,10 @@ fn authority_error(
 ) -> StandingGoalTerminalEvaluatorError {
     StandingGoalTerminalEvaluatorError {
         stage: StandingGoalTerminalEvaluationStage::GrantJudgeAuthority,
-        message: error.kind.as_str().to_owned(),
+        message: error
+            .reason
+            .map(|reason| reason.as_str().to_owned())
+            .unwrap_or_else(|| error.kind.as_str().to_owned()),
         retryable: error.retryable,
         runtime_code: error.runtime_code,
         correlation_id: error.correlation_id,

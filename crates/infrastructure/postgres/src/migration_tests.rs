@@ -3,12 +3,15 @@ use musteragent_testkit::IsolatedPostgres;
 use std::collections::BTreeSet;
 
 #[test]
-fn migration_set_contains_only_the_complete_unpublished_baseline() {
+fn migration_set_contains_baseline_and_expand_only_migrations() {
     let migrations: Vec<_> = migration_set().iter().collect();
-    assert_eq!(migrations.len(), 1);
+    assert_eq!(migrations.len(), 2);
     let baseline = migrations[0];
     assert_eq!(baseline.version, 1);
     assert_eq!(baseline.description, "kernel baseline");
+    let pause_reason = migrations[1];
+    assert_eq!(pause_reason.version, 2);
+    assert_eq!(pause_reason.description, "schedule pause reason");
     let tables: BTreeSet<_> = migrations
         .iter()
         .flat_map(|migration| migration.sql.lines())
@@ -60,15 +63,30 @@ async fn empty_database_migrates_verifies_and_matches_kernel_inventory() {
         .map(|(schema, table)| (schema.to_string(), table.to_string()))
         .collect();
     assert_eq!(tables, expected);
-    let history: Vec<(i64, String)> = sqlx::query_as(
-        "SELECT version, encode(checksum, 'hex') FROM _sqlx_migrations ORDER BY version",
-    )
-    .fetch_all(&pool)
-    .await
-    .expect("read installed migration checksums");
+    let history: Vec<(i64, Vec<u8>)> =
+        sqlx::query_as("SELECT version, checksum FROM _sqlx_migrations ORDER BY version")
+            .fetch_all(&pool)
+            .await
+            .expect("read installed migration checksums");
+    assert_eq!(history.len(), 2);
+    assert_eq!(history[0].0, 1);
     assert_eq!(
-        history,
-        [(1, "f6b7502c04f384d9efbbad8ff9f7868fd96c8c22689b4db595d276564f81967a3b21cdc5fef7b01f480e0071b3c35400".to_owned())]
+        history[0]
+            .1
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>(),
+        "f6b7502c04f384d9efbbad8ff9f7868fd96c8c22689b4db595d276564f81967a3b21cdc5fef7b01f480e0071b3c35400"
+    );
+    assert_eq!(history[1].0, 2);
+    assert_eq!(
+        history[1].1.as_slice(),
+        migration_set()
+            .iter()
+            .nth(1)
+            .expect("schedule pause reason migration")
+            .checksum
+            .as_ref()
     );
     let revision: i64 =
         sqlx::query_scalar("SELECT revision FROM artifact.content_cache_revision WHERE singleton")
@@ -143,6 +161,14 @@ async fn verification_rejects_dirty_unknown_changed_and_missing_history() {
         .execute(&pool)
         .await
         .expect("restore baseline checksum");
+    sqlx::query("DELETE FROM _sqlx_migrations WHERE version = 2")
+        .execute(&pool)
+        .await
+        .expect("simulate pending follow-up migration");
+    assert!(matches!(
+        verify_migrations(&pool).await,
+        Err(MigrationVerificationError::Pending(2))
+    ));
     sqlx::query("DELETE FROM _sqlx_migrations")
         .execute(&pool)
         .await

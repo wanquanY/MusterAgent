@@ -11,6 +11,7 @@ pub(crate) fn schedule_batch(
     now: UtcTimestamp,
     codec: &dyn LedgerPayloadEncoder,
     retry: musteragent_runtime_automation::schedule_policy::RetrySpec,
+    partition: Option<musteragent_runtime_automation::RefreshedAutomationPartition>,
 ) -> Result<AdmissionBatch, Error> {
     let ids =
         AdmissionIdentities::derive(CommandId::from_uuid(occurrence).map_err(|_| Error::Invalid)?)
@@ -48,7 +49,7 @@ pub(crate) fn schedule_batch(
         home_epoch: HomeEpoch::new(1).map_err(|_| Error::Corrupt)?,
         runtime_snapshot_id: ids.runtime_snapshot_id,
     };
-    let snapshot = super::snapshot::derive(source, context, now, retry)?;
+    let snapshot = super::snapshot::derive(source, context, now, retry, partition)?;
     let message = AdmissionMessage {
         project_task_target: None,
         message_id: MessageId::from_uuid(uuid::Uuid::new_v5(&occurrence, b"input"))

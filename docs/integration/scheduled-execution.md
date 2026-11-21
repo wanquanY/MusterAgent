@@ -22,7 +22,11 @@ with `ScheduleHistoryCursor`. Limits are 1–100; `next: null` ends traversal.
 The cloud catalog exposes `schedules.create@2`, `schedules.update@2`,
 `schedules.control@2`, `schedules.list@2`, and `schedules.history@1`. Management
 effects and original Tool success receipts commit together. The earlier device
-contracts retain their versions. A scheduled Run or its descendant receives
+contracts retain their versions. `ScheduleView` exposes `pause_reason: Option<SafeDisplayText>`
+to host callers (`PostgresScheduleService::{list,change}`) and in `schedule.changed`
+payloads; the frozen `@2` tool schemas (`additionalProperties: false`) remain
+unchanged and omit `pause_reason` at the tool boundary. `Resume` and `Update`
+clear `pause_reason`. A scheduled Run or its descendant receives
 `ScheduledContextDenied` from the service when attempting schedule management;
 the Tool boundary reports `PolicyDenied`.
 
@@ -58,6 +62,40 @@ exponential backoff and attempt budget. It does not create replacement Runs with
 fresh effect identities. Leases and fencing allow another worker to resume after a crash. Dependency errors
 before admission preserve the due cursor, emit `schedule.dispatch.deferred`, and
 defer that schedule by 30 seconds so it cannot starve other candidates.
+
+## Pre-trigger host admission hook
+
+Hosts whose capability entitlements, skills or prompts can change after schedule
+creation configure `PostgresScheduleDispatcher::with_admission_hook(Arc<dyn ScheduleAdmissionHook>)`.
+When no hook is configured, dispatch uses the frozen source Snapshot directly.
+Delegated child sub-agent Runs never invoke `ScheduleAdmissionHook`.
+
+Before admitting a due occurrence, the dispatcher releases database row locks and
+calls `ScheduleAdmissionHook::before_trigger(ScheduleTriggerContext)`. The hook
+returns `Result<PreTriggerDecision, ScheduleAdmissionHookError>`:
+
+- `PreTriggerDecision::UseFrozenSource` derives the scheduled Run from the frozen
+  source Snapshot (excluding device capabilities).
+- `PreTriggerDecision::Refresh(Box<RefreshedAutomationPartition>)` replaces the
+  `{ capabilities, tools, skills, discovery, prompt }` partition while keeping the
+  frozen Agent identity, model routes, policy mode, memory/instinct selections and
+  Goal authority. The refreshed Snapshot passes full admission sealing
+  (`RuntimeSnapshot::seal`), derived-grant projection checks (`grant_derived_<run>`),
+  content authorization and `runtime.derived_run_authorities` lineage recording
+  with no validation bypass; physical device capabilities are rejected.
+- `PreTriggerDecision::Pause { reason }` transitions `agent.owner_schedules` to
+  `paused` with `pause_reason = reason` (`1..=1024` UTF-8 bytes, non-null only
+  when `status = 'paused'`), creates no Run, records the occurrence as `skipped`
+  with that reason (`schedule.occurrence.ended`), and emits `schedule.changed`.
+  `ScheduleAction::Resume` and `ScheduleAction::Update` clear `pause_reason`.
+- `Err(ScheduleAdmissionHookError { retryable: true, .. })` never falls back to
+  the stale Snapshot: no Run is created, `tick` defers the schedule by 30 seconds
+  and emits `schedule.dispatch.deferred` with the hook reason so the same
+  occurrence retries later.
+- `Err(ScheduleAdmissionHookError { retryable: false, .. })` never falls back to
+  the stale Snapshot: no Run is created, the occurrence is recorded as
+  `dead_lettered` with `schedule.occurrence.ended` carrying the failure reason,
+  and the occurrence is not retried.
 
 Placement has exactly one owner: `Cloud` or `Device(name)`. `BeginHandover`
 pauses and increments the epoch in one transaction. `CompleteHandover` requires

@@ -170,7 +170,7 @@ pub(crate) async fn change_in_transaction(
             Action::Create => unreachable!(),
         }
         item.revision += 1;
-        sqlx::query("UPDATE agent.owner_schedules SET retry_after_ms=0,revision=$2,definition=$3,status=$4,next_run_at_ms=$5,updated_at_ms=$6 WHERE schedule_id=$1")
+        sqlx::query("UPDATE agent.owner_schedules SET retry_after_ms=0,revision=$2,definition=$3,status=$4,next_run_at_ms=$5,updated_at_ms=$6,pause_reason=CASE WHEN $4='paused' THEN pause_reason ELSE NULL END WHERE schedule_id=$1")
                 .bind(item.schedule_id).bind(item.revision as i64).bind(definition_wire(&item.definition).encode_to_vec()).bind(&item.status).bind(item.next_run_at.map(|v|v.unix_millis())).bind(command.now.unix_millis()).execute(&mut *tx).await.map_err(db)?;
         if command.action != Action::RunNow {
             sqlx::query("UPDATE agent.owner_schedule_occurrences SET status='cancelled' WHERE schedule_id=$1 AND status='pending'").bind(item.schedule_id).execute(&mut *tx).await.map_err(db)?;

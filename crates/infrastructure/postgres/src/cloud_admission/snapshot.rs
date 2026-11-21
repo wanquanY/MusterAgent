@@ -11,8 +11,9 @@ pub(super) fn derive(
     run: RunContext,
     now: UtcTimestamp,
     retry: musteragent_runtime_automation::schedule_policy::RetrySpec,
+    partition: Option<musteragent_runtime_automation::RefreshedAutomationPartition>,
 ) -> Result<musteragent_ledger::RuntimeSnapshotBlob, Error> {
-    derive_with_retry(source, run, now, Some(retry))
+    derive_with_retry(source, run, now, Some(retry), partition)
 }
 
 pub(crate) fn derive_child(
@@ -20,7 +21,7 @@ pub(crate) fn derive_child(
     run: RunContext,
     now: UtcTimestamp,
 ) -> Result<musteragent_ledger::RuntimeSnapshotBlob, Error> {
-    derive_with_retry(source, run, now, None)
+    derive_with_retry(source, run, now, None, None)
 }
 
 fn derive_with_retry(
@@ -28,6 +29,7 @@ fn derive_with_retry(
     run: RunContext,
     now: UtcTimestamp,
     retry: Option<musteragent_runtime_automation::schedule_policy::RetrySpec>,
+    partition: Option<musteragent_runtime_automation::RefreshedAutomationPartition>,
 ) -> Result<musteragent_ledger::RuntimeSnapshotBlob, Error> {
     let mut content = source.snapshot.clone();
     if let Some(spec) = retry {
@@ -53,25 +55,43 @@ fn derive_with_retry(
         ))
         .map_err(|_| Error::Invalid)?;
     }
-    // A scheduled execution never acquires physical device capabilities from
-    // the originating foreground conversation.
-    content
-        .capabilities
-        .retain(|c| c.location != musteragent_capability::CapabilityLocation::Device);
-    content.tools.retain(|tool| {
-        content
+    let refreshed = partition.is_some();
+    if let Some(partition) = partition {
+        // Refreshed partitions are validated as supplied without silent
+        // rewriting; scheduled cloud Runs never admit physical device grants.
+        if partition
             .capabilities
             .iter()
-            .any(|cap| cap.key.as_str() == tool.manifest.capability_key.as_str())
-    });
-    if let Some(discovery) = &mut content.discovery {
-        discovery
-            .initial_exposed_tool_keys
-            .retain(|key| content.tools.iter().any(|t| t.manifest.key == *key));
-        discovery.authorized_tool_catalog_hash =
-            authorized_tool_catalog(&content.tools, &content.capabilities)
-                .map_err(|_| Error::Corrupt)?
-                .catalog_hash();
+            .any(|c| c.location == musteragent_capability::CapabilityLocation::Device)
+        {
+            return Err(Error::Invalid);
+        }
+        content.capabilities = partition.capabilities;
+        content.tools = partition.tools;
+        content.skills = partition.skills;
+        content.discovery = partition.discovery;
+        content.prompt = partition.prompt;
+    } else {
+        // A scheduled execution never acquires physical device capabilities from
+        // the originating foreground conversation.
+        content
+            .capabilities
+            .retain(|c| c.location != musteragent_capability::CapabilityLocation::Device);
+        content.tools.retain(|tool| {
+            content
+                .capabilities
+                .iter()
+                .any(|cap| cap.key.as_str() == tool.manifest.capability_key.as_str())
+        });
+        if let Some(discovery) = &mut content.discovery {
+            discovery
+                .initial_exposed_tool_keys
+                .retain(|key| content.tools.iter().any(|t| t.manifest.key == *key));
+            discovery.authorized_tool_catalog_hash =
+                authorized_tool_catalog(&content.tools, &content.capabilities)
+                    .map_err(|_| Error::Corrupt)?
+                    .catalog_hash();
+        }
     }
     let grant = ExecutionGrant {
         reviewed_application_source_sha256: Vec::new(),
@@ -160,7 +180,11 @@ fn derive_with_retry(
     };
     grant.validate().map_err(|error| {
         tracing::warn!(error = ?error, "derived grant rejected");
-        Error::Corrupt
+        if refreshed {
+            Error::Invalid
+        } else {
+            Error::Corrupt
+        }
     })?;
     let sealed = RuntimeSnapshot::seal(
         run.runtime_snapshot_id,
@@ -170,7 +194,11 @@ fn derive_with_retry(
     )
     .map_err(|error| {
         tracing::warn!(error = ?error, "derived snapshot rejected");
-        Error::Corrupt
+        if refreshed {
+            Error::Invalid
+        } else {
+            Error::Corrupt
+        }
     })?;
     Ok(musteragent_ledger::RuntimeSnapshotBlob {
         runtime_snapshot_id: sealed.runtime_snapshot_id,
