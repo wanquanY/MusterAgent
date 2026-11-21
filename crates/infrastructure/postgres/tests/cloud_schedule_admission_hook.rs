@@ -245,6 +245,8 @@ impl CloudScheduleFixture {
                 file_operation: tool.file_operation.clone(),
                 title: tool.title.clone(),
                 description: tool.description.clone(),
+                tags: Vec::new(),
+                when_to_use: None,
                 input_schema_json: tool.input_schema_json.clone(),
                 output_schema_json: tool.output_schema_json.clone(),
             });
@@ -277,6 +279,8 @@ impl CloudScheduleFixture {
                     file_operation: device_tool.file_operation.clone(),
                     title: device_tool.title.clone(),
                     description: device_tool.description.clone(),
+                    tags: Vec::new(),
+                    when_to_use: None,
                     input_schema_json: device_tool.input_schema_json.clone(),
                     output_schema_json: device_tool.output_schema_json.clone(),
                 });
