@@ -19,9 +19,9 @@
 //!
 //! - **ASCII / non-CJK alphanumeric runs**: lowercased (with fullwidth ASCII
 //!   folded to halfwidth) and split on whitespace, punctuation, and script
-//!   transitions (`查询A股` and `查询 A 股` produce identical runs).
+//!   transitions (`查询A馆藏书` and `查询 A 馆藏书` produce identical runs).
 //! - **CJK runs**: character bigrams for runs of length `>= 2`, plus single
-//!   character unigram matching for 1-character CJK runs (such as `股` in `A股`)
+//!   character unigram matching for 1-character CJK runs (such as `书` in `A书`)
 //!   and unigram fallback whenever no bigram of a multi-character CJK query run
 //!   matches in the candidate entry.
 
@@ -493,42 +493,37 @@ mod tests {
 
     #[test]
     fn mixed_script_segmentation_splits_cjk_and_ascii_without_spaces() {
-        assert_eq!(
-            canonical_query("查询A股个股实时行情"),
-            "查询 a 股个股实时行情"
-        );
-        assert_eq!(
-            canonical_query("查询 A 股个股实时行情"),
-            "查询 a 股个股实时行情"
-        );
-        assert_eq!(canonical_query("查询Ａ股ETF行情"), "查询 a 股 etf 行情");
+        assert_eq!(canonical_query("查询A馆热门藏书"), "查询 a 馆热门藏书");
+        assert_eq!(canonical_query("查询 A 馆热门藏书"), "查询 a 馆热门藏书");
+        assert_eq!(canonical_query("查询Ａ馆PDF藏书"), "查询 a 馆 pdf 藏书");
     }
 
     #[test]
     fn cjk_bigrams_match_non_contiguous_phrases_and_unigrams_fallback() {
         let doc = DocumentSearchIndex::new(
-            ["market.quote@1", "market_quote", "Market Quote"],
+            ["weather.forecast@1", "weather_forecast", "Weather Forecast"],
             [],
             None,
-            "查询 A 股个股实时行情",
+            "查询 A 区天气实时预报",
         );
-        assert!(ParsedQuery::parse("个股行情").score(&doc) > 0);
-        assert!(ParsedQuery::parse("A股行情").score(&doc) > 0);
-        assert!(ParsedQuery::parse("股").score(&doc) > 0);
+        assert!(ParsedQuery::parse("天气预报").score(&doc) > 0);
+        assert!(ParsedQuery::parse("A区预报").score(&doc) > 0);
+        assert!(ParsedQuery::parse("雨").score(&doc) == 0);
+        assert!(ParsedQuery::parse("天").score(&doc) > 0);
 
         let unigram_only = DocumentSearchIndex::new(
-            ["market.price@1", "market_price", "Market Price"],
+            ["weather.temp@1", "weather_temp", "Temperature Reading"],
             [],
             None,
-            "查询 A 股实时价格",
+            "查询今天空气与温度",
         );
         let bigram_exact = DocumentSearchIndex::new(
-            ["market.spot@1", "market_spot", "Market Spot"],
+            ["weather.current@1", "weather_current", "Current Weather"],
             [],
             None,
-            "查询实时股价",
+            "查询实时气温",
         );
-        let q = ParsedQuery::parse("股价");
+        let q = ParsedQuery::parse("气温");
         let fallback_score = q.score(&unigram_only);
         let bigram_score = q.score(&bigram_exact);
         assert!(fallback_score > 0);

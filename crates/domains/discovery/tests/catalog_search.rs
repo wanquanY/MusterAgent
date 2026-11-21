@@ -103,8 +103,8 @@ fn make_skill(
         origin: SkillOrigin::Installed,
         trust: SkillCatalogTrust::Verified,
         provenance: SkillCatalogProvenance::Installed {
-            source: "marketplace".to_owned(),
-            source_ref: format!("market://{reference}"),
+            source: "hub".to_owned(),
+            source_ref: format!("https://example.test/skills/{reference}"),
             publisher_ref: "publisher:test".to_owned(),
         },
         install_scope: SkillCatalogInstallScope::Tenant(TenantId::generate()),
@@ -160,17 +160,17 @@ fn search_skills(catalog: &AuthorizedSkillCatalog, query: &str) -> Vec<String> {
 fn chinese_only_queries_match_segmented_bigrams_and_unigram_fallback() {
     let catalog = AuthorizedToolCatalog::new(vec![
         make_tool(
-            "market.quote.get@1",
-            "Market Quote",
-            "查询 A 股个股实时行情",
+            "weather.forecast.get@1",
+            "Weather Forecast",
+            "查询城市天气实时预报",
             &[],
             None,
             CapabilityLocation::Backend,
         ),
         make_tool(
-            "market.price.snapshot@1",
-            "Price Snapshot",
-            "查询 A 股实时价格",
+            "weather.temp.snapshot@1",
+            "Temperature Snapshot",
+            "查询今天空气与温度",
             &[],
             None,
             CapabilityLocation::Backend,
@@ -186,37 +186,38 @@ fn chinese_only_queries_match_segmented_bigrams_and_unigram_fallback() {
     ])
     .expect("catalog");
 
-    // Non-contiguous Chinese phrase (`个股` + `行情` separated by `实时` in description)
-    // matches via CJK bigrams and ranks ahead of unrelated single-character overlap (`个`).
-    let results = search_tools(&catalog, "个股行情");
-    assert_eq!(results[0], "market.quote.get@1");
+    // Non-contiguous Chinese phrase (`天气` + `预报` separated by `实时` in description)
+    // matches via CJK bigrams and excludes unrelated entries.
+    let results = search_tools(&catalog, "天气预报");
+    assert_eq!(results[0], "weather.forecast.get@1");
 
-    // Pure unigram fallback: `股价` has no matching bigram in `查询 A 股实时价格`,
-    // but both `'股'` and `'价'` match via unigram fallback, while `个人日程安排` has zero overlap.
-    let fallback_results = search_tools(&catalog, "股价");
-    assert_eq!(fallback_results, vec!["market.price.snapshot@1"]);
+    // Pure unigram fallback: `气温` has no matching bigram in `查询今天空气与温度`,
+    // but both `'气'` and `'温'` match via unigram fallback, while single-character or zero
+    // overlap entries are excluded.
+    let fallback_results = search_tools(&catalog, "气温");
+    assert_eq!(fallback_results, vec!["weather.temp.snapshot@1"]);
 
-    // Single-character CJK query (`股`) matches tools containing `'股'` and excludes unrelated entries.
-    let single_char = search_tools(&catalog, "股");
+    // Single-character CJK query (`气`) matches tools containing `'气'` and excludes unrelated entries.
+    let single_char = search_tools(&catalog, "气");
     assert_eq!(
         single_char,
-        vec!["market.price.snapshot@1", "market.quote.get@1"]
+        vec!["weather.forecast.get@1", "weather.temp.snapshot@1"]
     );
 
     // Bigram match strictly outranks unigram-only fallback.
     let with_exact_bigram = AuthorizedToolCatalog::new(vec![
         make_tool(
-            "market.price.snapshot@1",
-            "股票实时价格",
-            "查询股票实时价格",
+            "weather.temp.snapshot@1",
+            "今天空气与温度",
+            "查询今天空气与温度",
             &[],
             None,
             CapabilityLocation::Backend,
         ),
         make_tool(
-            "market.spot.quote@1",
-            "Spot Quote",
-            "获取最新股价",
+            "weather.hourly.get@1",
+            "Hourly Weather",
+            "获取最新气温",
             &[],
             None,
             CapabilityLocation::Backend,
@@ -224,8 +225,8 @@ fn chinese_only_queries_match_segmented_bigrams_and_unigram_fallback() {
     ])
     .expect("bigram vs unigram catalog");
     assert_eq!(
-        search_tools(&with_exact_bigram, "股价"),
-        vec!["market.spot.quote@1", "market.price.snapshot@1"]
+        search_tools(&with_exact_bigram, "气温"),
+        vec!["weather.hourly.get@1", "weather.temp.snapshot@1"]
     );
 }
 
@@ -233,17 +234,17 @@ fn chinese_only_queries_match_segmented_bigrams_and_unigram_fallback() {
 fn mixed_cjk_and_ascii_queries_work_with_or_without_spaces() {
     let catalog = AuthorizedToolCatalog::new(vec![
         make_tool(
-            "market.ashare.quote@1",
-            "Equity Quote",
-            "查询 A 股个股实时行情",
-            &["etf"],
+            "library.zone_a.search@1",
+            "Zone A Catalog",
+            "查询 A 馆图书实时借阅",
+            &["pdf"],
             None,
             CapabilityLocation::Backend,
         ),
         make_tool(
-            "market.hk.quote@1",
-            "Regional Quote",
-            "查询港股个股实时行情",
+            "library.zone_b.search@1",
+            "Zone B Catalog",
+            "查询 B 馆图书实时借阅",
             &[],
             None,
             CapabilityLocation::Backend,
@@ -259,28 +260,29 @@ fn mixed_cjk_and_ascii_queries_work_with_or_without_spaces() {
     ])
     .expect("catalog");
 
-    for query in ["A股行情", "A 股行情", "Ａ股行情"] {
+    for query in ["A馆借阅", "A 馆借阅", "Ａ馆借阅"] {
         let keys = search_tools(&catalog, query);
-        assert_eq!(keys[0], "market.ashare.quote@1", "query={query}");
-        // Single-letter ASCII 'a' must not substring-match "image" or "generate".
+        assert_eq!(keys[0], "library.zone_a.search@1", "query={query}");
+        // Single-letter ASCII 'a' must not substring-match "image" or "generate"
+        // or produce a stopword-only hit on "from a text prompt".
         assert!(
             !keys.contains(&"image.generate@1".to_owned()),
             "unexpected English substring match for {query}: {keys:?}"
         );
     }
 
-    let etf = search_tools(&catalog, "ETF实时行情");
-    assert_eq!(etf[0], "market.ashare.quote@1");
+    let pdf = search_tools(&catalog, "PDF实时借阅");
+    assert_eq!(pdf[0], "library.zone_a.search@1");
 }
 
 #[test]
 fn tag_only_and_when_to_use_only_matches_succeed_for_tools_and_skills() {
     let tools = AuthorizedToolCatalog::new(vec![
         make_tool(
-            "data.series.compute@1",
-            "Series Compute",
-            "Compute numeric series summaries",
-            &["量化回测", "backtest"],
+            "recipe.steps.compute@1",
+            "Cooking Timer",
+            "Compute step durations for kitchen preparation",
+            &["烘焙食谱", "baking"],
             None,
             CapabilityLocation::Cloud,
         ),
@@ -289,7 +291,7 @@ fn tag_only_and_when_to_use_only_matches_succeed_for_tools_and_skills() {
             "Export Table",
             "Write structured rows to an output file",
             &[],
-            Some("当用户需要导出财报表格或 CSV 清单时使用"),
+            Some("当用户需要导出图书借阅或 CSV 清单时使用"),
             CapabilityLocation::Cloud,
         ),
         make_tool(
@@ -304,14 +306,14 @@ fn tag_only_and_when_to_use_only_matches_succeed_for_tools_and_skills() {
     .expect("tool catalog");
 
     assert_eq!(
-        search_tools(&tools, "量化回测"),
-        vec!["data.series.compute@1"]
+        search_tools(&tools, "烘焙食谱"),
+        vec!["recipe.steps.compute@1"]
     );
     assert_eq!(
-        search_tools(&tools, "backtest"),
-        vec!["data.series.compute@1"]
+        search_tools(&tools, "baking"),
+        vec!["recipe.steps.compute@1"]
     );
-    assert_eq!(search_tools(&tools, "财报表格"), vec!["table.export.run@1"]);
+    assert_eq!(search_tools(&tools, "图书借阅"), vec!["table.export.run@1"]);
     assert_eq!(search_tools(&tools, "csv 清单"), vec!["table.export.run@1"]);
 
     let skills = AuthorizedSkillCatalog::new(vec![
@@ -320,25 +322,22 @@ fn tag_only_and_when_to_use_only_matches_succeed_for_tools_and_skills() {
             "Workflow Alpha",
             "General document preparation workflow.",
             "Apply when assembling neutral summaries.",
-            &["合规审查", "compliance"],
+            &["文献归档", "archival"],
         ),
         make_skill(
             "workflow-beta@1",
             "Workflow Beta",
-            "General numeric check workflow.",
-            "当用户请求核对季度对账单时使用。",
+            "General inventory check workflow.",
+            "当用户请求核对仓库盘点单时使用。",
             &[],
         ),
     ])
     .expect("skill catalog");
 
-    assert_eq!(search_skills(&skills, "合规审查"), vec!["workflow-alpha@1"]);
+    assert_eq!(search_skills(&skills, "文献归档"), vec!["workflow-alpha@1"]);
+    assert_eq!(search_skills(&skills, "archival"), vec!["workflow-alpha@1"]);
     assert_eq!(
-        search_skills(&skills, "compliance"),
-        vec!["workflow-alpha@1"]
-    );
-    assert_eq!(
-        search_skills(&skills, "季度对账单"),
+        search_skills(&skills, "仓库盘点单"),
         vec!["workflow-beta@1"]
     );
 }
@@ -357,7 +356,7 @@ fn field_weights_rank_key_name_above_tags_above_when_to_use_above_description() 
         make_tool(
             "d.entry@1",
             "Generic Entry D",
-            "Supports 资产配置 analysis in detail",
+            "Supports 图书检索 queries in detail",
             &[],
             None,
             CapabilityLocation::Cloud,
@@ -367,20 +366,20 @@ fn field_weights_rank_key_name_above_tags_above_when_to_use_above_description() 
             "Generic Entry C",
             "General helper",
             &[],
-            Some("当用户询问资产配置方案时调用"),
+            Some("当用户询问图书检索方案时调用"),
             CapabilityLocation::Cloud,
         ),
         make_tool(
             "b.entry@1",
             "Generic Entry B",
-            "Supports 资产配置 in description too",
-            &["资产配置"],
-            Some("也可用于资产配置"),
+            "Supports 图书检索 in description too",
+            &["图书检索"],
+            Some("也可用于图书检索"),
             CapabilityLocation::Cloud,
         ),
         make_tool(
             "z.entry@1",
-            "资产配置工具",
+            "图书检索工具",
             "General helper",
             &[],
             None,
@@ -390,7 +389,7 @@ fn field_weights_rank_key_name_above_tags_above_when_to_use_above_description() 
     .expect("weighted tool catalog");
 
     assert_eq!(
-        search_tools(&tools, "资产配置"),
+        search_tools(&tools, "图书检索"),
         vec!["z.entry@1", "b.entry@1", "c.entry@1", "d.entry@1"]
     );
 
@@ -398,7 +397,7 @@ fn field_weights_rank_key_name_above_tags_above_when_to_use_above_description() 
         make_tool(
             "a.desc@1",
             "Alpha Helper",
-            "Inspects portfolio exposures",
+            "Inspects itinerary schedules",
             &[],
             None,
             CapabilityLocation::Cloud,
@@ -406,23 +405,23 @@ fn field_weights_rank_key_name_above_tags_above_when_to_use_above_description() 
         make_tool(
             "b.when@1",
             "Beta Helper",
-            "Inspects exposures",
+            "Inspects schedules",
             &[],
-            Some("Use when rebalancing a portfolio"),
+            Some("Use when updating an itinerary"),
             CapabilityLocation::Cloud,
         ),
         make_tool(
             "c.tags@1",
             "Gamma Helper",
-            "Inspects portfolio exposures",
-            &["portfolio"],
-            Some("Use when rebalancing a portfolio"),
+            "Inspects itinerary schedules",
+            &["itinerary"],
+            Some("Use when updating an itinerary"),
             CapabilityLocation::Cloud,
         ),
         make_tool(
             "z.name@1",
-            "Portfolio Inspector",
-            "Inspects exposures",
+            "Itinerary Inspector",
+            "Inspects schedules",
             &[],
             None,
             CapabilityLocation::Cloud,
@@ -431,7 +430,7 @@ fn field_weights_rank_key_name_above_tags_above_when_to_use_above_description() 
     .expect("weighted ascii tool catalog");
 
     assert_eq!(
-        search_tools(&ascii_tools, "portfolio"),
+        search_tools(&ascii_tools, "itinerary"),
         vec!["z.name@1", "c.tags@1", "b.when@1", "a.desc@1"]
     );
 
@@ -439,28 +438,28 @@ fn field_weights_rank_key_name_above_tags_above_when_to_use_above_description() 
         make_skill(
             "a-desc@1",
             "Routine A",
-            "Performs ledger reconciliation steps.",
+            "Formats citation bibliography entries.",
             "Use for periodic review.",
             &[],
         ),
         make_skill(
             "b-when@1",
             "Routine B",
-            "Performs periodic steps.",
-            "Use when running reconciliation checks.",
+            "Formats citation entries.",
+            "Use when compiling bibliography checks.",
             &[],
         ),
         make_skill(
             "c-tags@1",
             "Routine C",
-            "Performs reconciliation steps.",
-            "Use when running reconciliation checks.",
-            &["reconciliation"],
+            "Formats bibliography entries.",
+            "Use when compiling bibliography checks.",
+            &["bibliography"],
         ),
         make_skill(
             "z-name@1",
-            "Reconciliation Guide",
-            "Performs periodic steps.",
+            "Bibliography Guide",
+            "Formats citation entries.",
             "Use for periodic review.",
             &[],
         ),
@@ -468,7 +467,7 @@ fn field_weights_rank_key_name_above_tags_above_when_to_use_above_description() 
     .expect("weighted skill catalog");
 
     assert_eq!(
-        search_skills(&skills, "reconciliation"),
+        search_skills(&skills, "bibliography"),
         vec!["z-name@1", "c-tags@1", "b-when@1", "a-desc@1"]
     );
 }
@@ -538,18 +537,18 @@ fn search_never_returns_unauthorized_entries_and_preserves_location_and_limit_bo
     let admitted = AuthorizedToolCatalog::new(vec![
         make_tool(
             "authorized.cloud@1",
-            "Cloud Quote",
-            "查询个股行情",
-            &["行情"],
+            "Cloud Weather",
+            "查询天气预报",
+            &["预报"],
             None,
             CapabilityLocation::Cloud,
         ),
         make_tool(
             "authorized.backend@1",
-            "个股行情服务",
-            "查询个股行情",
-            &["个股行情"],
-            Some("查询个股行情"),
+            "天气预报服务",
+            "查询天气预报",
+            &["天气预报"],
+            Some("查询天气预报"),
             CapabilityLocation::Backend,
         ),
     ])
@@ -560,7 +559,7 @@ fn search_never_returns_unauthorized_entries_and_preserves_location_and_limit_bo
     assert_eq!(
         admitted.search_with_semantic_scores(
             &ToolCatalogSearchRequest {
-                query: "个股行情".to_owned(),
+                query: "天气预报".to_owned(),
                 locations: BTreeSet::new(),
                 limit: NonZeroUsize::new(10).expect("limit"),
                 cursor: None,
@@ -573,7 +572,7 @@ fn search_never_returns_unauthorized_entries_and_preserves_location_and_limit_bo
     // Location filter restricts results strictly to Cloud even though Backend has a higher score.
     let cloud_only = admitted
         .search(&ToolCatalogSearchRequest {
-            query: "个股行情".to_owned(),
+            query: "天气预报".to_owned(),
             locations: BTreeSet::from([CapabilityLocation::Cloud]),
             limit: NonZeroUsize::new(10).expect("limit"),
             cursor: None,
@@ -585,7 +584,7 @@ fn search_never_returns_unauthorized_entries_and_preserves_location_and_limit_bo
     // Limit bound is strictly respected.
     let limited = admitted
         .search(&ToolCatalogSearchRequest {
-            query: "个股行情".to_owned(),
+            query: "天气预报".to_owned(),
             locations: BTreeSet::new(),
             limit: NonZeroUsize::new(1).expect("limit 1"),
             cursor: None,

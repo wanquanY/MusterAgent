@@ -133,8 +133,8 @@ fn legacy_tool_and_skill_snapshots_without_search_metadata_preserve_wire_bytes_a
 
     // Round-trip a snapshot with `tags` and `when_to_use` populated.
     let mut enriched_snap = legacy_snap.clone();
-    enriched_snap.tags = vec!["行情".to_owned(), "market".to_owned()];
-    enriched_snap.when_to_use = Some("当用户查询个股实时行情时调用".to_owned());
+    enriched_snap.tags = vec!["天气".to_owned(), "weather".to_owned()];
+    enriched_snap.when_to_use = Some("当用户查询城市天气预报时调用".to_owned());
     let enriched_bytes = tool_manifest(&enriched_snap).encode_to_vec();
     assert_ne!(enriched_bytes, pre_k7_bytes);
     let decoded_enriched = decode_tool(
