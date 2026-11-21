@@ -687,3 +687,6 @@ mod delegation;
 
 #[path = "binary_smoke/model_recovery.rs"]
 mod model_recovery;
+
+#[path = "binary_smoke/host_dispatch.rs"]
+mod host_dispatch;

@@ -312,6 +312,83 @@ optional media kind in `backend_artifact_type`. Both participate in release
 contract comparison. Ship the same release bytes to admission and execution.
 A method rename creates a different release digest.
 
+### Dynamically admitted host capabilities
+
+When backend capability keys are only known at run admission (for example
+published at runtime without restarting workers), a host can admit those
+`BackendNamed` tools on a release-bound snapshot and supply a
+`CapabilityDispatcher` per host `CapabilityProviderId`.
+
+Snapshot validation under `product_release: Some(_)` admits a backend-operation
+tool absent from the release's compiled `BuiltinToolCatalog` if and only if:
+
+- `capability_provider_id` is neither `BUILTIN_RUST_PROVIDER_ID` nor
+  `BUILTIN_BACKEND_PROVIDER_ID`.
+- `ToolManifest.key` collides with no compiled product release catalog (`Cloud`
+  or `Device`). Any tool whose key is present in a compiled catalog must still
+  match its compiled execution contract and schemas byte-for-byte.
+
+Contract rules for dynamically admitted backend capabilities:
+
+- **Deterministic provider ID**: `CapabilityProviderId` must be a deterministic,
+  non-nil UUID (for example `Uuid::new_v5` over a host namespace and stable
+  adapter identifier), never nil and never a builtin provider ID.
+- **`BackendOperation` naming**: `BackendOperation::new("<Service>.<Method>", None)`
+  requires two ASCII identifiers matching `[A-Za-z][A-Za-z0-9_]*` separated by
+  one `.` within 128 ASCII bytes. Generic dispatcher method names (`ExecuteTool`,
+  `execute_tool`, and case/underscore variants) are forbidden.
+- **Approval floor for non-read effects**: Tools whose `Effect` is not
+  `Effect::Read` (`WriteReversible`, `WriteExternal`, `Destructive`) must
+  declare `ApprovalRequirement::ByPolicy` or `ApprovalRequirement::Always`;
+  `ApprovalRequirement::Never` fails contract validation.
+- **Catalog discovery and activation**: `tool.catalog.search` and
+  `tool.catalog.activate` operate over the snapshot's `authorized_tools`, so
+  dynamically admitted `CapabilityLocation::Backend` tools omitted from
+  `initial_exposed_tool_keys` can be searched and activated on demand.
+- **Derived runs**: Cloud delegation sub-agents and scheduled runs retain
+  non-device backend capabilities through re-derived `grant_derived_<run_id>`
+  grants with `execution_grant_proof: None`. Host dispatchers must authorize
+  from the kernel-verified `CapabilityInvocation` (`tenant_id`, `actor`,
+  `run_id`, `capability_key`, `capability_provider_id`) rather than requiring a
+  root grant proof.
+
+Register host dispatchers on `WorkerOverrides::capability_dispatchers` when
+calling `run_worker`, or wrap `kernel_dispatcher` / `product_dispatchers` with
+`ProviderCapabilityDispatcher::new` when composing `CloudWorkerComposition`:
+
+```rust
+use std::{collections::BTreeMap, path::Path, sync::Arc};
+use musteragent_cloud_worker::{
+    BuildError, CapabilityDispatcher, CloudWorkerSettings, WorkerOverrides, run_worker,
+};
+use musteragent_identity::CapabilityProviderId;
+use uuid::Uuid;
+
+fn inventory_provider_id() -> CapabilityProviderId {
+    CapabilityProviderId::from_uuid(Uuid::new_v5(
+        &Uuid::NAMESPACE_OID,
+        b"example.test/capability-provider/inventory.v1",
+    ))
+    .expect("UUIDv5 is non-nil")
+}
+
+async fn start(dispatcher: Arc<dyn CapabilityDispatcher>) -> Result<(), BuildError> {
+    let mut signal = musteragent_cloud_lifecycle::ShutdownSignal::install()?;
+    let settings = CloudWorkerSettings::load(Path::new("worker.toml"))?;
+    let overrides = WorkerOverrides {
+        capability_dispatchers: BTreeMap::from([(inventory_provider_id(), dispatcher)]),
+        ..WorkerOverrides::default()
+    };
+    run_worker(settings, overrides, signal.recv()).await
+}
+```
+
+`ProviderCapabilityDispatcher::new` rejects builtin provider IDs and duplicate
+registrations at construction. Calls matching a registered `CapabilityProviderId`
+route to that host dispatcher; other calls fall through to the inner product
+dispatcher, and an unknown provider ID for a host-shaped call fails explicitly
+with `ErrorCode::CapabilityUnavailable`.
+
 ## Sandbox and process lifecycle
 
 Host admission calls `PostgresSandboxRoutingStore::bind_run_context` with the

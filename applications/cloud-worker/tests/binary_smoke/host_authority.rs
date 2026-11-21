@@ -108,6 +108,7 @@ async fn recording_host(config: PathBuf) -> Result<(), BuildError> {
         WorkerOverrides {
             credentials: Some(host.clone()),
             model_headers: Some(host),
+            capability_dispatchers: Default::default(),
         },
         signal.recv(),
     )

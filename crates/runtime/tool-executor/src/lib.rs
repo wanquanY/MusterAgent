@@ -76,7 +76,8 @@ pub use discovery_catalog::{DiscoveryExecutionCatalogError, discovery_execution_
 pub use dispatcher::{
     ApprovalPromptOverride, AtomicCapabilityHandler, CapabilityDispatcher,
     CompositeCapabilityDispatcher, DispatchedCapabilityOutcome, DispatchedReconciliationOutcome,
-    RegistryCapabilityDispatcher, RetainedToolResult, ToolPhysicalExecution,
+    ProviderCapabilityDispatcher, ProviderDispatcherError, RegistryCapabilityDispatcher,
+    RetainedToolResult, ToolPhysicalExecution,
 };
 pub use executor::{
     DurableToolExecutor, InheritInvocationPolicyEvaluator, ToolDispatchAuthorizer,
