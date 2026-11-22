@@ -793,17 +793,6 @@ impl DurableContextPlanner {
                 .await?;
             request.instructions = view.instructions;
             request.input = view.input;
-            // Projection is before sealing and cannot silently exceed the
-            // admitted route capacity. Oversized additions fail explicitly.
-            let projected_tokens = estimate_instruction_tokens(&request.instructions)
-                .saturating_add(estimate_messages(&request.input))
-                .saturating_add(estimate_tool_tokens(&request.tools))
-                .saturating_add(estimate_runtime_event_tokens(&request.runtime_events));
-            if projected_tokens.saturating_add(request.max_output_tokens.get())
-                > request.route.context_window.get()
-            {
-                return Err(ContextPlanError::quota());
-            }
         }
         if repair.is_some() {
             observe_context_plan_stage(run_id, "delivery_repair_request", || {

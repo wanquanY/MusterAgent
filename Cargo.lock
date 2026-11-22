@@ -2594,6 +2594,7 @@ dependencies = [
  "musteragent-execution-liveness",
  "musteragent-execution-supervision",
  "musteragent-identity",
+ "musteragent-memory",
  "musteragent-model",
  "musteragent-policy",
  "musteragent-run",

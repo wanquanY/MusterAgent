@@ -1,4 +1,5 @@
 mod dialogue_input;
+mod projection;
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroU64;
 
