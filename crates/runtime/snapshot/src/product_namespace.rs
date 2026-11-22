@@ -27,6 +27,7 @@ impl RuntimeSnapshotContent {
                 DISCOVERY_POLICY_V11
                     | CLOUD_SCHEDULE_DISCOVERY_POLICY_V1
                     | CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1
+                    | CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V2
             ) || is_dialogue_family_discovery_policy(policy)
         }) {
             discovery_policy.ok_or(SnapshotContractError::ProductNamespaceMismatch)?

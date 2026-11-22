@@ -35,7 +35,11 @@ mod agent_version;
 mod cloud_delegation_discovery;
 mod cloud_schedule_discovery;
 mod discovery_bootstrap;
-pub use cloud_delegation_discovery::CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1;
+pub use cloud_delegation_discovery::{
+    CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1, CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V2,
+    CLOUD_ORCHESTRATION_V2_ADDITIONS, cloud_orchestration_discovery_policy_for,
+    is_cloud_orchestration_discovery_policy,
+};
 pub use cloud_schedule_discovery::CLOUD_SCHEDULE_DISCOVERY_POLICY_V1;
 mod discovery_validation;
 mod hosted_discovery;

@@ -124,7 +124,9 @@ pub fn capability_available_for_dialogue_policy(policy: &str, key: &str) -> bool
 pub fn dialogue_capability_ceiling_for_policy(policy: &str, key: &str) -> bool {
     if matches!(
         policy,
-        CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1 | CLOUD_SCHEDULE_DISCOVERY_POLICY_V1
+        CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1
+            | CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V2
+            | CLOUD_SCHEDULE_DISCOVERY_POLICY_V1
     ) {
         return capability_available_for_dialogue_policy(policy, key);
     }

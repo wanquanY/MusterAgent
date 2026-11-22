@@ -7,7 +7,7 @@ pub(super) fn bootstrap_tool_keys_are_valid(
     device_catalog: bool,
     delegation_catalog: bool,
 ) -> bool {
-    if discovery_policy == super::CLOUD_ORCHESTRATION_DISCOVERY_POLICY_V1 {
+    if super::is_cloud_orchestration_discovery_policy(discovery_policy) {
         return !device_catalog
             && keys
                 .iter()
