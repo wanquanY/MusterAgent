@@ -279,7 +279,10 @@ impl<S: AdmittedModelInvocationStore> PersistedDecisionCapability<S> {
                 .validate(evaluation)
                 .map_err(|_| ErrorCode::ModelResponseInvalid)?;
             if invocation.usage.is_none() {
-                return Err(ErrorCode::ModelResponseInvalid);
+                // Usage is the Provider's accounting; its absence never fails a
+                // valid decision. Record it as zero and leave a trace.
+                tracing::warn!(capability = "decision", "Provider reported no usage");
+                invocation.usage = Some(Default::default());
             }
             invocation.response_model_key = Some(
                 ModelKey::new(response.model.clone())
@@ -306,7 +309,7 @@ impl<S: AdmittedModelInvocationStore> PersistedDecisionCapability<S> {
                 .await
                 .map_err(|_| ErrorCode::ContentUnavailable)?;
             invocation.response_ref = Some(result_ref.clone());
-            Ok(CapabilityResult {
+            Ok::<_, ErrorCode>(CapabilityResult {
                 result_hash: result_ref.sha256,
                 result_ref,
                 result_schema: cap.result_schema.clone(),

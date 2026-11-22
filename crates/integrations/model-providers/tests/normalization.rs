@@ -288,7 +288,7 @@ fn anthropic_preserves_one_hour_cache_creation_as_a_distinct_dimension() {
 }
 
 #[test]
-fn unknown_or_malformed_provider_frames_fail_closed() {
+fn unknown_frames_are_ignored_and_malformed_frames_fail() {
     let mut responses = match ProviderNormalizer::new(
         ApiFormat::OpenAiResponses,
         fixture_route(),
@@ -298,12 +298,13 @@ fn unknown_or_malformed_provider_frames_fail_closed() {
         Ok(value) => value,
         Err(error) => panic!("normalizer creation failed: {error}"),
     };
+    // Unknown event families are ignored, as Provider docs require.
     assert_eq!(
         responses.observe(
             Some("response.future_unrecognized"),
             serde_json::json!({"type": "response.future_unrecognized"})
         ),
-        Err(NormalizeError::UnknownEventType)
+        Ok(Vec::new())
     );
 
     let mut anthropic = match ProviderNormalizer::new(
@@ -315,17 +316,18 @@ fn unknown_or_malformed_provider_frames_fail_closed() {
         Ok(value) => value,
         Err(error) => panic!("normalizer creation failed: {error}"),
     };
-    assert!(matches!(
-        anthropic.observe(
-            None,
-            serde_json::json!({
-                "type": "content_block_delta",
-                "index": 0,
-                "delta": {"type": "unknown_delta"}
-            })
-        ),
-        Err(NormalizeError::UnknownDeltaType)
-    ));
+    assert!(
+        anthropic
+            .observe(
+                None,
+                serde_json::json!({
+                    "type": "content_block_delta",
+                    "index": 0,
+                    "delta": {"type": "unknown_delta"}
+                })
+            )
+            .is_ok()
+    );
 }
 
 fn fixture_route() -> ModelRouteRef {

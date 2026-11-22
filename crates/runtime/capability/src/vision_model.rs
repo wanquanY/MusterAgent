@@ -605,14 +605,8 @@ async fn consume_events(
             stop_reason,
             Some(StopReason::MaxOutputTokens | StopReason::TokenLimit)
         ),
-        usage: usage.ok_or(VisionStreamFailure {
-            early_provider_cause: None,
-            reason: "missing_usage",
-            code: ErrorCode::DependencyUnavailable,
-            retryable: true,
-            retry_after_ms: None,
-            usage: None,
-        })?,
+        // A Provider that never reports usage still answered; record zero.
+        usage: usage.unwrap_or_default(),
         provider_request_ref: provider_request_ref.ok_or(VisionStreamFailure {
             early_provider_cause: None,
             reason: "missing_response_id",

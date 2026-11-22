@@ -68,8 +68,13 @@ impl ProviderNormalizer {
             .tools
             .get_mut(&index)
             .ok_or(NormalizeError::UnknownTool)?;
+        // Relays re-serialize the final snapshot (whitespace, key order); the
+        // same JSON value is not a conflict. Different values are: which call
+        // to execute is ambiguous, so the attempt fails retryably.
         if (state.argument_stream_started || state.argument_snapshot_seen)
             && state.arguments != arguments
+            && serde_json::from_str::<serde_json::Value>(&state.arguments).ok()
+                != serde_json::from_str::<serde_json::Value>(arguments).ok()
         {
             return Err(NormalizeError::ConflictingToolArguments);
         }
