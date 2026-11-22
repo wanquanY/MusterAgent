@@ -19,6 +19,7 @@ mod request_transport;
 mod response_timing;
 mod route_parameters;
 mod structured_output;
+mod tool_schema;
 mod transport_memory;
 mod wire;
 mod wire_body;
