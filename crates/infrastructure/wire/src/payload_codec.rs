@@ -95,6 +95,7 @@ fn decode_domain_event(value: wire::DomainEvent) -> Result<DomainEvent, Subscrip
         event @ (Event::ConversationCreated(_)
         | Event::ConversationWorkspaceAssigned(_)
         | Event::ConversationArchived(_)
+        | Event::ConversationUnarchived(_)
         | Event::ConversationTitleChanged(_)
         | Event::ParticipantJoined(_)
         | Event::ParticipantLeft(_)

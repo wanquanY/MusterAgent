@@ -680,6 +680,7 @@ impl ProductProjectionReducer {
             ConversationEvent::WorkspaceAssigned { .. }
             | ConversationEvent::Created { .. }
             | ConversationEvent::Archived
+            | ConversationEvent::Unarchived
             | ConversationEvent::TitleChanged { .. }
             | ConversationEvent::ParticipantJoined { .. }
             | ConversationEvent::ParticipantLeft => {}

@@ -22,6 +22,9 @@ pub(super) fn decode(value: wire::domain_event::Event) -> Result<DomainEvent, Su
         Event::ConversationArchived(_) => {
             Ok(DomainEvent::Conversation(ConversationEvent::Archived))
         }
+        Event::ConversationUnarchived(_) => {
+            Ok(DomainEvent::Conversation(ConversationEvent::Unarchived))
+        }
         Event::ConversationTitleChanged(value) => {
             let proposal_record_id = optional_id(value.proposal_record_id.map(|item| item.value))?;
             let origin = match wire::ConversationTitleOrigin::try_from(value.origin) {

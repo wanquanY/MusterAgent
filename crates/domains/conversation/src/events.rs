@@ -32,6 +32,8 @@ pub enum ConversationEvent {
         assignment_command_id: CommandId,
     },
     Archived,
+    /// An archived Conversation returned to the active catalog.
+    Unarchived,
     TitleChanged {
         title: musteragent_runtime_contract::DisplayText,
         origin: ConversationTitleOrigin,

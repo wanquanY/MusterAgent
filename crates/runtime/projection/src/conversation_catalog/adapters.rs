@@ -151,10 +151,13 @@ pub fn adapt_conversation_event(
             1,
             CatalogFactKind::ConversationCreated,
         )?,
-        ConversationEvent::Archived => context.draft(
-            CatalogSourceIdentity::Conversation(context.conversation_id),
-            1,
-            CatalogFactKind::LifecycleChanged(ConversationLifecycle::Archived),
+        // Lifecycle changes are keyed by their Ledger record so an archive,
+        // unarchive, archive cycle projects every transition exactly once.
+        ConversationEvent::Archived => context.record_draft(CatalogFactKind::LifecycleChanged(
+            ConversationLifecycle::Archived,
+        ))?,
+        ConversationEvent::Unarchived => context.record_draft(
+            CatalogFactKind::LifecycleChanged(ConversationLifecycle::Active),
         )?,
         ConversationEvent::WorkspaceAssigned { workspace_id, .. } => {
             context.record_draft(CatalogFactKind::WorkspaceAssigned(*workspace_id))?
