@@ -11,20 +11,31 @@ pub(super) fn present_message_for_route(
         .and_then(|mut messages| messages.pop().ok_or_else(ContextPlanError::invariant))
 }
 
-/// Native first: every attachment the active route can receive natively is
-/// sent as original bytes; only what it cannot receive falls back to our own
-/// readers (vision_analyze for images, the file tools for documents) or to an
-/// honest notice for audio and video.
+#[cfg(test)]
 pub(super) fn present_messages_for_route(
     messages: &[&CanonicalMessage],
     route: &ModelRoute,
+) -> Result<Vec<CanonicalMessage>, ContextPlanError> {
+    present_messages_for_route_with_vision_tool(messages, route, true)
+}
+
+/// Native first: every attachment the active route can receive natively is
+/// sent as original bytes; only what it cannot receive falls back to our own
+/// readers (vision_analyze for images when available, the file tools for
+/// documents) or to an honest notice for audio, video, or unavailable vision.
+pub(super) fn present_messages_for_route_with_vision_tool(
+    messages: &[&CanonicalMessage],
+    route: &ModelRoute,
+    vision_tool_available: bool,
 ) -> Result<Vec<CanonicalMessage>, ContextPlanError> {
     let image_presented = if route.accepts_native_image() {
         present_messages_for_visual_route(messages, route)?
     } else {
         messages
             .iter()
-            .map(|message| present_message_for_nonvisual_image_route(message))
+            .map(|message| {
+                present_message_for_nonvisual_image_route(message, vision_tool_available)
+            })
             .collect::<Result<Vec<_>, _>>()?
     };
     let presented = image_presented.iter().collect::<Vec<_>>();
@@ -37,6 +48,121 @@ pub(super) fn present_messages_for_route(
                 .and_then(|message| present_media_for_route(&message, route))
         })
         .collect()
+}
+
+/// Projects authorized media parts returned by `files.read` onto the active
+/// route's native input capabilities.
+///
+/// Parts the route can receive natively remain typed so the caller can read and
+/// hash-verify their bytes before mounting them. Unsupported parts become
+/// route-presentation notices using the same formatting rules as context
+/// planning, without reading their source bytes or instructing the model to
+/// call a tool that is not available in this run.
+pub fn present_file_read_parts_for_route(
+    parts: &[CanonicalContentPart],
+    route: &ModelRoute,
+    vision_tool_available: bool,
+) -> Result<Vec<CanonicalContentPart>, ContextPlanError> {
+    let unsupported_image_ids = if route.accepts_native_image() {
+        Vec::new()
+    } else {
+        parts
+            .iter()
+            .filter_map(|part| match part {
+                CanonicalContentPart::Image(reference) => Some(reference.content_id.to_string()),
+                CanonicalContentPart::Text(_)
+                | CanonicalContentPart::Audio(_)
+                | CanonicalContentPart::Video(_)
+                | CanonicalContentPart::File(_) => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let image_notice = if unsupported_image_ids.is_empty() {
+        None
+    } else {
+        Some(nonvisual_image_notice(
+            &unsupported_image_ids,
+            vision_tool_available,
+        )?)
+    };
+    let mut emitted_image_notice = false;
+    let mut presented = Vec::with_capacity(parts.len());
+    for part in parts {
+        match part {
+            CanonicalContentPart::Image(_) if !route.accepts_native_image() => {
+                if !emitted_image_notice {
+                    presented.push(CanonicalContentPart::Text(
+                        image_notice
+                            .clone()
+                            .ok_or_else(ContextPlanError::invariant)?,
+                    ));
+                    emitted_image_notice = true;
+                }
+            }
+            CanonicalContentPart::Audio(reference) if !route.accepts_native_audio() => {
+                presented.push(CanonicalContentPart::Text(unsupported_media_notice(
+                    "audio", reference,
+                )?));
+            }
+            CanonicalContentPart::Video(reference) if !route.accepts_native_video() => {
+                presented.push(CanonicalContentPart::Text(unsupported_media_notice(
+                    "video", reference,
+                )?));
+            }
+            CanonicalContentPart::File(reference)
+                if !route.accepts_native_document(reference.media_type.as_str()) =>
+            {
+                presented.push(CanonicalContentPart::Text(
+                    unsupported_file_read_document_notice(reference)?,
+                ));
+            }
+            _ => presented.push(part.clone()),
+        }
+    }
+    Ok(presented)
+}
+
+fn nonvisual_image_notice(
+    image_ids: &[String],
+    vision_tool_available: bool,
+) -> Result<ModelText, ContextPlanError> {
+    let text = if vision_tool_available {
+        format!(
+            "[Authorized image access: vision_tool_required content_ids=[{}]. No matching image pixels are included because the active model route cannot inspect them natively. Before making visual claims, call the already exposed vision_analyze Tool once with images=[{{content_id: ...}}, ...]; do not call once per image. Use analysis_mode=joint for cross-image comparison and independent otherwise.]",
+            image_ids.join(",")
+        )
+    } else {
+        format!(
+            "[Authorized image access: content_ids=[{}]. No matching image pixels are included because the active model route cannot inspect images natively and no visual analysis tool is available in this run. Do not guess what the image contains; adjust your approach or tell the user this run cannot inspect images directly.]",
+            image_ids.join(",")
+        )
+    };
+    ModelText::new(text).map_err(|_| ContextPlanError::invariant())
+}
+
+fn unsupported_media_notice(
+    kind: &str,
+    reference: &musteragent_content_ref::ContentRef,
+) -> Result<ModelText, ContextPlanError> {
+    ModelText::new(format!(
+        "[Authorized {kind} attachment content_id={} ({}, {} bytes). The active model route cannot hear or watch {kind} natively, so none of its content is included. Do not guess what it contains; tell the user this model cannot process {kind} and that a model with native {kind} input can.]",
+        reference.content_id,
+        reference.media_type.as_str(),
+        reference.byte_length,
+    ))
+    .map_err(|_| ContextPlanError::invariant())
+}
+
+fn unsupported_file_read_document_notice(
+    reference: &musteragent_content_ref::ContentRef,
+) -> Result<ModelText, ContextPlanError> {
+    ModelText::new(format!(
+        "[Authorized document content_id={} ({}, {} bytes). The active model route cannot receive this document as original bytes, so none of its raw content is included. Do not guess what it contains; use another available document or parser tool if exposed, or tell the user this model cannot read this document directly.]",
+        reference.content_id,
+        reference.media_type.as_str(),
+        reference.byte_length,
+    ))
+    .map_err(|_| ContextPlanError::invariant())
 }
 
 /// Bounds the original document bytes one request carries. Newest messages
@@ -99,12 +225,7 @@ fn present_media_for_route(
                 CanonicalContentPart::Video(reference) => ("video", reference),
                 _ => return Err(ContextPlanError::invariant()),
             };
-            ModelText::new(format!(
-                "[Authorized {kind} attachment content_id={} ({}, {} bytes). The active model route cannot hear or watch {kind} natively, so none of its content is included. Do not guess what it contains; tell the user this model cannot process {kind} and that a model with native {kind} input can.]",
-                reference.content_id, reference.media_type.as_str(), reference.byte_length,
-            ))
-            .map(CanonicalContentPart::Text)
-            .map_err(|_| ContextPlanError::invariant())
+            unsupported_media_notice(kind, reference).map(CanonicalContentPart::Text)
         })
         .collect::<Result<Vec<_>, _>>()?;
     presented
@@ -198,6 +319,7 @@ fn present_visual_message(
 
 fn present_message_for_nonvisual_image_route(
     message: &CanonicalMessage,
+    vision_tool_available: bool,
 ) -> Result<CanonicalMessage, ContextPlanError> {
     let mut presented = message.clone();
     let image_ids = message
@@ -214,13 +336,7 @@ fn present_message_for_nonvisual_image_route(
     let batch_hint = if image_ids.is_empty() {
         None
     } else {
-        Some(
-            ModelText::new(format!(
-                "[Authorized image access: vision_tool_required content_ids=[{}]. No matching image pixels are included because the active model route cannot inspect them natively. Before making visual claims, call the already exposed vision_analyze Tool once with images=[{{content_id: ...}}, ...]; do not call once per image. Use analysis_mode=joint for cross-image comparison and independent otherwise.]",
-                image_ids.join(",")
-            ))
-            .map_err(|_| ContextPlanError::invariant())?,
-        )
+        Some(nonvisual_image_notice(&image_ids, vision_tool_available)?)
     };
     let mut emitted_batch_hint = false;
     let mut content = Vec::with_capacity(message.content.len());

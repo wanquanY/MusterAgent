@@ -95,7 +95,7 @@ pub use plan_lifecycle::{
     ContextPlanControlCut, ContextPlanHead, ContextPlanHeadRef, ContextPlanLineage,
     ContextPlanSelection, select_context_plan_for_sealed_input, select_context_plan_generation,
 };
-pub use planner::DurableContextPlanner;
+pub use planner::{DurableContextPlanner, present_file_read_parts_for_route};
 pub use port::{
     COMPACTION_HISTORY_CODEC_SCHEMA, COMPACTION_PROMPT_SCHEMA, CONTEXT_PLAN_GENERATION,
     ContextCodec, ContextCompactionFailureCommit, ContextCompactionRequest,

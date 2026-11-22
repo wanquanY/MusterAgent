@@ -174,6 +174,45 @@ fn files_read_projects_only_receipt_metadata_and_keeps_native_visual_identity() 
 }
 
 #[test]
+fn files_read_projects_receipt_metadata_and_preserves_degraded_media_notice() {
+    let reference = ContentRef {
+        content_id: ContentId::generate(),
+        media_type: MediaType::new("image/png").expect("media type"),
+        byte_length: 3,
+        sha256: Sha256::digest(b"png"),
+    };
+    let raw = json!({
+        "view": {"entry": {"name": "diagram.png"}, "representation": "visual_content"},
+        "visual_content": [{"content_id": reference.content_id.to_string(),
+            "media_type": "image/png", "byte_length": 3, "sha256": "storage-digest"}]
+    });
+    let notice = ModelText::new(format!(
+        "[Authorized image access: content_ids=[{}]. No matching image pixels are included.]",
+        reference.content_id
+    ))
+    .expect("notice");
+    let mut projected = message(raw.clone());
+    projected
+        .content
+        .push(CanonicalContentPart::Text(notice.clone()));
+    let key = crate::model_field_views::contract("files.read@6").expect("owned view");
+    project_message(&mut projected, ResultView::ModelFields(key)).expect("project");
+    let CanonicalContentPart::Text(json_part) = &projected.content[0] else {
+        panic!("expected JSON receipt");
+    };
+    let output: Value = serde_json::from_str(json_part.as_str()).expect("valid JSON");
+    assert!(output["visual_content"][0].get("sha256").is_none());
+    assert_eq!(
+        output["visual_content"][0]["content_id"],
+        raw["visual_content"][0]["content_id"]
+    );
+    assert_eq!(projected.content[1], CanonicalContentPart::Text(notice));
+    let once = projected.clone();
+    project_message(&mut projected, ResultView::ModelFields(key)).expect("idempotent view");
+    assert_eq!(projected, once);
+}
+
+#[test]
 fn current_file_discovery_keeps_execution_provenance_and_exact_reference() {
     let origin = json!({
         "execution_home":"native",

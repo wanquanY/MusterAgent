@@ -1,4 +1,5 @@
 mod dialogue_input;
+mod projection;
 use std::collections::{BTreeMap, BTreeSet};
 use std::num::NonZeroU64;
 
@@ -698,6 +699,82 @@ fn nonvisual_route_replaces_image_pixels_with_authorized_tool_reference() {
     assert!(reference.as_str().contains("vision_analyze"));
     assert!(reference.as_str().contains("vision_tool_required"));
     assert!(!reference.as_str().contains("native_loaded"));
+
+    let without_tool = super::route_presentation::present_messages_for_route_with_vision_tool(
+        &[&message],
+        &model_route(),
+        false,
+    )
+    .expect("present text-only message without vision tool")
+    .pop()
+    .expect("message");
+    assert_eq!(without_tool.content.len(), 1);
+    let CanonicalContentPart::Text(notice) = &without_tool.content[0] else {
+        panic!("nonvisual route must never receive image pixels");
+    };
+    assert!(notice.as_str().contains(&content_id));
+    assert!(!notice.as_str().contains("vision_analyze"));
+    assert!(!notice.as_str().contains("vision_tool_required"));
+    assert!(
+        notice
+            .as_str()
+            .contains("no visual analysis tool is available")
+    );
+}
+
+#[test]
+fn file_read_route_presentation_batches_unsupported_images_and_keeps_supported_media() {
+    let first_image = image_part(b"first-frame");
+    let second_image = image_part(b"second-frame");
+    let pdf = pdf_part(b"%PDF-sample");
+    let first_id = match &first_image {
+        CanonicalContentPart::Image(reference) => reference.content_id.to_string(),
+        _ => panic!("expected image"),
+    };
+    let second_id = match &second_image {
+        CanonicalContentPart::Image(reference) => reference.content_id.to_string(),
+        _ => panic!("expected image"),
+    };
+    let pdf_id = match &pdf {
+        CanonicalContentPart::File(reference) => reference.content_id.to_string(),
+        _ => panic!("expected pdf"),
+    };
+
+    let text_route = model_route();
+    let presented = super::present_file_read_parts_for_route(
+        &[first_image.clone(), second_image.clone(), pdf.clone()],
+        &text_route,
+        true,
+    )
+    .expect("present file read parts");
+    assert_eq!(presented.len(), 2);
+    let CanonicalContentPart::Text(image_notice) = &presented[0] else {
+        panic!("expected batched image notice");
+    };
+    assert!(
+        image_notice
+            .as_str()
+            .contains(&format!("content_ids=[{first_id},{second_id}]"))
+    );
+    assert!(image_notice.as_str().contains("vision_tool_required"));
+    assert!(image_notice.as_str().contains("vision_analyze"));
+    let CanonicalContentPart::Text(doc_notice) = &presented[1] else {
+        panic!("expected document notice");
+    };
+    assert!(doc_notice.as_str().contains(&pdf_id));
+    assert!(
+        doc_notice
+            .as_str()
+            .contains("cannot receive this document as original bytes")
+    );
+
+    let mut visual_route = model_route();
+    visual_route.capabilities = BTreeSet::from([DottedKey::new("vision").expect("vision")]);
+    let visual =
+        super::present_file_read_parts_for_route(&[first_image.clone(), pdf], &visual_route, false)
+            .expect("present visual file read parts");
+    assert_eq!(visual[0], first_image);
+    assert!(matches!(visual[1], CanonicalContentPart::Text(_)));
 }
 
 #[test]

@@ -26,6 +26,7 @@ mod output_continuation;
 mod planning_budget;
 mod preparation;
 mod route_presentation;
+pub use route_presentation::present_file_read_parts_for_route;
 mod terminal_tool_guidance;
 mod tool_availability;
 mod turn_order;
@@ -79,9 +80,9 @@ use planning_budget::{
     can_fallback_to_uncompressed, compaction_summary_budget, estimate_context_tokens,
     estimate_entries, output_budget, planning_budgets, reasoning_policy, temperature,
 };
+use route_presentation::present_messages_for_route_with_vision_tool;
 #[cfg(test)]
-use route_presentation::present_message_for_route;
-use route_presentation::present_messages_for_route;
+use route_presentation::{present_message_for_route, present_messages_for_route};
 use turn_order::order_entries_for_run_turn;
 const MAX_SUMMARY_ITEMS: usize = 128;
 const MAX_SUMMARY_EXCERPT_CHARS: usize = 256;

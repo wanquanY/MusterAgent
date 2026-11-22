@@ -21,6 +21,7 @@ musteragent-approval.workspace = true
 musteragent-artifact.workspace = true
 musteragent-capability.workspace = true
 musteragent-content-ref.workspace = true
+musteragent-context.workspace = true
 musteragent-discovery.workspace = true
 musteragent-event-envelope.workspace = true
 musteragent-goal.workspace = true
