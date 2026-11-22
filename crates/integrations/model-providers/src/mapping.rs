@@ -1729,3 +1729,42 @@ pub enum MappingError {
     #[error(transparent)]
     Content(#[from] ContentResolverError),
 }
+
+impl MappingError {
+    /// Stable snake_case class of a request rejected before dispatch.
+    ///
+    /// Hosts receive only the coarse `invalid_request` safe code; this class
+    /// is emitted as `provider.mapping_error` on the diagnostic event so the
+    /// cause can be diagnosed without request contents. Values never change
+    /// meaning once published.
+    #[must_use]
+    pub const fn diagnostic_code(&self) -> &'static str {
+        match self {
+            Self::InvalidCanonicalRequest => "invalid_canonical_request",
+            Self::InvalidRouteConfiguration => "invalid_route_configuration",
+            Self::JsonEncoding => "json_encoding",
+            Self::InlineContentRequired => "inline_content_required",
+            Self::InvalidUtf8 => "invalid_utf8",
+            Self::InvalidProviderReplay => "invalid_provider_replay",
+            Self::InvalidReasoningReplay => "invalid_reasoning_replay",
+            Self::UnsupportedReasoningPolicy => "unsupported_reasoning_policy",
+            Self::UnsupportedJsonSchemaOutput => "unsupported_json_schema_output",
+            Self::UnauthorizedInputModality => "unauthorized_input_modality",
+            Self::UnsupportedInputModality => "unsupported_input_modality",
+            Self::ExactProviderReplayRequired => "exact_provider_replay_required",
+            Self::UnsupportedMedia => "unsupported_media",
+            Self::UnsafeAuxiliaryRequest => "unsafe_auxiliary_request",
+            Self::UnsafeAuxiliaryParameter => "unsafe_auxiliary_parameter",
+            Self::Content(error) => match error {
+                ContentResolverError::NotFound => "content_not_found",
+                ContentResolverError::Unauthorized => "content_unauthorized",
+                ContentResolverError::TooLarge => "content_too_large",
+                ContentResolverError::Unavailable => "content_unavailable",
+                ContentResolverError::MediaTypeMismatch => "content_media_type_mismatch",
+                ContentResolverError::LengthMismatch => "content_length_mismatch",
+                ContentResolverError::DuplicateContent => "content_duplicate",
+                ContentResolverError::NotResolved => "content_not_resolved",
+            },
+        }
+    }
+}
