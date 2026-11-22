@@ -329,9 +329,23 @@ impl DurableContextPlanner {
             .messages
             .iter()
             .collect::<Vec<_>>();
+        let vision_tool_available = tools
+            .iter()
+            .any(|tool| tool.key.logical_key() == "vision.analyze")
+            && material
+                .runtime_snapshot
+                .auxiliary_models
+                .iter()
+                .any(|aux| {
+                    aux.role == AuxiliaryModelRole::Vision && aux.model.route.accepts_native_image()
+                });
         let uncompressed_provider_input =
             observe_context_plan_stage(run_id, "route_presentation", || {
-                present_messages_for_route(&uncompressed_provider_messages, active_route)
+                present_messages_for_route_with_vision_tool(
+                    &uncompressed_provider_messages,
+                    active_route,
+                    vision_tool_available,
+                )
             })?;
         let uncompressed_tokens = effective_prefix_tokens
             .saturating_add(estimate_messages(&uncompressed_provider_input))
@@ -707,7 +721,11 @@ impl DurableContextPlanner {
         let provider_messages = provider_tool_history.messages.iter().collect::<Vec<_>>();
         let mut provider_input =
             observe_context_plan_stage(run_id, "retained_route_presentation", || {
-                present_messages_for_route(&provider_messages, active_route)
+                present_messages_for_route_with_vision_tool(
+                    &provider_messages,
+                    active_route,
+                    vision_tool_available,
+                )
             })?;
         if request_continuation_ref.is_none() {
             attach_history_summary(&mut provider_input, summary_text.as_deref())?;

@@ -4009,6 +4009,7 @@ dependencies = [
  "musteragent-artifact",
  "musteragent-capability",
  "musteragent-content-ref",
+ "musteragent-context",
  "musteragent-definition",
  "musteragent-discovery",
  "musteragent-event-envelope",

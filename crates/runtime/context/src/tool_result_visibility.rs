@@ -159,7 +159,42 @@ pub(crate) fn project_message(
             _ => None,
         })
         .collect();
-    let Ok(mut value) = serde_json::from_str::<Value>(&text) else {
+    if let Ok(mut value) = serde_json::from_str::<Value>(&text) {
+        if !project_result(&mut value, view) {
+            return Ok(());
+        }
+        let encoded = serde_json::to_string(&value).map_err(|_| ContextPlanError::invariant())?;
+        let mut projected =
+            Some(ModelText::chunked(encoded).map_err(|_| ContextPlanError::invariant())?);
+        let original = std::mem::take(&mut message.content);
+        for part in original {
+            match part {
+                CanonicalContentPart::Text(_) => {
+                    if let Some(texts) = projected.take() {
+                        message
+                            .content
+                            .extend(texts.into_iter().map(CanonicalContentPart::Text));
+                    }
+                }
+                other => message.content.push(other),
+            }
+        }
+        return Ok(());
+    }
+    // A Tool receipt may carry trailing route-presentation text notices after
+    // its primary JSON payload (for example degraded media from `files.read`).
+    // Project only that leading JSON part and leave trailing notices verbatim.
+    let Some(first_text_index) = message
+        .content
+        .iter()
+        .position(|part| matches!(part, CanonicalContentPart::Text(_)))
+    else {
+        return Ok(());
+    };
+    let CanonicalContentPart::Text(first_text) = &message.content[first_text_index] else {
+        return Ok(());
+    };
+    let Ok(mut value) = serde_json::from_str::<Value>(first_text.as_str()) else {
         // Plain-text errors are not metadata. Never pattern-replace file bytes,
         // stdout, diagnostic prose or an arbitrary user's SHA-256 string.
         return Ok(());
@@ -168,19 +203,15 @@ pub(crate) fn project_message(
         return Ok(());
     }
     let encoded = serde_json::to_string(&value).map_err(|_| ContextPlanError::invariant())?;
-    let mut projected =
-        Some(ModelText::chunked(encoded).map_err(|_| ContextPlanError::invariant())?);
+    let projected = ModelText::chunked(encoded).map_err(|_| ContextPlanError::invariant())?;
     let original = std::mem::take(&mut message.content);
-    for part in original {
-        match part {
-            CanonicalContentPart::Text(_) => {
-                if let Some(texts) = projected.take() {
-                    message
-                        .content
-                        .extend(texts.into_iter().map(CanonicalContentPart::Text));
-                }
-            }
-            other => message.content.push(other),
+    for (index, part) in original.into_iter().enumerate() {
+        if index == first_text_index {
+            message
+                .content
+                .extend(projected.iter().cloned().map(CanonicalContentPart::Text));
+        } else {
+            message.content.push(part);
         }
     }
     Ok(())
